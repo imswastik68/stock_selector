@@ -1,0 +1,57 @@
+name: Daily Stock Scan
+
+on:
+  schedule:
+    - cron: "0 13 * * 1-5"   # 6:30 PM IST = 13:00 UTC, Mon–Fri
+  workflow_dispatch:            # manual trigger for testing
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download stock universe (NIFTY500 + SME)
+        run: python scripts/download_universe.py || echo "Universe download failed; using fallback list"
+
+      # Restore F&O ban cache from the previous run so we can compute the delta
+      - name: Restore F&O ban cache
+        uses: actions/cache@v4
+        with:
+          path: data/fo_ban_prev.json
+          key: fo-ban-cache-${{ runner.os }}
+          restore-keys: fo-ban-cache-
+
+      - name: Run stock scan
+        run: python main.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+      # Save updated F&O ban cache for tomorrow
+      - name: Save F&O ban cache
+        uses: actions/cache@v4
+        with:
+          path: data/fo_ban_prev.json
+          key: fo-ban-cache-${{ runner.os }}
+
+      # Upload today's watchlist JSON as a run artifact
+      - name: Upload watchlist artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: watchlist-${{ github.run_id }}
+          path: outputs/
+          retention-days: 30

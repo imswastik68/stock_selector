@@ -1,0 +1,21 @@
+# credentials — never commit
+.env
+
+# runtime state
+data/fo_ban_prev.json
+outputs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
