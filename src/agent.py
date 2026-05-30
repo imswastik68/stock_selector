@@ -15,7 +15,7 @@ from src.prompt_builder import SYSTEM_PROMPT, build_user_message
 from src.response_parser import ParseError, parse_claude_response
 
 _GROQ_BASE  = "https://api.groq.com/openai/v1"
-_GROQ_MODEL = "qwen-qwq-32b"
+_GROQ_MODEL = "qwen/qwen3-32b"
 
 _OLLAMA_BASE  = "http://localhost:11434/v1"
 _OLLAMA_MODEL = "qwen3:8b"
@@ -170,10 +170,13 @@ def synthesize_watchlist(
     )
 
     backend = os.environ.get("INFERENCE_BACKEND", "groq").lower()
-    callers = (
-        [_groq_call, _ollama_call] if backend == "groq"
-        else [_ollama_call, _groq_call]
-    )
+    in_ci = os.environ.get("GITHUB_ACTIONS") == "true"
+
+    if backend == "groq":
+        # In CI Ollama is not running — don't waste time trying to connect
+        callers = [_groq_call] if in_ci else [_groq_call, _ollama_call]
+    else:
+        callers = [_ollama_call] if in_ci else [_ollama_call, _groq_call]
 
     last_exc = None
     for caller in callers:
