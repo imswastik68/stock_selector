@@ -21,6 +21,7 @@ load_dotenv()
 from src.data.bulk_deals import fetch_bulk_deals
 from src.data.breakouts import fetch_breakouts
 from src.data.fo_ban import fetch_fo_ban_delta
+from src.data.market_context import enrich_candidate_context, fetch_market_wide_context
 from src.data.results import fetch_results_calendar
 from src.data.volume import fetch_volume_gainers
 from src.scorer import score_candidates
@@ -30,18 +31,19 @@ from src.telegram_alert import send_telegram_alert
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
 
-def fetch_all_data() -> tuple[list, list, list, list, list]:
-    """Fetch all five data sources concurrently."""
+def fetch_all_data() -> tuple[list, list, list, list, list, dict]:
+    """Fetch all data sources concurrently. Returns 6-tuple including market-wide context."""
     print("[main] fetching market data...")
     t0 = time.time()
 
-    with ThreadPoolExecutor(max_workers=5) as pool:
+    with ThreadPoolExecutor(max_workers=6) as pool:
         futures = {
             "bulk_deals": pool.submit(fetch_bulk_deals),
             "volume": pool.submit(fetch_volume_gainers),
             "fo_ban": pool.submit(fetch_fo_ban_delta),
             "results": pool.submit(fetch_results_calendar),
             "breakouts": pool.submit(fetch_breakouts),
+            "market_wide": pool.submit(fetch_market_wide_context),
         }
 
         results = {}
@@ -50,7 +52,7 @@ def fetch_all_data() -> tuple[list, list, list, list, list]:
                 results[name] = future.result()
             except Exception as exc:
                 print(f"[main] {name} fetch error (continuing): {exc}")
-                results[name] = []
+                results[name] = [] if name != "market_wide" else {}
 
     elapsed = time.time() - t0
     print(f"[main] all data fetched in {elapsed:.1f}s")
@@ -60,6 +62,7 @@ def fetch_all_data() -> tuple[list, list, list, list, list]:
         results["fo_ban"],
         results["results"],
         results["breakouts"],
+        results["market_wide"],
     )
 
 
@@ -76,8 +79,8 @@ def save_output(watchlist_data: dict) -> Path:
 def main() -> int:
     print(f"[main] === Stock Selector run: {date.today().isoformat()} ===")
 
-    # 1. Fetch
-    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts = fetch_all_data()
+    # 1. Fetch (parallel)
+    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx = fetch_all_data()
 
     # Count total unique tickers across all sources for the report
     all_tickers: set[str] = set()
@@ -96,33 +99,62 @@ def main() -> int:
     if not candidates:
         print("[main] no qualifying candidates today")
         watchlist_data = {
-            "watchlist": [],
+            "buy_watchlist": [],
+            "sell_watchlist": [],
+            "phase_b_watchlist": [],
+            "nifty_context": market_wide_ctx.get("nifty_structure", {}).get("trend", "ranging"),
             "scan_date": date.today().isoformat(),
-            "total_candidates_scanned": total_scanned,
+            "total_screened": total_scanned,
+            "data_quality_warnings": [],
         }
         save_output(watchlist_data)
         send_telegram_alert(watchlist_data)
         return 0
 
-    # 3. Claude synthesis (top 20 candidates → ranked 10)
-    print(f"[main] sending {min(len(candidates), 20)} candidates to Claude for synthesis...")
-    watchlist_data = synthesize_watchlist(candidates, total_scanned)
+    # 3. Enrich market context for top 15 candidates (OHLCV, beta, ATR)
+    # Capped at 15 to stay under Groq free tier 6K TPM limit (~5,500 tokens per prompt)
+    candidate_tickers = [c["ticker"] for c in candidates[:15]]
+    print(f"[main] enriching market context for {len(candidate_tickers)} candidates...")
+    market_context = enrich_candidate_context(candidate_tickers, market_wide_ctx)
+    # Stash auxiliary data so agent.py can embed it in the prompt
+    market_context["bulk_deals"] = bulk_deals
+    market_context["fo_ban_delta"] = fo_ban_removed
+    market_context["results_calendar"] = results_calendar
 
-    # 4. Save
+    # 4. LLM synthesis (Wyckoff + SMC + VSA)
+    print(f"[main] synthesising watchlist for {min(len(candidates), 15)} candidates...")
+    watchlist_data = synthesize_watchlist(candidates, total_scanned, market_context=market_context)
+
+    # 5. Save
     save_output(watchlist_data)
 
-    # 5. Telegram alert
+    # 6. Telegram alert
     send_telegram_alert(watchlist_data)
 
     # Print summary to stdout for GitHub Actions logs
-    watchlist = watchlist_data.get("watchlist", [])
-    print(f"\n[main] === WATCHLIST ({len(watchlist)} picks) ===")
-    for i, entry in enumerate(watchlist, 1):
+    buy_list = watchlist_data.get("buy_watchlist", [])
+    sell_list = watchlist_data.get("sell_watchlist", [])
+    phase_b_list = watchlist_data.get("phase_b_watchlist", [])
+
+    print(f"\n[main] === BUY WATCHLIST ({len(buy_list)} picks) ===")
+    for i, entry in enumerate(buy_list, 1):
         print(
-            f"  {i:>2}. {entry['ticker']:<20} score={entry['score']}"
-            f"  {entry['timeframe']}  target=+{entry['target_move_pct']}%"
-            f"  risk={entry['risk']}"
+            f"  {i:>2}. {entry['ticker']:<22} score={entry['score']}"
+            f"  {entry.get('wyckoff_phase','?'):<18} risk={entry['risk']}"
         )
+
+    if sell_list:
+        print(f"\n[main] === SELL WATCHLIST ({len(sell_list)} picks) ===")
+        for i, entry in enumerate(sell_list, 1):
+            print(
+                f"  {i:>2}. {entry['ticker']:<22} score={entry['score']}"
+                f"  {entry.get('wyckoff_phase','?'):<18} risk={entry['risk']}"
+            )
+
+    if phase_b_list:
+        print(f"\n[main] === PHASE-B WATCH ({len(phase_b_list)} stocks) ===")
+        for i, entry in enumerate(phase_b_list, 1):
+            print(f"  {i:>2}. {entry['ticker']:<22} {entry.get('phase','?')}")
 
     return 0
 
