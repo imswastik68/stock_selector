@@ -111,34 +111,22 @@ def _compute_beta(stock_returns: pd.Series, nifty_returns: pd.Series) -> float:
 
 def _compute_atr_pct(df: pd.DataFrame, period: int = 14) -> float:
     try:
-        import pandas_ta as ta  # deferred import — optional dep
-        atr_series = ta.atr(df["High"], df["Low"], df["Close"], length=period)
-        if atr_series is None or atr_series.empty:
-            return float("nan")
-        atr_val = float(atr_series.dropna().iloc[-1])
-        close_val = float(df["Close"].iloc[-1])
+        high = df["High"]
+        low = df["Low"]
+        close = df["Close"]
+        prev_close = close.shift(1)
+        tr = pd.concat([
+            high - low,
+            (high - prev_close).abs(),
+            (low - prev_close).abs(),
+        ], axis=1).max(axis=1)
+        atr = tr.ewm(alpha=1 / period, adjust=False).mean().iloc[-1]
+        close_val = float(close.iloc[-1])
         if close_val <= 0:
             return float("nan")
-        return round(atr_val / close_val * 100, 3)
+        return round(float(atr) / close_val * 100, 3)
     except Exception:
-        # Fallback: manual ATR (Wilder)
-        try:
-            high = df["High"]
-            low = df["Low"]
-            close = df["Close"]
-            prev_close = close.shift(1)
-            tr = pd.concat([
-                high - low,
-                (high - prev_close).abs(),
-                (low - prev_close).abs(),
-            ], axis=1).max(axis=1)
-            atr = tr.ewm(alpha=1 / period, adjust=False).mean().iloc[-1]
-            close_val = float(close.iloc[-1])
-            if close_val <= 0:
-                return float("nan")
-            return round(float(atr) / close_val * 100, 3)
-        except Exception:
-            return float("nan")
+        return float("nan")
 
 
 def enrich_candidate_context(tickers: list[str], base_ctx: dict) -> dict:
