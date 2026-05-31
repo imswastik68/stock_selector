@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-SYSTEM_PROMPT = """You are a quantitative analyst for NSE/BSE stocks. Analyse OHLCV data and score signals. Return ONLY valid JSON — no preamble, no markdown fences.
+SYSTEM_PROMPT = """You are a quantitative analyst for NSE/BSE stocks. Analyse OHLCV data and score signals. Return ONLY valid JSON — no preamble, no markdown fences, no thinking blocks.
 
 WYCKOFF PHASE CLASSIFICATION (from 90d OHLCV):
 - ACCUMULATION: range contracted near lows, vol falls on red days / rises on green days. Signals: Spring (wick below range low + snaps back), LPS (higher low + expanding vol), CHoCH bullish (first higher-high after lower-low sequence).
@@ -56,7 +56,7 @@ def _ohlcv_to_csv(df: pd.DataFrame, max_rows: int = 20) -> str:
     return "\n".join(lines)
 
 
-def _bulk_deals_to_csv(bulk_deals: list[dict], max_rows: int = 20) -> str:
+def _bulk_deals_to_csv(bulk_deals: list[dict], max_rows: int = 10) -> str:
     lines = ["ticker,actor,deal_type,qty,price,institutional"]
     for deal in bulk_deals[:max_rows]:
         actor = str(deal.get("actor", "")).replace(",", " ")

@@ -20,7 +20,7 @@ _GROQ_MODEL = "qwen/qwen3-32b"
 _OLLAMA_BASE  = "http://localhost:11434/v1"
 _OLLAMA_MODEL = "qwen3:8b"
 
-_MAX_TOKENS = 8192   # reasoning models need room for <think> + JSON output
+_MAX_TOKENS = 1500   # Groq TPM = input + max_tokens; keep total under 6K free limit
 
 MAX_WATCHLIST = 10
 TARGET_MOVE = {"1-2d": 7, "5-7d": 28}
