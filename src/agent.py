@@ -169,6 +169,13 @@ def synthesize_watchlist(
         scan_date=scan_date.isoformat(),
     )
 
+    # Build close-price anchor map for post-parse sanity checks
+    close_prices = {
+        c["ticker"]: c["today_close"]
+        for c in candidates[:5]
+        if c.get("today_close") and c["today_close"] > 0
+    }
+
     backend = os.environ.get("INFERENCE_BACKEND", "groq").lower()
     in_ci = os.environ.get("GITHUB_ACTIONS") == "true"
 
@@ -184,7 +191,7 @@ def synthesize_watchlist(
             raw = caller(user_msg)
             print(f"[agent] raw response ({len(raw)} chars): {raw[:800]!r}")
             print("[agent] response received, parsing...")
-            result = parse_claude_response(raw, scan_date.isoformat(), total_scanned)
+            result = parse_claude_response(raw, scan_date.isoformat(), total_scanned, close_prices=close_prices)
             b = len(result.get("buy_watchlist", []))
             s = len(result.get("sell_watchlist", []))
             p = len(result.get("phase_b_watchlist", []))

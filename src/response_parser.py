@@ -63,6 +63,27 @@ def _rr_float(rr_str: str) -> float:
     return 0.0
 
 
+def _extract_first_price(price_str: str) -> float | None:
+    """Extract first numeric value from a price string like '₹464.0-₹470.0'."""
+    import re
+    m = re.search(r"[\d,]+\.?\d*", str(price_str).replace(",", ""))
+    if m:
+        try:
+            return float(m.group().replace(",", ""))
+        except ValueError:
+            pass
+    return None
+
+
+def _price_ok(price_str: str, anchor: float, factor: float = 3.0) -> bool:
+    """Return False if extracted price deviates from anchor by more than factor×."""
+    p = _extract_first_price(price_str)
+    if p is None or anchor <= 0:
+        return True  # can't validate, let it through
+    ratio = max(p, anchor) / min(p, anchor)
+    return ratio <= factor
+
+
 def _validate_buy_entry(entry: dict) -> dict | None:
     missing = _BUY_REQUIRED - entry.keys()
     for field in missing:
@@ -142,9 +163,15 @@ def _validate_phase_b_entry(entry: dict) -> dict | None:
     return entry
 
 
-def parse_claude_response(raw: str, scan_date: str, total_screened: int) -> dict:
+def parse_claude_response(
+    raw: str,
+    scan_date: str,
+    total_screened: int,
+    close_prices: dict[str, float] | None = None,
+) -> dict:
     """
     Extract, validate, and normalise Claude's JSON output.
+    close_prices: {ticker: today_close} used to sanity-check price fields.
     Raises ParseError if no valid JSON is recoverable.
     """
     json_str = _extract_json(raw)
@@ -169,6 +196,27 @@ def parse_claude_response(raw: str, scan_date: str, total_screened: int) -> dict
     sell_list = [e for e in (_validate_sell_entry(e) for e in sell_raw) if e is not None]
     phase_b_list = [e for e in (_validate_phase_b_entry(e) for e in phase_b_raw) if e is not None]
 
+    # Price sanity check: drop entries whose price fields are >3x away from actual close
+    price_warnings: list[str] = []
+    if close_prices:
+        def _check_prices(entry: dict, price_field: str) -> bool:
+            ticker = entry.get("ticker", "")
+            anchor = close_prices.get(ticker, 0)
+            if anchor <= 0:
+                return True
+            for field in (price_field, "stop_loss"):
+                val = entry.get(field, "")
+                if val and not _price_ok(str(val), anchor):
+                    p = _extract_first_price(str(val))
+                    msg = f"PRICE_SCALE_ERROR {ticker} {field}={val} (anchor=₹{anchor:.0f})"
+                    print(f"[parser] {msg}")
+                    price_warnings.append(msg)
+                    return False
+            return True
+
+        buy_list  = [e for e in buy_list  if _check_prices(e, "entry_zone")]
+        sell_list = [e for e in sell_list if _check_prices(e, "short_entry_zone")]
+
     # Cap combined buy+sell at 10, sorted by score
     # Re-split by phase only to correct clear LLM mistakes; unrecognised phases are dropped.
     _BUY_PHASES  = {"ACCUMULATION_C", "ACCUMULATION_D", "MARKUP"}
@@ -184,5 +232,7 @@ def parse_claude_response(raw: str, scan_date: str, total_screened: int) -> dict
         "buy_watchlist": buy_list,
         "sell_watchlist": sell_list,
         "phase_b_watchlist": phase_b_list[:5],
-        "data_quality_warnings": warnings_raw if isinstance(warnings_raw, list) else [],
+        "data_quality_warnings": (
+            (warnings_raw if isinstance(warnings_raw, list) else []) + price_warnings
+        ),
     }

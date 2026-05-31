@@ -124,11 +124,13 @@ def build_user_message(
         beta_str = f"{beta_val:.2f}" if beta_val == beta_val else "N/A"
         atr_str = f"{atr_val:.2f}" if atr_val == atr_val else "N/A"
 
+        close_val = c.get('today_close', '?')
         block = (
             f"TICKER:{ticker} SCORE:{c.get('score',0)} "
             f"SIGNALS:{','.join(c.get('active_signals',[]))} "
-            f"CLOSE:{c.get('today_close','?')} VOLRATIO:{c.get('volume_ratio','?')} "
+            f"CLOSE_INR:{close_val} VOLRATIO:{c.get('volume_ratio','?')} "
             f"BETA:{beta_str} ATR%:{atr_str} MCAP_CR:{c.get('market_cap_cr','?')}\n"
+            f"PRICE_ANCHOR: All entry/target/stop prices must be near {close_val} INR — do NOT scale, divide, or truncate.\n"
             f"{ohlcv_str}"
         )
         candidate_blocks.append(block)
