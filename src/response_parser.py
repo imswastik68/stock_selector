@@ -163,10 +163,12 @@ def parse_claude_response(raw: str, scan_date: str, total_screened: int) -> dict
     phase_b_list = [e for e in (_validate_phase_b_entry(e) for e in phase_b_raw) if e is not None]
 
     # Cap combined buy+sell at 10, sorted by score
+    # Re-split by phase only to correct clear LLM mistakes; unrecognised phases are dropped.
+    _BUY_PHASES  = {"ACCUMULATION_C", "ACCUMULATION_D", "MARKUP"}
+    _SELL_PHASES = {"DISTRIBUTION_C", "DISTRIBUTION_D", "MARKDOWN"}
     all_actionable = sorted(buy_list + sell_list, key=lambda e: e.get("score", 0), reverse=True)[:10]
-    buy_phases = {"ACCUMULATION_C", "ACCUMULATION_D", "MARKUP"}
-    buy_list = [e for e in all_actionable if e.get("wyckoff_phase", "") in buy_phases]
-    sell_list = [e for e in all_actionable if e.get("wyckoff_phase", "") not in buy_phases]
+    buy_list  = [e for e in all_actionable if e.get("wyckoff_phase", "") in _BUY_PHASES]
+    sell_list = [e for e in all_actionable if e.get("wyckoff_phase", "") in _SELL_PHASES]
 
     return {
         "scan_date": scan_date,

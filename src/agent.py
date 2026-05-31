@@ -20,7 +20,7 @@ _GROQ_MODEL = "qwen/qwen3-32b"
 _OLLAMA_BASE  = "http://localhost:11434/v1"
 _OLLAMA_MODEL = "qwen3:8b"
 
-_MAX_TOKENS = 1500   # Groq TPM = input + max_tokens; keep total under 6K free limit
+_MAX_TOKENS = 2000   # Groq TPM = input + max_tokens; ~2550 input + 2000 = 4550 < 6K free limit
 
 MAX_WATCHLIST = 10
 TARGET_MOVE = {"1-2d": 7, "5-7d": 28}
@@ -182,6 +182,7 @@ def synthesize_watchlist(
     for caller in callers:
         try:
             raw = caller(user_msg)
+            print(f"[agent] raw response ({len(raw)} chars): {raw[:400]!r}")
             print("[agent] response received, parsing...")
             result = parse_claude_response(raw, scan_date.isoformat(), total_scanned)
             b = len(result.get("buy_watchlist", []))
