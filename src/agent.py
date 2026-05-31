@@ -66,7 +66,7 @@ def _label_signals(signals: list[str]) -> list[str]:
 
 
 def _fallback_synthesize(candidates: list[dict], total_scanned: int, scan_date: date) -> dict:
-    top = sorted(candidates, key=lambda c: c["score"], reverse=True)[:MAX_WATCHLIST]
+    top = sorted(candidates, key=lambda c: c["score"], reverse=True)[:5]
     buy_watchlist = []
     for c in top:
         tf = c.get("timeframe", "1-2d")

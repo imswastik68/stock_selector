@@ -111,9 +111,9 @@ def main() -> int:
         send_telegram_alert(watchlist_data)
         return 0
 
-    # 3. Enrich market context for top 15 candidates (OHLCV, beta, ATR)
-    # Capped at 15 to stay under Groq free tier 6K TPM limit (~5,500 tokens per prompt)
-    candidate_tickers = [c["ticker"] for c in candidates[:15]]
+    # 3. Enrich market context for top 5 candidates (OHLCV, beta, ATR)
+    # Capped at 5 to stay under Groq free tier 6K TPM limit
+    candidate_tickers = [c["ticker"] for c in candidates[:5]]
     print(f"[main] enriching market context for {len(candidate_tickers)} candidates...")
     market_context = enrich_candidate_context(candidate_tickers, market_wide_ctx)
     # Stash auxiliary data so agent.py can embed it in the prompt
@@ -122,7 +122,7 @@ def main() -> int:
     market_context["results_calendar"] = results_calendar
 
     # 4. LLM synthesis (Wyckoff + SMC + VSA)
-    print(f"[main] synthesising watchlist for {min(len(candidates), 15)} candidates...")
+    print(f"[main] synthesising watchlist for {min(len(candidates), 5)} candidates...")
     watchlist_data = synthesize_watchlist(candidates, total_scanned, market_context=market_context)
 
     # 5. Save
