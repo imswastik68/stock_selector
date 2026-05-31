@@ -49,83 +49,90 @@ def _fmt_tags(tags: list) -> str:
 
 
 def _format_buy_entry(entry: dict, rank: int) -> str:
-    ticker = entry.get("ticker", "?")
-    score = entry.get("score", 0)
-    risk = entry.get("risk", "MEDIUM")
-    phase = entry.get("wyckoff_phase", "?")
+    ticker    = entry.get("ticker", "?")
+    score     = entry.get("score", 0)
+    risk      = entry.get("risk", "MEDIUM")
+    phase     = entry.get("wyckoff_phase", "?")
     confidence = entry.get("wyckoff_confidence", "?")
-    smc = entry.get("smc_structure", "none")
-    vsa = entry.get("vsa_signal", "none")
-    tags = entry.get("volatility_tags", [])
+    rsi       = entry.get("rsi", "?")
+    macd      = entry.get("macd_signal", "none")
+    tags      = entry.get("volatility_tags", [])
     entry_zone = entry.get("entry_zone", "—")
-    stop = entry.get("stop_loss", "—")
-    t1 = entry.get("target_1", "—")
-    t2 = entry.get("target_2", "—")
-    rr = entry.get("risk_reward", "—")
-    tf = entry.get("timeframe", "?")
-    catalyst = entry.get("catalyst", "none")
-    signals = entry.get("top_signals", [])
+    stop      = entry.get("stop_loss", "—")
+    t1        = entry.get("target_1", "—")
+    t2        = entry.get("target_2", "—")
+    rr        = entry.get("risk_reward", "—")
+    tf        = entry.get("timeframe", "?")
+    signals   = entry.get("top_signals", [])
+    narrative = entry.get("narrative", "")
 
-    risk_icon = RISK_EMOJI.get(risk, "⚪")
+    risk_icon  = RISK_EMOJI.get(risk, "⚪")
     phase_icon = WYCKOFF_EMOJI.get(phase, "")
-    tf_label = TIMEFRAME_LABEL.get(tf, tf)
+    tf_label   = TIMEFRAME_LABEL.get(tf, tf)
     signals_str = ", ".join(signals[:3]) if signals else "—"
-    tags_str = _fmt_tags(tags)
+    tags_str   = _fmt_tags(tags)
 
-    return (
-        f"*{rank}. {ticker}* {risk_icon}\n"
-        f"  Score: `{score}` | {phase_icon} `{phase}` ({confidence})\n"
-        f"  SMC: `{smc}` | VSA: `{vsa}`"
-        + (f" | {tags_str}" if tags_str else "") + "\n"
-        f"  Entry: `{entry_zone}` | SL: `{stop}`\n"
-        f"  T1: `{t1}` | T2: `{t2}` | R:R: `{rr}`\n"
-        f"  {tf_label}" + (f" | Catalyst: `{catalyst}`" if catalyst and catalyst != "none" else "") + "\n"
-        f"  Signals: _{signals_str}_"
-    )
+    lines = [
+        f"*{rank}. {ticker}* {risk_icon}",
+        f"  Score: `{score}` | {phase_icon} `{phase}` ({confidence})",
+        f"  RSI: `{rsi}` | MACD: `{macd}`" + (f" | {tags_str}" if tags_str else ""),
+        f"  Entry: `{entry_zone}` | SL: `{stop}`",
+        f"  T1: `{t1}` | T2: `{t2}` | R:R: `{rr}`",
+        f"  {tf_label}",
+        f"  Signals: _{signals_str}_",
+    ]
+    if narrative:
+        lines.append(f"  💬 _{narrative}_")
+    return "\n".join(lines)
 
 
 def _format_sell_entry(entry: dict, rank: int) -> str:
-    ticker = entry.get("ticker", "?")
-    score = entry.get("score", 0)
-    risk = entry.get("risk", "MEDIUM")
-    phase = entry.get("wyckoff_phase", "?")
+    ticker    = entry.get("ticker", "?")
+    score     = entry.get("score", 0)
+    risk      = entry.get("risk", "MEDIUM")
+    phase     = entry.get("wyckoff_phase", "?")
     confidence = entry.get("wyckoff_confidence", "?")
-    smc = entry.get("smc_structure", "none")
-    vsa = entry.get("vsa_signal", "none")
-    tags = entry.get("volatility_tags", [])
-    entry_zone = entry.get("short_entry_zone", "—")
-    stop = entry.get("stop_loss", "—")
-    t1 = entry.get("cover_target_1", "—")
-    t2 = entry.get("cover_target_2", "—")
-    rr = entry.get("risk_reward", "—")
-    tf = entry.get("timeframe", "?")
-    signals = entry.get("top_signals", [])
+    rsi       = entry.get("rsi", "?")
+    macd      = entry.get("macd_signal", "none")
+    tags      = entry.get("volatility_tags", [])
+    entry_zone = entry.get("entry_zone", "—")
+    stop      = entry.get("stop_loss", "—")
+    t1        = entry.get("target_1", "—")
+    t2        = entry.get("target_2", "—")
+    rr        = entry.get("risk_reward", "—")
+    tf        = entry.get("timeframe", "?")
+    signals   = entry.get("top_signals", [])
+    narrative = entry.get("narrative", "")
 
-    risk_icon = RISK_EMOJI.get(risk, "⚪")
+    risk_icon  = RISK_EMOJI.get(risk, "⚪")
     phase_icon = WYCKOFF_EMOJI.get(phase, "")
-    tf_label = TIMEFRAME_LABEL.get(tf, tf)
+    tf_label   = TIMEFRAME_LABEL.get(tf, tf)
     signals_str = ", ".join(signals[:3]) if signals else "—"
-    tags_str = _fmt_tags(tags)
+    tags_str   = _fmt_tags(tags)
 
-    return (
-        f"*{rank}. {ticker}* {risk_icon}\n"
-        f"  Score: `{score}` | {phase_icon} `{phase}` ({confidence})\n"
-        f"  SMC: `{smc}` | VSA: `{vsa}`"
-        + (f" | {tags_str}" if tags_str else "") + "\n"
-        f"  Short entry: `{entry_zone}` | SL: `{stop}`\n"
-        f"  Cover T1: `{t1}` | Cover T2: `{t2}` | R:R: `{rr}`\n"
-        f"  {tf_label}\n"
-        f"  Signals: _{signals_str}_"
-    )
+    lines = [
+        f"*{rank}. {ticker}* {risk_icon}",
+        f"  Score: `{score}` | {phase_icon} `{phase}` ({confidence})",
+        f"  RSI: `{rsi}` | MACD: `{macd}`" + (f" | {tags_str}" if tags_str else ""),
+        f"  Short entry: `{entry_zone}` | SL: `{stop}`",
+        f"  Cover T1: `{t1}` | Cover T2: `{t2}` | R:R: `{rr}`",
+        f"  {tf_label}",
+        f"  Signals: _{signals_str}_",
+    ]
+    if narrative:
+        lines.append(f"  💬 _{narrative}_")
+    return "\n".join(lines)
 
 
 def _format_phase_b_entry(entry: dict, rank: int) -> str:
-    ticker = entry.get("ticker", "?")
-    phase = entry.get("phase", "?")
+    ticker  = entry.get("ticker", "?")
+    phase   = entry.get("phase", "?")
     trigger = entry.get("alert_trigger", "—")
-    days = entry.get("estimated_days_to_phase_c", "?")
+    days    = entry.get("estimated_days_to_phase_c", "?")
+    rsi     = entry.get("rsi", "")
+    rsi_str = f" | RSI: `{rsi}`" if rsi else ""
     return (
-        f"*{rank}. {ticker}* — `{phase}`\n"
+        f"*{rank}. {ticker}* — `{phase}`{rsi_str}\n"
         f"  Trigger: _{trigger}_\n"
         f"  Est. Phase C: ~{days}"
     )

@@ -131,13 +131,16 @@ def _compute_atr_pct(df: pd.DataFrame, period: int = 14) -> float:
 
 def enrich_candidate_context(tickers: list[str], base_ctx: dict) -> dict:
     """
-    Phase 3: download 90d OHLCV, compute beta and ATR% for each candidate ticker.
-    Returns base_ctx merged with: ohlcv_90d, beta, atr_pct.
+    Phase 3: download 90d OHLCV, compute beta, ATR%, and deterministic technicals
+    (RSI, MACD, Wyckoff phase, entry/stop/target levels) for each candidate ticker.
+    Returns base_ctx merged with: ohlcv_90d, beta, atr_pct, technicals.
     """
-    ctx = dict(base_ctx)  # shallow copy to avoid mutating original
+    from src.technicals import enrich_with_technicals  # avoid circular at module level
+    ctx = dict(base_ctx)
     ctx["ohlcv_90d"] = {}
     ctx["beta"] = {}
     ctx["atr_pct"] = {}
+    ctx["technicals"] = {}
 
     if not tickers:
         return ctx
@@ -184,7 +187,16 @@ def enrich_candidate_context(tickers: list[str], base_ctx: dict) -> dict:
             ctx["beta"][ticker] = _compute_beta(stock_returns, nifty_returns)
 
         # ATR%
-        ctx["atr_pct"][ticker] = _compute_atr_pct(df)
+        atr_pct = _compute_atr_pct(df)
+        ctx["atr_pct"][ticker] = atr_pct
 
-    print(f"[market_context] enriched {len(ctx['ohlcv_90d'])} candidates with OHLCV/beta/ATR")
+        # Deterministic technicals: RSI, MACD, Wyckoff phase, entry/stop/target
+        close_val = float(df["Close"].squeeze().iloc[-1])
+        atr_abs = atr_pct / 100 * close_val if atr_pct == atr_pct else 0
+        try:
+            ctx["technicals"][ticker] = enrich_with_technicals(df, close_val, atr_abs)
+        except Exception as exc:
+            print(f"[market_context] technicals error for {ticker}: {exc}")
+
+    print(f"[market_context] enriched {len(ctx['ohlcv_90d'])} candidates with OHLCV/beta/ATR/technicals")
     return ctx
