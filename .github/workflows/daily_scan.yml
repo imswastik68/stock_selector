@@ -9,6 +9,8 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write           # needed to push output JSON back to repo
 
     steps:
       - name: Checkout
@@ -48,7 +50,17 @@ jobs:
           path: data/fo_ban_prev.json
           key: fo-ban-cache-${{ runner.os }}
 
-      # Upload today's watchlist JSON as a run artifact
+      # Commit today's output JSON back to the repo so it's browsable on GitHub
+      - name: Commit output JSON
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add outputs/
+          git diff --cached --quiet && echo "No output changes to commit" || \
+            git commit -m "scan output $(date -u +%Y-%m-%d)" && git push
+
+      # Upload today's watchlist JSON as a run artifact (backup)
       - name: Upload watchlist artifact
         uses: actions/upload-artifact@v4
         if: always()

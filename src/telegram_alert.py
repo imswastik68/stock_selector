@@ -3,124 +3,123 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import os
 
 import telegram
 
 RISK_EMOJI = {"LOW": "🟢", "MEDIUM": "🟡", "HIGH": "🔴"}
-TIMEFRAME_LABEL = {"1-2d": "Short-term (1-2d)", "5-7d": "Swing (5-7d)", "3-5d": "Swing (3-5d)", "5-10d": "Multi-day (5-10d)"}
-
+TIMEFRAME_LABEL = {
+    "1-2d": "Short-term (1-2d)", "5-7d": "Swing (5-7d)",
+    "3-5d": "Swing (3-5d)", "5-10d": "Multi-day (5-10d)",
+}
 WYCKOFF_EMOJI = {
     "ACCUMULATION_C": "🌀", "ACCUMULATION_D": "📈", "MARKUP": "🚀",
     "DISTRIBUTION_C": "⚠️", "DISTRIBUTION_D": "📉", "MARKDOWN": "🔻",
-    "UNKNOWN": "❓",
 }
 
 
-# ── legacy formatter (old schema with 'watchlist' key) ───────────────────────
-
-def _format_entry(entry: dict, rank: int) -> str:
-    ticker = entry.get("ticker", "?")
-    score = entry.get("score", 0)
-    tf = entry.get("timeframe", "?")
-    target = entry.get("target_move_pct", 0)
-    risk = entry.get("risk", "MEDIUM")
-    entry_zone = entry.get("entry_zone", "—")
-    invalidation = entry.get("invalidation", "—")
-    signals = entry.get("top_signals", [])
-
-    risk_icon = RISK_EMOJI.get(risk, "⚪")
-    tf_label = TIMEFRAME_LABEL.get(tf, tf)
-    signals_str = "\n    • ".join(signals) if signals else "—"
-
-    return (
-        f"*{rank}. {ticker}* {risk_icon}\n"
-        f"  Score: `{score}` | {tf_label} | Target: `+{target}%`\n"
-        f"  Entry: `{entry_zone}` | Stop: `{invalidation}`\n"
-        f"  Signals:\n"
-        f"    • {signals_str}"
-    )
+def _e(text: str) -> str:
+    """Escape text for Telegram HTML mode."""
+    return html.escape(str(text))
 
 
-# ── new formatters (Wyckoff schema) ──────────────────────────────────────────
+def _code(text) -> str:
+    return f"<code>{_e(text)}</code>"
+
+
+def _b(text: str) -> str:
+    return f"<b>{_e(text)}</b>"
+
+
+def _i(text: str) -> str:
+    return f"<i>{_e(text)}</i>"
+
 
 def _fmt_tags(tags: list) -> str:
-    return " ".join(f"`{t}`" for t in tags) if tags else ""
+    return " ".join(_code(t) for t in tags) if tags else ""
 
+
+def _fmt_signals(signals: list) -> str:
+    if not signals:
+        return "—"
+    # replace underscores with spaces for readability
+    return ", ".join(s.replace("_", " ") for s in signals[:3])
+
+
+# ── new formatters ────────────────────────────────────────────────────────────
 
 def _format_buy_entry(entry: dict, rank: int) -> str:
-    ticker    = entry.get("ticker", "?")
-    score     = entry.get("score", 0)
-    risk      = entry.get("risk", "MEDIUM")
-    phase     = entry.get("wyckoff_phase", "?")
+    ticker     = entry.get("ticker", "?")
+    score      = entry.get("score", 0)
+    risk       = entry.get("risk", "MEDIUM")
+    phase      = entry.get("wyckoff_phase", "?")
     confidence = entry.get("wyckoff_confidence", "?")
-    rsi       = entry.get("rsi", "?")
-    macd      = entry.get("macd_signal", "none")
-    tags      = entry.get("volatility_tags", [])
+    rsi        = entry.get("rsi", "?")
+    macd       = entry.get("macd_signal", "none")
+    tags       = entry.get("volatility_tags", [])
     entry_zone = entry.get("entry_zone", "—")
-    stop      = entry.get("stop_loss", "—")
-    t1        = entry.get("target_1", "—")
-    t2        = entry.get("target_2", "—")
-    rr        = entry.get("risk_reward", "—")
-    tf        = entry.get("timeframe", "?")
-    signals   = entry.get("top_signals", [])
-    narrative = entry.get("narrative", "")
+    stop       = entry.get("stop_loss", "—")
+    t1         = entry.get("target_1", "—")
+    t2         = entry.get("target_2", "—")
+    rr         = entry.get("risk_reward", "—")
+    tf         = entry.get("timeframe", "?")
+    signals    = entry.get("top_signals", [])
+    narrative  = entry.get("narrative", "")
 
     risk_icon  = RISK_EMOJI.get(risk, "⚪")
     phase_icon = WYCKOFF_EMOJI.get(phase, "")
     tf_label   = TIMEFRAME_LABEL.get(tf, tf)
-    signals_str = ", ".join(signals[:3]) if signals else "—"
     tags_str   = _fmt_tags(tags)
 
     lines = [
-        f"*{rank}. {ticker}* {risk_icon}",
-        f"  Score: `{score}` | {phase_icon} `{phase}` ({confidence})",
-        f"  RSI: `{rsi}` | MACD: `{macd}`" + (f" | {tags_str}" if tags_str else ""),
-        f"  Entry: `{entry_zone}` | SL: `{stop}`",
-        f"  T1: `{t1}` | T2: `{t2}` | R:R: `{rr}`",
-        f"  {tf_label}",
-        f"  Signals: _{signals_str}_",
+        f"{_b(f'{rank}. {ticker}')} {risk_icon}",
+        f"  Score: {_code(score)} | {phase_icon} {_code(phase)} ({_e(confidence)})",
+        f"  RSI: {_code(rsi)} | MACD: {_code(macd)}" + (f" | {tags_str}" if tags_str else ""),
+        f"  Entry: {_code(entry_zone)} | SL: {_code(stop)}",
+        f"  T1: {_code(t1)} | T2: {_code(t2)} | R:R: {_code(rr)}",
+        f"  {_e(tf_label)}",
+        f"  Signals: {_i(_fmt_signals(signals))}",
     ]
     if narrative:
-        lines.append(f"  💬 _{narrative}_")
+        lines.append(f"  💬 {_i(narrative)}")
     return "\n".join(lines)
 
 
 def _format_sell_entry(entry: dict, rank: int) -> str:
-    ticker    = entry.get("ticker", "?")
-    score     = entry.get("score", 0)
-    risk      = entry.get("risk", "MEDIUM")
-    phase     = entry.get("wyckoff_phase", "?")
+    ticker     = entry.get("ticker", "?")
+    score      = entry.get("score", 0)
+    risk       = entry.get("risk", "MEDIUM")
+    phase      = entry.get("wyckoff_phase", "?")
     confidence = entry.get("wyckoff_confidence", "?")
-    rsi       = entry.get("rsi", "?")
-    macd      = entry.get("macd_signal", "none")
-    tags      = entry.get("volatility_tags", [])
+    rsi        = entry.get("rsi", "?")
+    macd       = entry.get("macd_signal", "none")
+    tags       = entry.get("volatility_tags", [])
     entry_zone = entry.get("entry_zone", "—")
-    stop      = entry.get("stop_loss", "—")
-    t1        = entry.get("target_1", "—")
-    t2        = entry.get("target_2", "—")
-    rr        = entry.get("risk_reward", "—")
-    tf        = entry.get("timeframe", "?")
-    signals   = entry.get("top_signals", [])
-    narrative = entry.get("narrative", "")
+    stop       = entry.get("stop_loss", "—")
+    t1         = entry.get("target_1", "—")
+    t2         = entry.get("target_2", "—")
+    rr         = entry.get("risk_reward", "—")
+    tf         = entry.get("timeframe", "?")
+    signals    = entry.get("top_signals", [])
+    narrative  = entry.get("narrative", "")
 
     risk_icon  = RISK_EMOJI.get(risk, "⚪")
     phase_icon = WYCKOFF_EMOJI.get(phase, "")
     tf_label   = TIMEFRAME_LABEL.get(tf, tf)
-    signals_str = ", ".join(signals[:3]) if signals else "—"
     tags_str   = _fmt_tags(tags)
 
     lines = [
-        f"*{rank}. {ticker}* {risk_icon}",
-        f"  Score: `{score}` | {phase_icon} `{phase}` ({confidence})",
-        f"  RSI: `{rsi}` | MACD: `{macd}`" + (f" | {tags_str}" if tags_str else ""),
-        f"  Short entry: `{entry_zone}` | SL: `{stop}`",
-        f"  Cover T1: `{t1}` | Cover T2: `{t2}` | R:R: `{rr}`",
-        f"  {tf_label}",
-        f"  Signals: _{signals_str}_",
+        f"{_b(f'{rank}. {ticker}')} {risk_icon}",
+        f"  Score: {_code(score)} | {phase_icon} {_code(phase)} ({_e(confidence)})",
+        f"  RSI: {_code(rsi)} | MACD: {_code(macd)}" + (f" | {tags_str}" if tags_str else ""),
+        f"  Short entry: {_code(entry_zone)} | SL: {_code(stop)}",
+        f"  Cover T1: {_code(t1)} | Cover T2: {_code(t2)} | R:R: {_code(rr)}",
+        f"  {_e(tf_label)}",
+        f"  Signals: {_i(_fmt_signals(signals))}",
     ]
     if narrative:
-        lines.append(f"  💬 _{narrative}_")
+        lines.append(f"  💬 {_i(narrative)}")
     return "\n".join(lines)
 
 
@@ -130,11 +129,35 @@ def _format_phase_b_entry(entry: dict, rank: int) -> str:
     trigger = entry.get("alert_trigger", "—")
     days    = entry.get("estimated_days_to_phase_c", "?")
     rsi     = entry.get("rsi", "")
-    rsi_str = f" | RSI: `{rsi}`" if rsi else ""
+    rsi_str = f" | RSI: {_code(rsi)}" if rsi else ""
     return (
-        f"*{rank}. {ticker}* — `{phase}`{rsi_str}\n"
-        f"  Trigger: _{trigger}_\n"
-        f"  Est. Phase C: ~{days}"
+        f"{_b(f'{rank}. {ticker}')} — {_code(phase)}{rsi_str}\n"
+        f"  Trigger: {_i(_e(str(trigger)).replace('_', ' '))}\n"
+        f"  Est. Phase C: ~{_e(str(days))}"
+    )
+
+
+# ── legacy formatter ──────────────────────────────────────────────────────────
+
+def _format_entry_legacy(entry: dict, rank: int) -> str:
+    ticker     = entry.get("ticker", "?")
+    score      = entry.get("score", 0)
+    tf         = entry.get("timeframe", "?")
+    target     = entry.get("target_move_pct", 0)
+    risk       = entry.get("risk", "MEDIUM")
+    entry_zone = entry.get("entry_zone", "—")
+    invalidation = entry.get("invalidation", "—")
+    signals    = entry.get("top_signals", [])
+
+    risk_icon = RISK_EMOJI.get(risk, "⚪")
+    tf_label  = TIMEFRAME_LABEL.get(tf, tf)
+    sigs_str  = "\n    • ".join(_fmt_signals([s]) for s in signals) if signals else "—"
+
+    return (
+        f"{_b(f'{rank}. {ticker}')} {risk_icon}\n"
+        f"  Score: {_code(score)} | {_e(tf_label)} | Target: {_code(f'+{target}%')}\n"
+        f"  Entry: {_code(entry_zone)} | Stop: {_code(invalidation)}\n"
+        f"  Signals:\n    • {sigs_str}"
     )
 
 
@@ -143,47 +166,45 @@ def _format_phase_b_entry(entry: dict, rank: int) -> str:
 def _build_message(watchlist_data: dict) -> str:
     scan_date = watchlist_data.get("scan_date", "?")
 
-    # New schema
     if "buy_watchlist" in watchlist_data:
-        buy_list = watchlist_data.get("buy_watchlist", [])
-        sell_list = watchlist_data.get("sell_watchlist", [])
+        buy_list    = watchlist_data.get("buy_watchlist", [])
+        sell_list   = watchlist_data.get("sell_watchlist", [])
         phase_b_list = watchlist_data.get("phase_b_watchlist", [])
-        nifty_ctx = watchlist_data.get("nifty_context", "ranging").upper()
-        total = watchlist_data.get("total_screened", 0)
-        warnings = watchlist_data.get("data_quality_warnings", [])
+        nifty_ctx   = watchlist_data.get("nifty_context", "ranging").upper()
+        total       = watchlist_data.get("total_screened", 0)
+        warnings    = watchlist_data.get("data_quality_warnings", [])
 
         if not buy_list and not sell_list and not phase_b_list:
             return (
-                f"*NSE/BSE Stock Scanner — {scan_date}*\n\n"
+                f"<b>NSE/BSE Stock Scanner — {_e(scan_date)}</b>\n\n"
                 f"No qualifying candidates today ({total} scanned). "
-                f"Nifty: {nifty_ctx}"
+                f"Nifty: {_e(nifty_ctx)}"
             )
 
         header = (
-            f"*NSE/BSE Stock Scanner — {scan_date}*\n"
-            f"_Nifty 50: {nifty_ctx} | {total} stocks screened_\n"
+            f"<b>NSE/BSE Stock Scanner — {_e(scan_date)}</b>\n"
+            f"<i>Nifty 50: {_e(nifty_ctx)} | {total} stocks screened</i>\n"
             f"{'─' * 32}"
         )
-
         sections = [header]
 
         if buy_list:
-            sections.append(f"\n📈 *BUY WATCHLIST ({len(buy_list)} picks)*\n")
+            sections.append(f"\n📈 <b>BUY WATCHLIST ({len(buy_list)} picks)</b>\n")
             sections.extend(_format_buy_entry(e, i + 1) for i, e in enumerate(buy_list))
 
         if sell_list:
             offset = len(buy_list)
-            sections.append(f"\n📉 *SELL / SHORT WATCHLIST ({len(sell_list)} picks)*\n")
+            sections.append(f"\n📉 <b>SELL / SHORT WATCHLIST ({len(sell_list)} picks)</b>\n")
             sections.extend(_format_sell_entry(e, offset + i + 1) for i, e in enumerate(sell_list))
 
         if phase_b_list:
-            sections.append(f"\n👀 *WATCH — PHASE B ({len(phase_b_list)} stocks forming)*\n")
+            sections.append(f"\n👀 <b>WATCH — PHASE B ({len(phase_b_list)} forming)</b>\n")
             sections.extend(_format_phase_b_entry(e, i + 1) for i, e in enumerate(phase_b_list))
 
         if warnings:
-            sections.append("\n⚠ *Data warnings:*\n" + "\n".join(f"  • {w}" for w in warnings))
+            sections.append("\n⚠ <b>Data warnings:</b>\n" + "\n".join(f"  • {_e(w)}" for w in warnings))
 
-        sections.append("\n\n⚠️ _This is not investment advice. Do your own due diligence._")
+        sections.append("\n\n⚠️ <i>This is not investment advice. Do your own due diligence.</i>")
         return "\n\n".join(sections)
 
     # Legacy schema fallback
@@ -192,18 +213,17 @@ def _build_message(watchlist_data: dict) -> str:
 
     if not watchlist:
         return (
-            f"*NSE/BSE Stock Scanner — {scan_date}*\n\n"
-            f"No qualifying candidates today ({total} scanned). "
-            f"Market conditions don't meet signal thresholds."
+            f"<b>NSE/BSE Stock Scanner — {_e(scan_date)}</b>\n\n"
+            f"No qualifying candidates today ({total} scanned)."
         )
 
     header = (
-        f"*NSE/BSE Stock Scanner — {scan_date}*\n"
-        f"_{len(watchlist)} picks from {total} candidates scanned_\n"
+        f"<b>NSE/BSE Stock Scanner — {_e(scan_date)}</b>\n"
+        f"<i>{len(watchlist)} picks from {total} candidates scanned</i>\n"
         f"{'─' * 32}"
     )
-    entries = [_format_entry(e, i + 1) for i, e in enumerate(watchlist)]
-    footer = "\n\n⚠️ _This is not investment advice. Do your own due diligence._"
+    entries = [_format_entry_legacy(e, i + 1) for i, e in enumerate(watchlist)]
+    footer = "\n\n⚠️ <i>This is not investment advice. Do your own due diligence.</i>"
     return header + "\n\n" + "\n\n".join(entries) + footer
 
 
@@ -214,17 +234,12 @@ async def _send(token: str, chat_id: str, text: str) -> None:
         await bot.send_message(
             chat_id=chat_id,
             text=text[i : i + chunk_size],
-            parse_mode="Markdown",
+            parse_mode="HTML",
         )
 
 
 def send_telegram_alert(watchlist_data: dict) -> None:
-    """
-    Format the watchlist and send it to the configured Telegram chat.
-    Reads TELEGRAM_TOKEN and TELEGRAM_CHAT_ID from env.
-    Silently skips if env vars are missing.
-    """
-    token = os.environ.get("TELEGRAM_TOKEN")
+    token   = os.environ.get("TELEGRAM_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
     if not token or not chat_id:
