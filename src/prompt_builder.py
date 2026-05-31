@@ -113,11 +113,15 @@ def build_user_message(
         f"ema200={nifty.get('ema200','?')} price={nifty.get('current_price','?')}"
     )
 
+    # More OHLCV rows when fewer candidates: Wyckoff needs ≥45 bars to see full structure
+    n = len(candidates[:5])
+    ohlcv_rows = 45 if n <= 2 else (30 if n <= 4 else 20)
+
     candidate_blocks = []
     for c in candidates[:5]:
         ticker = c.get("ticker", "")
         df = ohlcv_90d.get(ticker)
-        ohlcv_str = _ohlcv_to_csv(df) if df is not None else "DATA_UNAVAILABLE"
+        ohlcv_str = _ohlcv_to_csv(df, max_rows=ohlcv_rows) if df is not None else "DATA_UNAVAILABLE"
 
         beta_val = beta_data.get(ticker, float("nan"))
         atr_val = atr_data.get(ticker, float("nan"))

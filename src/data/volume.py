@@ -12,7 +12,7 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 NIFTY500_CSV = DATA_DIR / "nifty500.csv"
 SME_CSV = DATA_DIR / "sme_list.csv"
 
-VOLUME_SURGE_THRESHOLD = 5.0
+VOLUME_SURGE_THRESHOLD = 2.5  # was 5.0 — too restrictive, genuine moves start at 2-3x
 SMALL_CAP_THRESHOLD_CR = 500
 BATCH_SIZE = 100  # yfinance handles ~100 tickers per batch comfortably
 

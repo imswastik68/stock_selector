@@ -12,8 +12,8 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 NIFTY500_CSV = DATA_DIR / "nifty500.csv"
 SME_CSV = DATA_DIR / "sme_list.csv"
 
-ATH_PROXIMITY_PCT = 1.0
-MIN_VOLUME_RATIO = 1.5
+ATH_PROXIMITY_PCT = 5.0   # within 5% of 52w high (was 1% — too few candidates)
+MIN_VOLUME_RATIO = 1.2
 CONSOLIDATION_WEEKS = 3
 BATCH_SIZE = 100
 

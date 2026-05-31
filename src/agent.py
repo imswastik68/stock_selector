@@ -15,7 +15,7 @@ from src.prompt_builder import SYSTEM_PROMPT, build_user_message
 from src.response_parser import ParseError, parse_claude_response
 
 _GROQ_BASE  = "https://api.groq.com/openai/v1"
-_GROQ_MODEL = "qwen/qwen3-32b"
+_GROQ_MODEL = "llama-3.3-70b-versatile"  # better instruction following than qwen3-32b; same free tier
 
 _OLLAMA_BASE  = "http://localhost:11434/v1"
 _OLLAMA_MODEL = "qwen3:8b"
