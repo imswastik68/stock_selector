@@ -3,6 +3,7 @@
 
 # runtime state
 data/fo_ban_prev.json
+outputs/
 
 # Python
 __pycache__/
