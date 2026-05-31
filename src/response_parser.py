@@ -73,10 +73,13 @@ def _validate_buy_entry(entry: dict) -> dict | None:
         else:
             entry[field] = "unknown"
 
-    # Enforce minimum score and R:R
+    t = entry.get("ticker", "?")
     if entry.get("score", 0) < 6:
+        print(f"[parser] drop buy {t}: score={entry.get('score')} < 6")
         return None
-    if _rr_float(entry.get("risk_reward", "1:1")) < 2.0:
+    rr = _rr_float(entry.get("risk_reward", "1:1"))
+    if rr < 2.0:
+        print(f"[parser] drop buy {t}: R:R={entry.get('risk_reward','missing')} ({rr:.1f} < 2.0)")
         return None
 
     # Fill optional fields with safe defaults
@@ -109,9 +112,13 @@ def _validate_sell_entry(entry: dict) -> dict | None:
         else:
             entry[field] = "unknown"
 
+    t = entry.get("ticker", "?")
     if entry.get("score", 0) < 6:
+        print(f"[parser] drop sell {t}: score={entry.get('score')} < 6")
         return None
-    if _rr_float(entry.get("risk_reward", "1:1")) < 2.0:
+    rr = _rr_float(entry.get("risk_reward", "1:1"))
+    if rr < 2.0:
+        print(f"[parser] drop sell {t}: R:R={entry.get('risk_reward','missing')} ({rr:.1f} < 2.0)")
         return None
 
     entry.setdefault("volatility_tags", [])

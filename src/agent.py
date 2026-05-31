@@ -182,7 +182,7 @@ def synthesize_watchlist(
     for caller in callers:
         try:
             raw = caller(user_msg)
-            print(f"[agent] raw response ({len(raw)} chars): {raw[:400]!r}")
+            print(f"[agent] raw response ({len(raw)} chars): {raw[:800]!r}")
             print("[agent] response received, parsing...")
             result = parse_claude_response(raw, scan_date.isoformat(), total_scanned)
             b = len(result.get("buy_watchlist", []))
