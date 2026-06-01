@@ -158,63 +158,139 @@ def compute_macd_signal(close: pd.Series) -> str:
 
 def classify_wyckoff_phase(df: pd.DataFrame) -> str:
     """
-    Rule-based Wyckoff phase from OHLCV. Returns one of the 8 exact phase strings.
-    Logic: based on EMA trend, recent EMA crossover, and price vs range.
+    Rule-based Wyckoff phase classification.
+
+    Four inputs (in order of reliability):
+      1. Prior trend — bars -60 to -30 ago vs bars -30 to now
+      2. EMA alignment — trending_up/down vs ranging
+      3. Volume character — up-day vol vs down-day vol, expansion
+      4. Price structure — range position, Spring wick, UTAD wick, LPS pullback
+
+    Phase mapping:
+      BUY:   ACCUMULATION_C (Spring), ACCUMULATION_D (LPS), MARKUP
+      SELL:  DISTRIBUTION_C (UTAD),  DISTRIBUTION_D (LPSY), MARKDOWN
+      WATCH: ACCUMULATION_B, DISTRIBUTION_B
     """
-    if len(df) < 30:
+    if len(df) < 50:
         return "ACCUMULATION_B"
 
-    close = df["Close"].squeeze()
+    close  = df["Close"].squeeze()
+    high   = df["High"].squeeze()
+    low    = df["Low"].squeeze()
     volume = df["Volume"].squeeze()
+    price_now = float(close.iloc[-1])
 
+    # ── 1. Prior trend: compare price ~60 bars ago vs ~30 bars ago ───────────
+    lookback = min(60, len(close) - 2)
+    midback  = min(30, len(close) // 2)
+    prior_up   = float(close.iloc[-midback]) > float(close.iloc[-lookback]) * 1.05
+    prior_down = float(close.iloc[-midback]) < float(close.iloc[-lookback]) * 0.95
+
+    # ── 2. EMA alignment ──────────────────────────────────────────────────────
     ema20 = close.ewm(span=20, adjust=False).mean()
     ema50 = close.ewm(span=50, adjust=False).mean()
+    e20, e50 = float(ema20.iloc[-1]), float(ema50.iloc[-1])
+    trending_up   = price_now > e20 > e50
+    trending_down = price_now < e20 < e50
 
-    price_now = float(close.iloc[-1])
-    ema20_now = float(ema20.iloc[-1])
-    ema50_now = float(ema50.iloc[-1])
+    # ── 3. Volume character ───────────────────────────────────────────────────
+    vol_avg30    = float(volume.iloc[-31:-1].mean()) if len(volume) >= 32 else float(volume.mean())
+    vol_5d       = float(volume.iloc[-6:-1].mean())  if len(volume) >= 7  else vol_avg30
+    vol_expanding = vol_5d > vol_avg30 * 1.2
 
-    # Recent EMA crossover (last 5 bars)
-    ema_diff = ema20 - ema50
-    recent_cross_up   = (ema_diff.iloc[-6:-1] <= 0).any() and ema_diff.iloc[-1] > 0
-    recent_cross_down = (ema_diff.iloc[-6:-1] >= 0).any() and ema_diff.iloc[-1] < 0
+    # Volume on up-days vs down-days over last 20 bars (accumulation / distribution character)
+    diff20 = close.iloc[-21:].diff()
+    vol20  = volume.iloc[-21:]
+    up_vol   = float(vol20[diff20 > 0].mean()) if (diff20 > 0).any() else 0.0
+    down_vol = float(vol20[diff20 < 0].mean()) if (diff20 < 0).any() else 0.0
+    acc_vol  = up_vol   > down_vol * 1.1 if (up_vol > 0 and down_vol > 0) else False
+    dist_vol = down_vol > up_vol   * 1.1 if (up_vol > 0 and down_vol > 0) else False
 
-    # Volume trend: is recent volume expanding or contracting?
-    vol_30d = float(volume.iloc[-31:-1].mean()) if len(volume) >= 32 else float(volume.mean())
-    vol_5d  = float(volume.iloc[-6:-1].mean())  if len(volume) >= 7  else vol_30d
-    vol_expanding = vol_5d > vol_30d * 1.2
+    # ── 4. Trading range (bars -35 to -5, so last 5 bars are "current action") ─
+    rw      = close.iloc[-35:-5] if len(close) >= 40 else close.iloc[:-5]
+    tr_high = float(rw.max()) if not rw.empty else price_now
+    tr_low  = float(rw.min()) if not rw.empty else price_now
+    tr_rng  = tr_high - tr_low
 
-    # Price range over bars 10-45 (the "trading range")
-    range_window = close.iloc[-45:-5] if len(close) >= 50 else close.iloc[:-5]
-    range_high = float(range_window.max()) if not range_window.empty else price_now
-    range_low  = float(range_window.min()) if not range_window.empty else price_now
+    range_pct = (price_now - tr_low) / tr_rng if tr_rng > 0 else 0.5
+    near_high = range_pct >= 0.75
+    near_low  = range_pct <= 0.25
 
-    near_high = price_now >= range_high * 0.97
-    near_low  = price_now <= range_low  * 1.03
+    # Spring: LOW wick tested below range low within last 15 bars, CLOSE recovered
+    # 15-bar window because the spring wick typically occurs 5-10 sessions before
+    # the scanner run — 6 bars is too narrow to catch it reliably.
+    low15  = float(low.iloc[-16:].min())  if len(low)  >= 16 else float(low.min())
+    spring = low15 < tr_low * 0.99 and price_now > tr_low * 0.99
 
-    # Phase classification (order matters — most specific first)
-    if recent_cross_up and near_low:
-        return "ACCUMULATION_C"  # EMA just crossed up from low range = Spring/LPS signal
+    # UTAD: HIGH wick tested above range high within last 15 bars, CLOSE failed back
+    high15 = float(high.iloc[-16:].max()) if len(high) >= 16 else float(high.max())
+    utad   = high15 > tr_high * 1.01 and price_now < tr_high * 1.01
 
-    if recent_cross_down and near_high:
-        return "DISTRIBUTION_C"  # EMA just crossed down from high range = UTAD/LPSY signal
+    # LPS pullback: price pulled back 3%+ from its 20-bar high
+    high20 = float(close.iloc[-21:-1].max()) if len(close) >= 21 else price_now
+    low20  = float(close.iloc[-21:-1].min()) if len(close) >= 21 else price_now
+    lps_pullback  = high20 > 0 and (high20 - price_now) / high20 > 0.03
+    lpsy_bounce   = low20  > 0 and (price_now - low20)  / low20  > 0.03
 
-    if price_now > ema20_now > ema50_now and vol_expanding:
+    # EMA gap strength: wide gap (>5%) = strong trend, narrow = weakening / converging
+    # Used to distinguish a genuine LPS (strong trend pausing) from a tired trend
+    # that is drifting sideways before a reversal (which looks the same with EMAs alone).
+    ema_bull_gap = (e20 - e50) / e50 if e50 > 0 else 0.0   # positive = bullish trend strength
+    ema_bear_gap = (e50 - e20) / e50 if e50 > 0 else 0.0   # positive = bearish trend strength
+    strong_bull  = ema_bull_gap > 0.05   # e20 is >5% above e50
+    strong_bear  = ema_bear_gap > 0.05   # e20 is >5% below e50
+
+    # ── Classification ────────────────────────────────────────────────────────
+
+    # MARKUP / MARKDOWN: full EMA alignment — stock is actively trending
+    if trending_up:
         return "MARKUP"
-
-    if price_now < ema20_now < ema50_now and vol_expanding:
+    if trending_down:
         return "MARKDOWN"
 
-    if price_now > ema20_now > ema50_now:
-        return "ACCUMULATION_D"  # Trending up but volume not yet expanding = late accum
+    # Ranging from here: price is between or around the two EMAs
+    # ──────────────────────────────────────────────────────────────────────────
 
-    if price_now < ema20_now < ema50_now:
-        return "DISTRIBUTION_D"  # Trending down but volume not expanding = late dist
+    # ACCUMULATION_C (Spring):
+    #   Intraday wick tested below range low but CLOSE recovered above it.
+    #   Requires prior downtrend or currently near range lows (no spring from uptrend).
+    if spring and (prior_down or near_low):
+        return "ACCUMULATION_C"
 
-    if near_high:
-        return "DISTRIBUTION_B"  # Range-bound near highs
+    # DISTRIBUTION_C (UTAD):
+    #   Intraday wick tested above range high but CLOSE failed back below it.
+    #   Requires prior uptrend or currently near range highs.
+    if utad and (prior_up or near_high):
+        return "DISTRIBUTION_C"
 
-    return "ACCUMULATION_B"      # Range-bound near lows or midpoint
+    # EMA alignment determines which regime (bullish vs bearish) we are in:
+    #   e20 > e50 = medium-term trend still bullish  → accumulation family
+    #   e20 < e50 = medium-term trend still bearish  → distribution family
+    #   e20 ≈ e50 = neutral → use prior trend / position
+
+    if e20 > e50:
+        # LPS pullback: only valid when the EMA gap is wide (>5%) — that confirms the trend
+        # was genuinely strong before the pullback, not just a convergence artifact.
+        if strong_bull and lps_pullback and not vol_expanding and price_now > e50 * 0.97:
+            return "ACCUMULATION_D"
+        # Pre-breakout: still ranging but acc volume near range top after a downtrend
+        if acc_vol and near_high and prior_down:
+            return "ACCUMULATION_D"
+        return "ACCUMULATION_B"
+
+    if e20 < e50:
+        # LPSY bounce: valid only when bear trend is genuinely strong (EMA gap > 5%)
+        if strong_bear and lpsy_bounce and not vol_expanding and price_now < e50 * 1.03:
+            return "DISTRIBUTION_D"
+        # Pre-breakdown: ranging with dist volume near range bottom after an uptrend
+        if dist_vol and near_low and prior_up:
+            return "DISTRIBUTION_D"
+        return "DISTRIBUTION_B"
+
+    # EMAs nearly equal — use prior trend context
+    if prior_up or near_high:
+        return "DISTRIBUTION_B"
+    return "ACCUMULATION_B"
 
 
 def compute_entry_levels(close: float, atr: float, direction: str) -> dict:
