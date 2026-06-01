@@ -8,17 +8,73 @@ from __future__ import annotations
 import pandas as pd
 
 
-def compute_rsi(close: pd.Series, period: int = 14) -> float:
+def _rsi_series(close: pd.Series, period: int = 14) -> pd.Series:
+    """Full RSI series used by both compute_rsi() and divergence detection."""
     delta = close.diff()
-    gain = delta.clip(lower=0)
-    loss = (-delta).clip(lower=0)
-    avg_gain = gain.ewm(com=period - 1, adjust=False).mean()
-    avg_loss = loss.ewm(com=period - 1, adjust=False).mean()
-    last_loss = avg_loss.iloc[-1]
-    if last_loss == 0:
-        return 100.0
-    rs = avg_gain.iloc[-1] / last_loss
-    return round(100 - 100 / (1 + rs), 1)
+    avg_gain = delta.clip(lower=0).ewm(com=period - 1, adjust=False).mean()
+    avg_loss = (-delta).clip(lower=0).ewm(com=period - 1, adjust=False).mean()
+    # avg_loss == 0 means no losses at all → RSI = 100
+    result = avg_gain.copy() * 0.0  # same index, start at 0
+    nz = avg_loss != 0
+    result[~nz] = 100.0
+    result[nz] = 100 - 100 / (1 + avg_gain[nz] / avg_loss[nz])
+    return result.round(1)
+
+
+def compute_rsi(close: pd.Series, period: int = 14) -> float:
+    return float(_rsi_series(close, period).iloc[-1])
+
+
+def _find_pivots(series: pd.Series) -> tuple[list[int], list[int]]:
+    """Return (peak_indices, trough_indices) as iloc positions within series."""
+    vals = series.values
+    peaks, troughs = [], []
+    for i in range(1, len(vals) - 1):
+        if vals[i] > vals[i - 1] and vals[i] > vals[i + 1]:
+            peaks.append(i)
+        elif vals[i] < vals[i - 1] and vals[i] < vals[i + 1]:
+            troughs.append(i)
+    return peaks, troughs
+
+
+def compute_rsi_divergence(close: pd.Series, lookback: int = 20) -> str:
+    """
+    Detect regular RSI divergence. Compares TODAY's bar against the most
+    recent prior pivot within `lookback` bars.
+
+    Bearish: today's price > prior peak AND today's RSI < prior RSI at that
+      peak by ≥2 pts. Strong trending stocks keep making higher highs WITH
+      rising RSI — only exhausted moves show this split.
+    Bullish: today's price < prior trough AND today's RSI > prior RSI at
+      that trough by ≥2 pts. Sellers losing force even at new lows.
+
+    Returns 'bearish_divergence', 'bullish_divergence', or 'none'.
+    """
+    if len(close) < max(lookback + 1, 20):
+        return "none"
+
+    full_rsi      = _rsi_series(close)
+    current_price = float(close.iloc[-1])
+    current_rsi   = float(full_rsi.iloc[-1])
+
+    # History window excludes today (today is what we compare against)
+    hist_c = close.iloc[-(lookback + 1):-1]
+    hist_r = full_rsi.iloc[-(lookback + 1):-1]
+    peaks, troughs = _find_pivots(hist_c)
+
+    if peaks:
+        p = peaks[-1]  # most recent prior peak
+        if (current_price > float(hist_c.iloc[p]) and
+                current_rsi < float(hist_r.iloc[p]) - 2):
+            return "bearish_divergence"
+
+    if troughs:
+        t = troughs[-1]  # most recent prior trough
+        if (current_price < float(hist_c.iloc[t]) and
+                current_rsi > float(hist_r.iloc[t]) + 2):
+            return "bullish_divergence"
+
+    return "none"
 
 
 def compute_macd_signal(close: pd.Series) -> str:
@@ -300,14 +356,16 @@ def enrich_with_technicals(
         direction = "watch"
 
     rsi_agrees = (
-        (direction == "buy"  and rsi < 70) or
-        (direction == "sell" and rsi > 30) or
+        (direction == "buy"  and not rsi_bearish_div) or
+        (direction == "sell" and not rsi_bullish_div) or
         (direction == "watch")
     )
 
     # RSI scoring signals
-    rsi_momentum = bool(50 <= rsi <= 70)   # building momentum, not yet overbought
-    rsi_extended = bool(rsi > 70)           # overbought — poor entry risk/reward
+    rsi_momentum = bool(50 <= rsi <= 75)   # building momentum
+    rsi_div      = compute_rsi_divergence(close_series)
+    rsi_bearish_div = rsi_div == "bearish_divergence"  # price HH + RSI LH: momentum fading
+    rsi_bullish_div = rsi_div == "bullish_divergence"  # price LL + RSI HL: sellers tiring
 
     # Relative strength vs Nifty over last 20 bars
     rs_vs_nifty = False
@@ -325,7 +383,8 @@ def enrich_with_technicals(
         "wyckoff_confidence": "HIGH" if rsi_agrees else "MEDIUM",
         "candlestick_patterns": candles,
         "rsi_momentum": rsi_momentum,
-        "rsi_extended": rsi_extended,
+        "rsi_bearish_div": rsi_bearish_div,
+        "rsi_bullish_div": rsi_bullish_div,
         "rs_vs_nifty": rs_vs_nifty,
         "obv_accumulation": obv_acc,
         "bb_squeeze_breakout": bb_sq,

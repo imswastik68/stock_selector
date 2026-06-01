@@ -15,7 +15,8 @@ SHORT_TERM_WEIGHTS = {
     "rs_vs_nifty": 2,           # stock outperforming Nifty by 2%+ over 20d
     "options_pcr_fear": 1,      # PCR > 1.5: extreme fear = contrarian bullish (min OI required)
     "options_long_buildup": 1,  # price up + OI up = fresh longs (min OI required)
-    "rsi_momentum": 1,          # RSI 50-70: momentum building
+    "rsi_momentum": 1,          # RSI 50-75: momentum building
+    "rsi_bullish_div": 1,       # price LL + RSI HL: sellers losing momentum
 }
 
 SWING_WEIGHTS = {
@@ -29,7 +30,7 @@ DISQUALIFIER_WEIGHTS = {
     "sebi_investigation": -10,
     "f_group": -5,
     "distribution_signal": -5,  # volume spike + price DOWN = institutional selling
-    "rsi_extended": -2,          # RSI > 70: overbought, poor entry timing
+    "rsi_bearish_div": -2,       # price HH + RSI LH: momentum fading (valid even above RSI 70)
     "thin_market": -4,           # avg daily turnover < ₹5cr: unreliable signals + exit risk
     "options_short_buildup": -2,  # price down + OI up = fresh shorts entering
     "options_pcr_greed": -1,      # PCR < 0.5: extreme complacency (min OI required)
@@ -84,9 +85,10 @@ def _build_signal_map(
 
     # Technical signals (pass 3 only — after enrich_candidate_context)
     if technical_data:
-        signals["rsi_momentum"] = technical_data.get("rsi_momentum", False)
-        signals["rs_vs_nifty"]  = technical_data.get("rs_vs_nifty", False)
-        signals["rsi_extended"] = technical_data.get("rsi_extended", False)
+        signals["rsi_momentum"]   = technical_data.get("rsi_momentum", False)
+        signals["rs_vs_nifty"]    = technical_data.get("rs_vs_nifty", False)
+        signals["rsi_bearish_div"] = technical_data.get("rsi_bearish_div", False)
+        signals["rsi_bullish_div"] = technical_data.get("rsi_bullish_div", False)
 
     # Delivery volume signal from NSE bhav copy
     if delivery_data:
