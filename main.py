@@ -239,6 +239,7 @@ def main() -> int:
         ticker: {
             "rsi_momentum": t.get("rsi_momentum", False),
             "rs_vs_nifty":  t.get("rs_vs_nifty", False),
+            "rsi_extended": t.get("rsi_extended", False),
         }
         for ticker, t in market_context.get("technicals", {}).items()
     }

@@ -29,6 +29,8 @@ DISQUALIFIER_WEIGHTS = {
     "sebi_investigation": -10,
     "f_group": -5,
     "distribution_signal": -5,  # volume spike + price DOWN = institutional selling
+    "rsi_extended": -2,          # RSI > 70: overbought, poor entry timing
+    "thin_market": -4,           # avg daily turnover < ₹5cr: unreliable signals + exit risk
     "options_short_buildup": -2,  # price down + OI up = fresh shorts entering
     "options_pcr_greed": -1,      # PCR < 0.5: extreme complacency (min OI required)
 }
@@ -63,6 +65,10 @@ def _build_signal_map(
     if volume_data:
         signals["volume_5x"]          = volume_data.get("is_volume_surge", False)
         signals["distribution_signal"] = volume_data.get("is_distribution", False)
+        # Thin market: avg daily turnover < ₹5 crore — signal quality is unreliable
+        avg_30d = volume_data.get("avg_30d_volume", 0) or 0
+        price   = volume_data.get("today_close", 0) or 0
+        signals["thin_market"] = bool(avg_30d > 0 and price > 0 and avg_30d * price < 5e7)
 
     # 52-week high: only actual breakout scores; proximity alone removed (redundant + noisy)
     if breakout_data:
@@ -80,6 +86,7 @@ def _build_signal_map(
     if technical_data:
         signals["rsi_momentum"] = technical_data.get("rsi_momentum", False)
         signals["rs_vs_nifty"]  = technical_data.get("rs_vs_nifty", False)
+        signals["rsi_extended"] = technical_data.get("rsi_extended", False)
 
     # Delivery volume signal from NSE bhav copy
     if delivery_data:

@@ -91,15 +91,16 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         # Nifty trend adjustment to score
         adjusted_score = score
         if nifty_trend == "downtrend" and direction == "buy":
-            adjusted_score -= 2
+            adjusted_score -= 4  # downtrend headwind is real — raise the bar hard
         elif nifty_trend == "uptrend" and direction == "sell":
-            adjusted_score -= 2
+            adjusted_score -= 4
 
         vtags = _volatility_tags(beta, atr_pct, vol_ratio)
         signals = _label_signals(c.get("active_signals", []))
         risk = _risk(c, tech)
 
-        if direction == "watch" or adjusted_score < 4:
+        phase_b_threshold = 5 if nifty_trend == "downtrend" else 4
+        if direction == "watch" or adjusted_score < phase_b_threshold:
             phase_b_list.append({
                 "ticker": ticker,
                 "phase": phase,

@@ -147,9 +147,11 @@ def compute_pivot_points(df: pd.DataFrame) -> dict:
     if df.empty or len(df) < 2:
         return result
 
-    # Daily: previous session
+    # Daily: previous session — skip if H=L=C (illiquid stock / data gap)
     prev = df.iloc[-2]
-    _pivots_from(float(prev["High"]), float(prev["Low"]), float(prev["Close"]), "daily")
+    ph, pl, pc = float(prev["High"]), float(prev["Low"]), float(prev["Close"])
+    if ph > pl:
+        _pivots_from(ph, pl, pc, "daily")
 
     # Weekly: last full week (last 5 bars before today)
     week_data = df.iloc[-6:-1] if len(df) >= 6 else df.iloc[:-1]
@@ -304,8 +306,8 @@ def enrich_with_technicals(
     )
 
     # RSI scoring signals
-    rsi_momentum = bool(50 <= rsi <= 70)   # building momentum, not yet extended
-    rsi_extended = bool(rsi > 75)           # risky entry zone
+    rsi_momentum = bool(50 <= rsi <= 70)   # building momentum, not yet overbought
+    rsi_extended = bool(rsi > 70)           # overbought — poor entry risk/reward
 
     # Relative strength vs Nifty over last 20 bars
     rs_vs_nifty = False
