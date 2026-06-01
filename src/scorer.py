@@ -28,8 +28,7 @@ SWING_WEIGHTS = {
 }
 
 DISQUALIFIER_WEIGHTS = {
-    "sebi_investigation": -10,
-    "f_group": -5,
+    "f_group": -5,               # currently on NSE F&O ban list: liquidity risk, forced-exit danger
     "distribution_signal": -5,  # volume spike + price DOWN = institutional selling
     "rsi_bearish_div": -2,        # price HH + RSI LH: momentum fading (valid even above RSI 70)
     "macd_bearish_cross": -1,    # histogram / zero-line crossed down in last 3-5 bars
@@ -54,9 +53,16 @@ def _build_signal_map(
     options_data: dict | None = None,
     technical_data: dict | None = None,
     delivery_data: dict | None = None,
+    fo_ban_current: set[str] | None = None,
 ) -> dict[str, bool]:
     """Build a boolean signal map for a single ticker."""
     signals: dict[str, bool] = {k: False for k in list(SHORT_TERM_WEIGHTS) + list(SWING_WEIGHTS) + list(DISQUALIFIER_WEIGHTS)}
+
+    # --- DISQUALIFIERS computed early (can short-circuit scoring logic) ---
+
+    # F&O ban: ticker is currently on NSE's banned list — position-building is prohibited,
+    # exits can be forced at unfavourable prices, and signals from this stock are unreliable.
+    signals["f_group"] = ticker in (fo_ban_current or set())
 
     # --- SHORT-TERM signals ---
 
@@ -154,6 +160,7 @@ def score_candidates(
     options_signals: dict | None = None,
     technical_signals: dict | None = None,
     delivery_signals: dict | None = None,
+    fo_ban_current: set[str] | None = None,
     market_regime: str = "normal",
 ) -> list[dict]:
     """
@@ -185,7 +192,7 @@ def score_candidates(
         signals = _build_signal_map(
             ticker, bulk_deals, vol, fo_ban_removed, results_calendar, brk,
             promoter_data=prom, options_data=opts, technical_data=tech,
-            delivery_data=deliv,
+            delivery_data=deliv, fo_ban_current=fo_ban_current,
         )
 
         score, timeframe = _compute_score(signals, market_regime)

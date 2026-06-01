@@ -68,10 +68,12 @@ def _save(symbols: list[str]) -> None:
     CACHE_FILE.write_text(json.dumps(symbols))
 
 
-def fetch_fo_ban_delta() -> list[str]:
+def fetch_fo_ban_delta() -> tuple[list[str], set[str]]:
     """
-    Return tickers newly removed from the F&O ban list (liquidity unlock signal).
-    Updates cache for next run. Returns list with .NS suffix.
+    Returns (removed_ns, current_ns):
+      removed_ns  — tickers newly removed from the ban (liquidity unlock signal), .NS suffix
+      current_ns  — full set of tickers currently in ban, .NS suffix (used to set f_group penalty)
+    Updates cache for the next run.
     """
     prev = set(_load_prev())
     current = _fetch_current_ban_list()
@@ -81,5 +83,6 @@ def fetch_fo_ban_delta() -> list[str]:
     _save(current)
 
     removed_ns = [f"{sym}.NS" for sym in sorted(removed)]
+    current_ns = {f"{sym}.NS" for sym in current_set}
     print(f"[fo_ban] current ban: {len(current)}, removed today: {len(removed_ns)}")
-    return removed_ns
+    return removed_ns, current_ns

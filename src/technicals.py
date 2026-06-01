@@ -503,18 +503,20 @@ def enrich_with_technicals(
     macd_bullish_cross = macd["bullish_cross"] or macd["zero_cross_up"]
     macd_bearish_cross = macd["bearish_cross"] or macd["zero_cross_down"]
 
-    # Wyckoff confidence: HIGH when RSI and MACD both agree with phase direction
-    rsi_agrees  = (
-        (direction == "buy"  and not rsi_bearish_div) or
-        (direction == "sell" and not rsi_bullish_div) or
-        (direction == "watch")
-    )
-    macd_agrees = (
-        (direction == "buy"  and not macd_bearish_cross) or
-        (direction == "sell" and not macd_bullish_cross) or
-        (direction == "watch")
-    )
-    wyckoff_confidence = "HIGH" if (rsi_agrees and macd_agrees) else "MEDIUM"
+    # Wyckoff confidence: HIGH when RSI and MACD both agree with phase direction.
+    # Watch-phase has no tradeable direction, so confidence is always MEDIUM.
+    if direction == "watch":
+        wyckoff_confidence = "MEDIUM"
+    else:
+        rsi_agrees  = (
+            (direction == "buy"  and not rsi_bearish_div) or
+            (direction == "sell" and not rsi_bullish_div)
+        )
+        macd_agrees = (
+            (direction == "buy"  and not macd_bearish_cross) or
+            (direction == "sell" and not macd_bullish_cross)
+        )
+        wyckoff_confidence = "HIGH" if (rsi_agrees and macd_agrees) else "MEDIUM"
 
     # Relative strength vs Nifty over last 20 bars
     rs_vs_nifty = False

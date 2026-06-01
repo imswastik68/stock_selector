@@ -233,7 +233,7 @@ def enrich_candidate_context(tickers: list[str], base_ctx: dict) -> dict:
 
         # Deterministic technicals: RSI, MACD, Wyckoff phase, entry/stop/target
         close_val = float(df["Close"].squeeze().iloc[-1])
-        atr_abs = atr_pct / 100 * close_val if atr_pct == atr_pct else 0
+        atr_abs = atr_pct / 100 * close_val if pd.notna(atr_pct) else 0
         try:
             ctx["technicals"][ticker] = enrich_with_technicals(
                 df, close_val, atr_abs, nifty_20d_return=nifty_20d_return

@@ -54,8 +54,8 @@ from src.telegram_alert import send_telegram_alert
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
 
-def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict]:
-    """Fetch all data sources concurrently. Returns 7-tuple including market-wide and delivery context."""
+def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set]:
+    """Fetch all data sources concurrently. Returns 8-tuple; last element is current F&O ban set."""
     print("[main] fetching market data...")
     t0 = time.time()
 
@@ -80,14 +80,23 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict]:
 
     elapsed = time.time() - t0
     print(f"[main] all data fetched in {elapsed:.1f}s")
+
+    # fo_ban returns (removed_list, current_set); unpack here so callers get clean types
+    fo_ban_raw = results["fo_ban"]
+    if isinstance(fo_ban_raw, tuple):
+        fo_ban_removed, fo_ban_current = fo_ban_raw
+    else:
+        fo_ban_removed, fo_ban_current = fo_ban_raw, set()
+
     return (
         results["bulk_deals"],
         results["volume"],
-        results["fo_ban"],
+        fo_ban_removed,
         results["results"],
         results["breakouts"],
         results["market_wide"],
         results["delivery"],
+        fo_ban_current,
     )
 
 
@@ -166,7 +175,7 @@ def main() -> int:
     print(f"[main] === Stock Selector run: {date.today().isoformat()}  mode={scan_mode} ===")
 
     # 1. Fetch (parallel)
-    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals = fetch_all_data()
+    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals, fo_ban_current = fetch_all_data()
 
     # Count total unique tickers across all sources for the report
     all_tickers: set[str] = set()
@@ -183,6 +192,7 @@ def main() -> int:
     candidates = score_candidates(
         bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts,
         delivery_signals=delivery_signals,
+        fo_ban_current=fo_ban_current,
         market_regime=nifty_regime,
     )
 
@@ -191,7 +201,11 @@ def main() -> int:
     if candidates:
         top_tickers = [c["ticker"] for c in candidates[:20]]
         print(f"[main] fetching options data for {len(top_tickers)} candidates...")
-        prev_closes = {d["ticker"]: d.get("today_close", 0) for d in volume_gainers}
+        # Build prev_closes from volume data AND breakouts so candidates that appear
+        # only in bulk deals / breakouts (not volume gainers) still get a price reference
+        # for options long/short buildup detection.
+        prev_closes = {b["ticker"]: b.get("today_close", 0) for b in breakouts}
+        prev_closes.update({d["ticker"]: d.get("today_close", 0) for d in volume_gainers})
         options_signals = fetch_options_signals(top_tickers, prev_closes=prev_closes)
 
         print(f"[main] fetching promoter signals for {len(top_tickers)} candidates...")
@@ -202,6 +216,7 @@ def main() -> int:
             bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts,
             promoter_signals=promoter_signals, options_signals=options_signals,
             delivery_signals=delivery_signals,
+            fo_ban_current=fo_ban_current,
             market_regime=nifty_regime,
         )
     else:
@@ -254,6 +269,7 @@ def main() -> int:
             options_signals=options_signals,
             technical_signals=tech_signals,
             delivery_signals=delivery_signals,
+            fo_ban_current=fo_ban_current,
             market_regime=nifty_regime,
         )
 
