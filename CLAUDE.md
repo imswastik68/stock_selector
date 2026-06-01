@@ -1,11 +1,11 @@
-# CLAUDE.md
-
-Keep this file short, specific, and enforceable. Prefer fewer rules over more rules.
-
-Use Caveman Ultra.
-
 ## Mission
 Make the smallest correct change that solves the request, preserves the codebase, and can be verified.
+
+## Communication Style
+Use caveman Ultra.
+Short direct responses.
+Code first.
+No fluff.
 
 ## Operating rules
 - Read the relevant files before editing.

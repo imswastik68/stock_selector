@@ -3,7 +3,6 @@
 import io
 import requests
 import pandas as pd
-from datetime import date
 
 ARCHIVE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -79,7 +78,7 @@ def _fetch_csv(url: str, deal_type: str) -> list[dict]:
         return []
 
 
-def fetch_bulk_deals(target_date: date | None = None) -> list[dict]:
+def fetch_bulk_deals() -> list[dict]:
     """
     Return today's NSE bulk + block deals from NSE archives CSV.
     Each dict: {ticker, actor, deal_type, quantity, price, is_fii_dii}

@@ -18,12 +18,12 @@ SHORT_TERM_WEIGHTS = {
     "rsi_momentum": 1,          # RSI 50-75: momentum building
     "rsi_bullish_div": 1,       # price LL + RSI HL: sellers losing momentum
     "macd_bullish_cross": 1,    # histogram / zero-line crossed up in last 3-5 bars
+    "fo_ban_lifted": 1,         # just removed from NSE F&O ban: liquidity restored, fresh positions allowed
 }
 
 SWING_WEIGHTS = {
     "results_due": 1,          # upcoming results — informational flag only (PEAD needs actual beat)
     "promoter_buying": 3,      # sets timeframe → 5-7d
-    "sector_rotation": 1,
     "consolidation_breakout": 3,
 }
 
@@ -63,6 +63,10 @@ def _build_signal_map(
     # F&O ban: ticker is currently on NSE's banned list — position-building is prohibited,
     # exits can be forced at unfavourable prices, and signals from this stock are unreliable.
     signals["f_group"] = ticker in (fo_ban_current or set())
+
+    # F&O ban lifted: ticker was just removed from the ban — liquidity restored, fresh derivative
+    # positions are now allowed. Pent-up institutional demand often causes a near-term price pop.
+    signals["fo_ban_lifted"] = ticker in set(fo_ban_removed)
 
     # --- SHORT-TERM signals ---
 
@@ -173,6 +177,7 @@ def score_candidates(
     all_tickers: set[str] = set()
     all_tickers.update(d["ticker"] for d in bulk_deals)
     all_tickers.update(d["ticker"] for d in volume_gainers)
+    all_tickers.update(fo_ban_removed)  # ban-lifted tickers enter scoring universe
     all_tickers.update(r["ticker"] for r in results_calendar)
     all_tickers.update(b["ticker"] for b in breakouts)
 

@@ -14,6 +14,7 @@ Backend selection via INFERENCE_BACKEND env var:
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 from datetime import date
@@ -56,9 +57,9 @@ def _label_signals(signals: list[str]) -> list[str]:
 
 def _volatility_tags(beta: float, atr_pct: float, volume_ratio: float | None) -> list[str]:
     tags = []
-    if beta == beta and beta > 1.5:
+    if math.isfinite(beta) and beta > 1.5:
         tags.append("HIGH-BETA")
-    if atr_pct == atr_pct and atr_pct > 3.0:
+    if math.isfinite(atr_pct) and atr_pct > 3.0:
         tags.append("HIGH-ATR")
     if volume_ratio and volume_ratio > 2.0:
         tags.append("VOL-SURGE")
