@@ -77,21 +77,83 @@ def compute_rsi_divergence(close: pd.Series, lookback: int = 20) -> str:
     return "none"
 
 
+def _compute_macd(close: pd.Series) -> dict:
+    """
+    MACD(12,26,9) — all signals in one pass.
+
+    Signal cross lookback 3 bars: catches crosses from the last 3 sessions
+    (EOD screener may miss a same-day cross depending on run time).
+    Zero cross lookback 5 bars: zero-line cross is a stronger, slower signal.
+
+    Returns:
+      signal (str)          — display string for Telegram / JSON
+      bullish_cross (bool)  — histogram crossed from negative to positive in last 3 bars
+      bearish_cross (bool)  — histogram crossed from positive to negative in last 3 bars
+      above_signal (bool)   — MACD currently above signal line
+      below_signal (bool)   — MACD currently below signal line
+      zero_cross_up (bool)  — MACD crossed above zero in last 5 bars
+      zero_cross_down (bool)— MACD crossed below zero in last 5 bars
+    """
+    _empty = {
+        "signal": "none", "bullish_cross": False, "bearish_cross": False,
+        "above_signal": False, "below_signal": False,
+        "zero_cross_up": False, "zero_cross_down": False,
+    }
+    if len(close) < 35:  # 26 EMA + 9 signal warmup
+        return _empty
+
+    ema12       = close.ewm(span=12, adjust=False).mean()
+    ema26       = close.ewm(span=26, adjust=False).mean()
+    macd_line   = ema12 - ema26
+    signal_line = macd_line.ewm(span=9, adjust=False).mean()
+    histogram   = macd_line - signal_line
+
+    hist = histogram.values
+    mac  = macd_line.values
+
+    above_signal = bool(hist[-1] > 0)
+    below_signal = bool(hist[-1] < 0)
+
+    # Signal-line cross within last 3 bars
+    sig_window = hist[-(3 + 1):]  # 4 values → 3 consecutive pairs
+    bullish_cross = any(sig_window[i] < 0 <= sig_window[i + 1] for i in range(len(sig_window) - 1))
+    bearish_cross = any(sig_window[i] > 0 >= sig_window[i + 1] for i in range(len(sig_window) - 1))
+
+    # Zero-line cross within last 5 bars
+    zero_window    = mac[-(5 + 1):]  # 6 values → 5 consecutive pairs
+    zero_cross_up  = any(zero_window[i] <= 0 < zero_window[i + 1] for i in range(len(zero_window) - 1))
+    zero_cross_down= any(zero_window[i] >= 0 > zero_window[i + 1] for i in range(len(zero_window) - 1))
+
+    # Display string — priority: zero cross > signal cross > state
+    if zero_cross_up:
+        signal = "zero_cross_up"
+    elif zero_cross_down:
+        signal = "zero_cross_down"
+    elif bullish_cross:
+        signal = "bullish_cross"
+    elif bearish_cross:
+        signal = "bearish_cross"
+    elif above_signal:
+        signal = "above_signal"
+    elif below_signal:
+        signal = "below_signal"
+    else:
+        signal = "none"
+
+    return {
+        "signal":          signal,
+        "bullish_cross":   bullish_cross,
+        "bearish_cross":   bearish_cross,
+        "above_signal":    above_signal,
+        "below_signal":    below_signal,
+        "zero_cross_up":   zero_cross_up,
+        "zero_cross_down": zero_cross_down,
+    }
+
+
 def compute_macd_signal(close: pd.Series) -> str:
-    """Return 'bullish_cross', 'bearish_cross', or 'none' based on MACD(12,26,9)."""
-    if len(close) < 27:
-        return "none"
-    ema12 = close.ewm(span=12, adjust=False).mean()
-    ema26 = close.ewm(span=26, adjust=False).mean()
-    macd = ema12 - ema26
-    signal = macd.ewm(span=9, adjust=False).mean()
-    prev_diff = macd.iloc[-2] - signal.iloc[-2]
-    curr_diff = macd.iloc[-1] - signal.iloc[-1]
-    if prev_diff <= 0 < curr_diff:
-        return "bullish_cross"
-    if prev_diff >= 0 > curr_diff:
-        return "bearish_cross"
-    return "none"
+    """Public display string for MACD state. See _compute_macd for full signals."""
+    return _compute_macd(close)["signal"]
 
 
 def classify_wyckoff_phase(df: pd.DataFrame) -> str:
@@ -337,8 +399,8 @@ def enrich_with_technicals(
 ) -> dict:
     """Return RSI, MACD, Wyckoff phase, pivot points, candlestick patterns, OBV, BB squeeze, RS."""
     close_series = df["Close"].squeeze()
-    rsi  = compute_rsi(close_series)
-    macd = compute_macd_signal(close_series)
+    rsi     = compute_rsi(close_series)
+    macd    = _compute_macd(close_series)
     phase   = classify_wyckoff_phase(df)
     pivots  = compute_pivot_points(df)
     candles = detect_candlestick_patterns(df)
@@ -355,17 +417,28 @@ def enrich_with_technicals(
     else:
         direction = "watch"
 
-    rsi_agrees = (
+    # RSI divergence — must be computed before rsi_agrees
+    rsi_momentum    = bool(50 <= rsi <= 75)
+    rsi_div         = compute_rsi_divergence(close_series)
+    rsi_bearish_div = rsi_div == "bearish_divergence"
+    rsi_bullish_div = rsi_div == "bullish_divergence"
+
+    # MACD momentum signals
+    macd_bullish_cross = macd["bullish_cross"] or macd["zero_cross_up"]
+    macd_bearish_cross = macd["bearish_cross"] or macd["zero_cross_down"]
+
+    # Wyckoff confidence: HIGH when RSI and MACD both agree with phase direction
+    rsi_agrees  = (
         (direction == "buy"  and not rsi_bearish_div) or
         (direction == "sell" and not rsi_bullish_div) or
         (direction == "watch")
     )
-
-    # RSI scoring signals
-    rsi_momentum = bool(50 <= rsi <= 75)   # building momentum
-    rsi_div      = compute_rsi_divergence(close_series)
-    rsi_bearish_div = rsi_div == "bearish_divergence"  # price HH + RSI LH: momentum fading
-    rsi_bullish_div = rsi_div == "bullish_divergence"  # price LL + RSI HL: sellers tiring
+    macd_agrees = (
+        (direction == "buy"  and not macd_bearish_cross) or
+        (direction == "sell" and not macd_bullish_cross) or
+        (direction == "watch")
+    )
+    wyckoff_confidence = "HIGH" if (rsi_agrees and macd_agrees) else "MEDIUM"
 
     # Relative strength vs Nifty over last 20 bars
     rs_vs_nifty = False
@@ -377,16 +450,18 @@ def enrich_with_technicals(
 
     return {
         "rsi": rsi,
-        "macd_signal": macd,
+        "macd_signal": macd["signal"],
         "wyckoff_phase": phase,
         "direction": direction,
-        "wyckoff_confidence": "HIGH" if rsi_agrees else "MEDIUM",
+        "wyckoff_confidence": wyckoff_confidence,
         "candlestick_patterns": candles,
-        "rsi_momentum": rsi_momentum,
-        "rsi_bearish_div": rsi_bearish_div,
-        "rsi_bullish_div": rsi_bullish_div,
-        "rs_vs_nifty": rs_vs_nifty,
-        "obv_accumulation": obv_acc,
+        "rsi_momentum":      rsi_momentum,
+        "rsi_bearish_div":   rsi_bearish_div,
+        "rsi_bullish_div":   rsi_bullish_div,
+        "macd_bullish_cross": macd_bullish_cross,
+        "macd_bearish_cross": macd_bearish_cross,
+        "rs_vs_nifty":       rs_vs_nifty,
+        "obv_accumulation":  obv_acc,
         "bb_squeeze_breakout": bb_sq,
         **pivots,
         **levels,

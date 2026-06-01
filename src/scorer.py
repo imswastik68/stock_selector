@@ -17,6 +17,7 @@ SHORT_TERM_WEIGHTS = {
     "options_long_buildup": 1,  # price up + OI up = fresh longs (min OI required)
     "rsi_momentum": 1,          # RSI 50-75: momentum building
     "rsi_bullish_div": 1,       # price LL + RSI HL: sellers losing momentum
+    "macd_bullish_cross": 1,    # histogram / zero-line crossed up in last 3-5 bars
 }
 
 SWING_WEIGHTS = {
@@ -30,7 +31,8 @@ DISQUALIFIER_WEIGHTS = {
     "sebi_investigation": -10,
     "f_group": -5,
     "distribution_signal": -5,  # volume spike + price DOWN = institutional selling
-    "rsi_bearish_div": -2,       # price HH + RSI LH: momentum fading (valid even above RSI 70)
+    "rsi_bearish_div": -2,        # price HH + RSI LH: momentum fading (valid even above RSI 70)
+    "macd_bearish_cross": -1,    # histogram / zero-line crossed down in last 3-5 bars
     "thin_market": -4,           # avg daily turnover < ₹5cr: unreliable signals + exit risk
     "options_short_buildup": -2,  # price down + OI up = fresh shorts entering
     "options_pcr_greed": -1,      # PCR < 0.5: extreme complacency (min OI required)
@@ -85,10 +87,12 @@ def _build_signal_map(
 
     # Technical signals (pass 3 only — after enrich_candidate_context)
     if technical_data:
-        signals["rsi_momentum"]   = technical_data.get("rsi_momentum", False)
-        signals["rs_vs_nifty"]    = technical_data.get("rs_vs_nifty", False)
-        signals["rsi_bearish_div"] = technical_data.get("rsi_bearish_div", False)
-        signals["rsi_bullish_div"] = technical_data.get("rsi_bullish_div", False)
+        signals["rsi_momentum"]      = technical_data.get("rsi_momentum", False)
+        signals["rs_vs_nifty"]       = technical_data.get("rs_vs_nifty", False)
+        signals["rsi_bearish_div"]   = technical_data.get("rsi_bearish_div", False)
+        signals["rsi_bullish_div"]   = technical_data.get("rsi_bullish_div", False)
+        signals["macd_bullish_cross"]= technical_data.get("macd_bullish_cross", False)
+        signals["macd_bearish_cross"]= technical_data.get("macd_bearish_cross", False)
 
     # Delivery volume signal from NSE bhav copy
     if delivery_data:

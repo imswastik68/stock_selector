@@ -237,10 +237,12 @@ def main() -> int:
     # 2 technical signals after research review (rsi_extended, obv, bb_squeeze removed)
     tech_signals = {
         ticker: {
-            "rsi_momentum":   t.get("rsi_momentum", False),
-            "rs_vs_nifty":    t.get("rs_vs_nifty", False),
-            "rsi_bearish_div": t.get("rsi_bearish_div", False),
-            "rsi_bullish_div": t.get("rsi_bullish_div", False),
+            "rsi_momentum":       t.get("rsi_momentum", False),
+            "rs_vs_nifty":        t.get("rs_vs_nifty", False),
+            "rsi_bearish_div":    t.get("rsi_bearish_div", False),
+            "rsi_bullish_div":    t.get("rsi_bullish_div", False),
+            "macd_bullish_cross": t.get("macd_bullish_cross", False),
+            "macd_bearish_cross": t.get("macd_bearish_cross", False),
         }
         for ticker, t in market_context.get("technicals", {}).items()
     }
