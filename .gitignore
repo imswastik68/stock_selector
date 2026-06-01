@@ -3,6 +3,7 @@
 
 # runtime state
 data/fo_ban_prev.json
+data/promoter_shp.json
 outputs/
 
 # Python

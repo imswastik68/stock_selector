@@ -10,26 +10,31 @@ from __future__ import annotations
 SHORT_TERM_WEIGHTS = {
     "bulk_deal_fii_dii": 3,
     "volume_5x": 3,
-    "fo_ban_removed": 2,
-    "near_52w_high": 2,
-    "small_cap": 1,
+    "actual_52w_breakout": 3,   # price broke through prior 52w high
+    "delivery_surge": 2,        # DELIV_PER >= 50% on EQ series — institutional accumulation
+    "rs_vs_nifty": 2,           # stock outperforming Nifty by 2%+ over 20d
+    "options_pcr_fear": 1,      # PCR > 1.5: extreme fear = contrarian bullish (min OI required)
+    "options_long_buildup": 1,  # price up + OI up = fresh longs (min OI required)
+    "rsi_momentum": 1,          # RSI 50-70: momentum building
 }
 
 SWING_WEIGHTS = {
-    "eps_surprise_15pct": 4,   # sets timeframe → 5-7d
+    "results_due": 1,          # upcoming results — informational flag only (PEAD needs actual beat)
     "promoter_buying": 3,      # sets timeframe → 5-7d
-    "sector_rotation": 2,
-    "consolidation_breakout": 2,
+    "sector_rotation": 1,
+    "consolidation_breakout": 3,
 }
 
 DISQUALIFIER_WEIGHTS = {
     "sebi_investigation": -10,
     "f_group": -5,
-    "distribution_signal": -5,  # volume spike + price DOWN
+    "distribution_signal": -5,  # volume spike + price DOWN = institutional selling
+    "options_short_buildup": -2,  # price down + OI up = fresh shorts entering
+    "options_pcr_greed": -1,      # PCR < 0.5: extreme complacency (min OI required)
 }
 
-MIN_SCORE = 2
-MIN_SIGNALS = 2
+MIN_SCORE = 3
+MIN_SIGNALS = 1
 PENNY_THRESHOLD = 10.0  # ₹10
 
 
@@ -40,6 +45,10 @@ def _build_signal_map(
     fo_ban_removed: list[str],
     results_calendar: list[dict],
     breakout_data: dict | None,
+    promoter_data: dict | None = None,
+    options_data: dict | None = None,
+    technical_data: dict | None = None,
+    delivery_data: dict | None = None,
 ) -> dict[str, bool]:
     """Build a boolean signal map for a single ticker."""
     signals: dict[str, bool] = {k: False for k in list(SHORT_TERM_WEIGHTS) + list(SWING_WEIGHTS) + list(DISQUALIFIER_WEIGHTS)}
@@ -50,47 +59,61 @@ def _build_signal_map(
     ticker_deals = [d for d in bulk_deals if d["ticker"] == ticker and d["is_fii_dii"]]
     signals["bulk_deal_fii_dii"] = bool(ticker_deals)
 
-    # Volume ≥ 5× 30-day average
+    # Volume ≥ 2.5× 30-day average
     if volume_data:
-        signals["volume_5x"] = volume_data.get("is_volume_surge", False)
-        signals["small_cap"] = volume_data.get("is_small_cap", False)
+        signals["volume_5x"]          = volume_data.get("is_volume_surge", False)
         signals["distribution_signal"] = volume_data.get("is_distribution", False)
 
-    # F&O ban removal
-    signals["fo_ban_removed"] = ticker in fo_ban_removed
-
-    # Near 52-week high (within 1%)
+    # 52-week high: only actual breakout scores; proximity alone removed (redundant + noisy)
     if breakout_data:
-        signals["near_52w_high"] = True
+        signals["actual_52w_breakout"]    = breakout_data.get("actual_breakout", False)
         signals["consolidation_breakout"] = breakout_data.get("consolidation_breakout", False)
+
+    # Options signals — PCR only at extremes; long_buildup gated by min OI in options.py
+    if options_data:
+        signals["options_pcr_fear"]      = options_data.get("pcr_fear", False)
+        signals["options_pcr_greed"]     = options_data.get("pcr_greed", False)
+        signals["options_long_buildup"]  = options_data.get("long_buildup", False)
+        signals["options_short_buildup"] = options_data.get("short_buildup", False)
+
+    # Technical signals (pass 3 only — after enrich_candidate_context)
+    if technical_data:
+        signals["rsi_momentum"] = technical_data.get("rsi_momentum", False)
+        signals["rs_vs_nifty"]  = technical_data.get("rs_vs_nifty", False)
+
+    # Delivery volume signal from NSE bhav copy
+    if delivery_data:
+        signals["delivery_surge"] = delivery_data.get("delivery_surge", False)
 
     # --- SWING signals ---
 
-    # Upcoming results (EPS surprise unknown without consensus data → [UNCONFIRMED])
+    # Upcoming results — weak informational flag; real PEAD requires confirmed post-beat data
     ticker_results = [r for r in results_calendar if r["ticker"] == ticker]
     if ticker_results:
-        # We flag this as a potential signal; Claude will mark it [UNCONFIRMED]
-        # because we don't have consensus EPS estimates from free APIs
-        signals["eps_surprise_15pct"] = True  # tagged [UNCONFIRMED] by Claude agent
+        signals["results_due"] = True
 
-    # sector_rotation and promoter_buying: not computed from free APIs in this version
-    # Leave as False; extend with screener.in export or BSE SHP data in a future iteration
+    # Promoter / insider buying
+    if promoter_data:
+        signals["promoter_buying"] = promoter_data.get("promoter_bought", False)
 
     return signals
 
 
-def _compute_score(signals: dict[str, bool]) -> tuple[int, str]:
+def _compute_score(signals: dict[str, bool], market_regime: str = "normal") -> tuple[int, str]:
     score = 0
     timeframe = "1-2d"
 
     for sig, weight in SHORT_TERM_WEIGHTS.items():
         if signals.get(sig):
+            # RSI 50-70 produces false signals in high-volatility regimes; disable it
+            if sig == "rsi_momentum" and market_regime == "high_vol":
+                continue
             score += weight
 
     for sig, weight in SWING_WEIGHTS.items():
         if signals.get(sig):
             score += weight
-            if sig in ("eps_surprise_15pct", "promoter_buying"):
+            if sig in ("results_due", "promoter_buying"):
                 timeframe = "5-7d"
 
     for sig, weight in DISQUALIFIER_WEIGHTS.items():
@@ -114,18 +137,22 @@ def score_candidates(
     fo_ban_removed: list[str],
     results_calendar: list[dict],
     breakouts: list[dict],
+    promoter_signals: dict | None = None,
+    options_signals: dict | None = None,
+    technical_signals: dict | None = None,
+    delivery_signals: dict | None = None,
+    market_regime: str = "normal",
 ) -> list[dict]:
     """
-    Merge all data sources, score every unique ticker, and return qualifying candidates
-    sorted by score descending.
+    Score every unique ticker across all data sources and return qualifying candidates.
 
-    Qualification: score >= MIN_SCORE and active_signals >= MIN_SIGNALS.
+    market_regime: "low_vol" | "normal" | "high_vol" — in high_vol, all scores drop by 1
+    to account for increased false-signal rate.
     """
     # Collect all unique tickers across all data sources
     all_tickers: set[str] = set()
     all_tickers.update(d["ticker"] for d in bulk_deals)
     all_tickers.update(d["ticker"] for d in volume_gainers)
-    all_tickers.update(fo_ban_removed)
     all_tickers.update(r["ticker"] for r in results_calendar)
     all_tickers.update(b["ticker"] for b in breakouts)
 
@@ -137,12 +164,23 @@ def score_candidates(
     for ticker in all_tickers:
         vol = volume_map.get(ticker)
         brk = breakout_map.get(ticker)
+        prom = (promoter_signals or {}).get(ticker)
+        opts = (options_signals or {}).get(ticker)
+        tech  = (technical_signals or {}).get(ticker)
+        deliv = (delivery_signals or {}).get(ticker)
 
         signals = _build_signal_map(
-            ticker, bulk_deals, vol, fo_ban_removed, results_calendar, brk
+            ticker, bulk_deals, vol, fo_ban_removed, results_calendar, brk,
+            promoter_data=prom, options_data=opts, technical_data=tech,
+            delivery_data=deliv,
         )
 
-        score, timeframe = _compute_score(signals)
+        score, timeframe = _compute_score(signals, market_regime)
+
+        # High-volatility regime: all signals are noisier — reduce score by 1
+        if market_regime == "high_vol":
+            score = max(0, score - 1)
+
         active = _active_signals(signals)
         disqs = _disqualifiers(signals)
 
@@ -163,7 +201,10 @@ def score_candidates(
             "market_cap_cr": (vol or {}).get("market_cap_cr"),
             "52w_high": (brk or {}).get("52w_high"),
             "consolidation_breakout": signals.get("consolidation_breakout", False),
-            # Pass through raw deal info for Claude context
+            "promoter_pct": (prom or {}).get("promoter_pct"),
+            "promoter_bought": (prom or {}).get("promoter_bought", False),
+            "options_pcr": (opts or {}).get("pcr"),
+            # Pass through raw deal info for LLM context
             "bulk_deals": [d for d in bulk_deals if d["ticker"] == ticker],
             "upcoming_results": [r for r in results_calendar if r["ticker"] == ticker],
         })

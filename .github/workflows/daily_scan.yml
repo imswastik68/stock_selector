@@ -2,14 +2,15 @@ name: Daily Stock Scan
 
 on:
   schedule:
-    - cron: "0 13 * * 1-5"   # 6:30 PM IST = 13:00 UTC, Mon–Fri
+    - cron: "15 3 * * 1-5"   # 8:45 AM IST = 03:15 UTC, Mon–Fri (pre-market watchlist)
+    - cron: "0 7 * * 1-5"    # 12:30 PM IST = 07:00 UTC, Mon–Fri (mid-day momentum check)
+    - cron: "30 11 * * 1-5"  # 5:00 PM IST = 11:30 UTC, Mon–Fri (EOD scan)
   workflow_dispatch:            # manual trigger for testing
 
 jobs:
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,13 +19,25 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
 
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Download stock universe (NIFTY500 + SME)
         run: python scripts/download_universe.py || echo "Universe download failed; using fallback list"
+
+      # Restore scan data (cache/ + outputs/) from the most recent prior run.
+      # cache/ → pre-market can reuse yesterday's expensive downloads via load_latest()
+      # outputs/ → mid-day scan needs yesterday's watchlist JSON for candidate tickers
+      - name: Restore scan data cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            cache/
+            outputs/
+          key: scan-data-${{ runner.os }}-${{ github.run_number }}
+          restore-keys: |
+            scan-data-${{ runner.os }}-
 
       # Restore F&O ban cache from the previous run so we can compute the delta
       - name: Restore F&O ban cache
@@ -39,6 +52,8 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          INFERENCE_BACKEND: groq
 
       # Save updated F&O ban cache for tomorrow
       - name: Save F&O ban cache

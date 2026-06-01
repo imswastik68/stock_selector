@@ -1,18 +1,30 @@
 """
-Download NIFTY 500 and NSE SME stock lists into data/.
+Download NSE stock universe into data/.
 Run once before first scan: python3 scripts/download_universe.py
 
-Strategy (tried in order):
-  1. archives.nseindia.com  — static CSV, no JS/cookie required
-  2. nsetools.get_stock_codes() — returns all NSE equities
-  3. Embedded NIFTY100 seed list — bare minimum fallback
+Strategy:
+  1. NSE archives (no JS/cookie): Nifty500 + Midcap150 + Smallcap250 + SME
+  2. Optional screener.in export (set SCREENER_EMAIL + SCREENER_PASSWORD in .env)
+     — fetches a quality-filtered screen (PE<50, positive ROE, low debt)
+  3. nsetools.get_stock_codes() fallback
+  4. Embedded NIFTY100 seed list — bare minimum
+
+Result: data/nifty500.csv + data/sme_list.csv (merged, deduplicated universe)
 """
 
 import io
+import os
 import sys
+import time
 import requests
 import pandas as pd
 from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / ".env")
+except ImportError:
+    pass
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -76,33 +88,75 @@ def _try_nsetools_all_stocks() -> list[str]:
 
 
 def download_nifty500() -> int:
+    """Fetch Nifty500 + Midcap150 + Smallcap250 merged into nifty500.csv."""
     out = DATA_DIR / "nifty500.csv"
 
-    # 1. Try archives subdomain (static CSV, most reliable)
-    symbols = _try_archives_csv("ind_nifty500list.csv")
+    # Pull all three NSE index constituent lists
+    all_symbols: list[str] = []
+    for index_file in ["ind_nifty500list.csv", "ind_niftymidcap150list.csv", "ind_niftysmallcap250list.csv"]:
+        syms = _try_archives_csv(index_file)
+        if syms:
+            print(f"[universe] {index_file}: {len(syms)} symbols")
+            all_symbols.extend(syms)
+        else:
+            print(f"[universe] {index_file}: unavailable (non-fatal)")
 
-    # 2. Try nsetools (all NSE equities — wider universe, also fine)
+    # Deduplicate preserving order
+    symbols = list(dict.fromkeys(all_symbols))
+
+    # 2. nsetools fallback
     if not symbols:
         print("[universe] trying nsetools for all NSE equities...")
         symbols = _try_nsetools_all_stocks()
 
-    # 3. Seed fallback — small but non-empty
+    # 3. Seed fallback
     if not symbols:
         print("[universe] using embedded NIFTY100 seed list")
         symbols = NIFTY100_SEED
 
+    # 4. Optional screener.in quality-filtered additions
+    screener_syms = _try_screener_in()
+    if screener_syms:
+        before = len(symbols)
+        symbols = list(dict.fromkeys(symbols + screener_syms))
+        print(f"[universe] screener.in added {len(symbols) - before} new quality symbols")
+
     df = pd.DataFrame({"Symbol": symbols})
     df.to_csv(out, index=False)
-    print(f"[universe] NIFTY500: saved {len(symbols)} symbols → {out}")
+    print(f"[universe] MAIN: saved {len(symbols)} symbols → {out}")
     return len(symbols)
+
+
+def _try_nse_full_equity_list() -> list[str]:
+    """
+    Download NSE's full equity list (includes SME/SME-IPO stocks not in Nifty indices).
+    URL: https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv
+    """
+    url = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
+    try:
+        resp = requests.get(url, headers=ARCHIVE_HEADERS, timeout=20)
+        resp.raise_for_status()
+        df = pd.read_csv(io.StringIO(resp.text))
+        sym_col = next((c for c in df.columns if "symbol" in c.lower()), None)
+        if sym_col is None:
+            return []
+        # Filter out debentures, ETFs, etc. — keep only EQ series
+        if "SERIES" in df.columns:
+            df = df[df["SERIES"].str.strip() == "EQ"]
+        symbols = df[sym_col].dropna().str.strip().str.upper().tolist()
+        print(f"[universe] NSE full equity list: {len(symbols)} EQ symbols")
+        return symbols
+    except Exception as exc:
+        print(f"[universe] NSE full equity list failed: {exc}")
+        return []
 
 
 def download_sme() -> int:
     out = DATA_DIR / "sme_list.csv"
 
-    symbols = _try_archives_csv("ind_niftysme500list.csv")
+    # Try NSE full equity list (covers SME stocks not in Nifty indices)
+    symbols = _try_nse_full_equity_list()
     if not symbols:
-        # SME list is nice-to-have; skip silently
         print("[universe] SME list unavailable — skipping (non-fatal)")
         return 0
 
@@ -110,6 +164,77 @@ def download_sme() -> int:
     df.to_csv(out, index=False)
     print(f"[universe] SME: saved {len(symbols)} symbols → {out}")
     return len(symbols)
+
+
+# ── screener.in optional integration ─────────────────────────────────────────
+
+def _try_screener_in() -> list[str]:
+    """
+    Log in to screener.in with SCREENER_EMAIL + SCREENER_PASSWORD from env/.env
+    and export a quality-filtered screen (PE<50, positive ROE, debt/equity<2).
+    Returns list of NSE symbols, or [] if credentials not set or request fails.
+    """
+    email = os.environ.get("SCREENER_EMAIL", "")
+    password = os.environ.get("SCREENER_PASSWORD", "")
+    if not email or not password:
+        print("[universe] SCREENER_EMAIL/PASSWORD not set — skipping screener.in")
+        return []
+
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
+        "Accept": "text/html,application/xhtml+xml,*/*",
+        "Referer": "https://www.screener.in/",
+    })
+
+    try:
+        # Step 1: get CSRF token
+        r = session.get("https://www.screener.in/login/", timeout=15)
+        r.raise_for_status()
+        csrf = ""
+        for line in r.text.splitlines():
+            if "csrfmiddlewaretoken" in line and 'value="' in line:
+                csrf = line.split('value="')[1].split('"')[0]
+                break
+        if not csrf:
+            print("[universe] screener.in: could not extract CSRF token")
+            return []
+
+        # Step 2: log in
+        login_data = {
+            "csrfmiddlewaretoken": csrf,
+            "username": email,
+            "password": password,
+        }
+        r = session.post("https://www.screener.in/login/", data=login_data,
+                         headers={"Referer": "https://www.screener.in/login/"}, timeout=15)
+        if "logout" not in r.text.lower() and r.url == "https://www.screener.in/login/":
+            print("[universe] screener.in: login failed — check credentials")
+            return []
+
+        time.sleep(0.5)
+
+        # Step 3: export quality screen as CSV
+        # Query: PE < 50 AND Return on equity > 10 AND Debt to equity < 2
+        query = "PE+Ratio+%3C+50+AND+Return+on+equity+%3E+10+AND+Debt+to+equity+%3C+2"
+        export_url = f"https://www.screener.in/screens/new/?sort=&order=&query={query}&limit=200&format=csv"
+        r = session.get(export_url, headers={"Referer": "https://www.screener.in/"}, timeout=30)
+        r.raise_for_status()
+
+        df = pd.read_csv(io.StringIO(r.text))
+        # screener.in CSV has a "Symbol" column with NSE tickers
+        sym_col = next((c for c in df.columns if "symbol" in c.lower()), None)
+        if sym_col is None:
+            print(f"[universe] screener.in: unexpected CSV columns: {list(df.columns)}")
+            return []
+
+        symbols = df[sym_col].dropna().str.strip().str.upper().tolist()
+        print(f"[universe] screener.in quality screen: {len(symbols)} symbols")
+        return symbols
+
+    except Exception as exc:
+        print(f"[universe] screener.in fetch failed: {exc}")
+        return []
 
 
 if __name__ == "__main__":
@@ -121,6 +246,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print(f"\nDone. Universe: {n500 + sme} tickers ({n500} main + {sme} SME)")
-    if n500 == len(NIFTY100_SEED):
-        print("WARNING: using seed fallback list only. For full coverage:")
-        print("  Download ind_nifty500list.csv from nseindia.com and save to data/nifty500.csv")
+    if n500 <= len(NIFTY100_SEED):
+        print("WARNING: using seed fallback list only. For full coverage run again with internet.")
+    print("\nFor screener.in quality filter, add to .env:")
+    print("  SCREENER_EMAIL=your@email.com")
+    print("  SCREENER_PASSWORD=yourpassword")

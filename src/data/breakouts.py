@@ -12,8 +12,8 @@ DATA_DIR = Path(__file__).parent.parent.parent / "data"
 NIFTY500_CSV = DATA_DIR / "nifty500.csv"
 SME_CSV = DATA_DIR / "sme_list.csv"
 
-ATH_PROXIMITY_PCT = 1.0
-MIN_VOLUME_RATIO = 1.5
+ATH_PROXIMITY_PCT = 5.0   # within 5% of 52w high (was 1% — too few candidates)
+MIN_VOLUME_RATIO = 1.2
 CONSOLIDATION_WEEKS = 3
 BATCH_SIZE = 100
 
@@ -59,9 +59,10 @@ def _parse_batch(df: pd.DataFrame, tickers: list[str]) -> list[dict]:
             if len(closes) < 50:
                 continue
 
-            high_52w = float(closes.tail(252).max())
+            # Use prior 52w high (excluding today) so we can detect actual breakouts
+            prior_52w_high = float(closes.iloc[:-1].tail(252).max())
             today_close = float(closes.iloc[-1])
-            proximity_pct = (high_52w - today_close) / high_52w * 100
+            proximity_pct = (prior_52w_high - today_close) / prior_52w_high * 100
 
             if proximity_pct > ATH_PROXIMITY_PCT:
                 continue
@@ -75,9 +76,10 @@ def _parse_batch(df: pd.DataFrame, tickers: list[str]) -> list[dict]:
 
             results.append({
                 "ticker": ticker,
-                "52w_high": round(high_52w, 2),
+                "52w_high": round(prior_52w_high, 2),
                 "today_close": round(today_close, 2),
                 "proximity_pct": round(proximity_pct, 2),
+                "actual_breakout": proximity_pct <= 0,  # price broke through prior 52w high
                 "volume_ratio": round(volume_ratio, 2),
                 "consolidation_breakout": _check_consolidation(closes, CONSOLIDATION_WEEKS),
             })
@@ -91,7 +93,18 @@ def fetch_breakouts() -> list[dict]:
     """
     Return stocks within ATH_PROXIMITY_PCT of 52-week high with volume confirmation.
     Uses batch yfinance downloads for speed.
+    Results are cached to disk for the calendar day — subsequent same-day calls are instant.
     """
+    import os
+    from src.cache import load_today, load_latest, save_today
+    cached = load_today("breakouts")
+    if cached is not None:
+        return cached
+    if os.environ.get("SCAN_MODE") == "pre_market":
+        cached = load_latest("breakouts")
+        if cached is not None:
+            return cached  # pre-market: reuse yesterday's data, no new download
+
     universe = _load_universe()
     print(f"[breakouts] scanning {len(universe)} tickers in batches of {BATCH_SIZE}...")
 
@@ -119,4 +132,5 @@ def fetch_breakouts() -> list[dict]:
 
     results.sort(key=lambda x: x["volume_ratio"], reverse=True)
     print(f"[breakouts] {len(results)} breakout candidates found")
+    save_today("breakouts", results)
     return results
