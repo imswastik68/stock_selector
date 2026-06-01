@@ -23,10 +23,23 @@ FII_DII_KEYWORDS = [
     "jp morgan", "blackrock", "vanguard", "fidelity", "nomura",
 ]
 
+# Entities that are typically promoter / promoter-group buyers
+PROMOTER_KEYWORDS = [
+    "promoter", "director", "chairman", "managing director",
+    "whole-time director", "wtd", "family trust", "family office",
+    "holding", "ventures pvt", "industries pvt", "enterprises pvt",
+    "private limited", "pvt. ltd", "pvt ltd",
+]
+
 
 def _is_fii_dii(actor: str) -> bool:
     a = actor.lower()
     return any(kw in a for kw in FII_DII_KEYWORDS)
+
+
+def _is_promoter(actor: str) -> bool:
+    a = actor.lower()
+    return any(kw in a for kw in PROMOTER_KEYWORDS) and not _is_fii_dii(actor)
 
 
 def _fetch_csv(url: str, deal_type: str) -> list[dict]:
@@ -54,6 +67,7 @@ def _fetch_csv(url: str, deal_type: str) -> list[dict]:
                     "quantity": float(qty or 0),
                     "price": float(price or 0),
                     "is_fii_dii": _is_fii_dii(actor),
+                    "is_promoter": _is_promoter(actor),
                 })
             except ValueError:
                 continue

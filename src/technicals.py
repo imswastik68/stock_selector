@@ -129,12 +129,163 @@ def compute_entry_levels(close: float, atr: float, direction: str) -> dict:
     }
 
 
-def enrich_with_technicals(df: pd.DataFrame, close: float, atr: float) -> dict:
-    """Return RSI, MACD signal, Wyckoff phase, and direction for a candidate."""
+def compute_pivot_points(df: pd.DataFrame) -> dict:
+    """
+    Standard pivot points from yesterday's OHLC, plus weekly and monthly pivots.
+    Returns: daily_pivot, daily_r1/r2, daily_s1/s2, weekly_pivot, monthly_pivot.
+    """
+    result = {}
+
+    def _pivots_from(high: float, low: float, close: float, prefix: str) -> None:
+        p = (high + low + close) / 3
+        result[f"{prefix}_pivot"] = round(p, 2)
+        result[f"{prefix}_r1"]    = round(2 * p - low, 2)
+        result[f"{prefix}_r2"]    = round(p + (high - low), 2)
+        result[f"{prefix}_s1"]    = round(2 * p - high, 2)
+        result[f"{prefix}_s2"]    = round(p - (high - low), 2)
+
+    if df.empty or len(df) < 2:
+        return result
+
+    # Daily: previous session
+    prev = df.iloc[-2]
+    _pivots_from(float(prev["High"]), float(prev["Low"]), float(prev["Close"]), "daily")
+
+    # Weekly: last full week (last 5 bars before today)
+    week_data = df.iloc[-6:-1] if len(df) >= 6 else df.iloc[:-1]
+    if not week_data.empty:
+        _pivots_from(
+            float(week_data["High"].max()),
+            float(week_data["Low"].min()),
+            float(week_data["Close"].iloc[-1]),
+            "weekly",
+        )
+
+    # Monthly: last ~22 bars before today
+    month_data = df.iloc[-23:-1] if len(df) >= 23 else df.iloc[:-1]
+    if not month_data.empty:
+        _pivots_from(
+            float(month_data["High"].max()),
+            float(month_data["Low"].min()),
+            float(month_data["Close"].iloc[-1]),
+            "monthly",
+        )
+
+    return result
+
+
+def detect_candlestick_patterns(df: pd.DataFrame) -> list[str]:
+    """
+    Detect common candlestick patterns on the last 1-2 bars.
+    Returns list of pattern names (empty if none detected).
+    """
+    if len(df) < 2:
+        return []
+
+    patterns = []
+    o = df["Open"].squeeze()
+    h = df["High"].squeeze()
+    l = df["Low"].squeeze()
+    c = df["Close"].squeeze()
+
+    # ── last bar ──────────────────────────────────────────────────────────────
+    o1, h1, l1, c1 = float(o.iloc[-1]), float(h.iloc[-1]), float(l.iloc[-1]), float(c.iloc[-1])
+    o2, h2, l2, c2 = float(o.iloc[-2]), float(h.iloc[-2]), float(l.iloc[-2]), float(c.iloc[-2])
+
+    body1 = abs(c1 - o1)
+    range1 = h1 - l1 if h1 != l1 else 1e-9
+    upper_shadow1 = h1 - max(o1, c1)
+    lower_shadow1 = min(o1, c1) - l1
+
+    body2 = abs(c2 - o2)
+
+    # Doji: open ≈ close (body < 10% of range)
+    if body1 < range1 * 0.1:
+        patterns.append("doji")
+
+    # Hammer: bullish reversal — small body in upper half, long lower shadow ≥ 2× body
+    if (lower_shadow1 >= 2 * body1 and upper_shadow1 <= 0.3 * body1
+            and min(o1, c1) > (h1 + l1) / 2):
+        patterns.append("hammer")
+
+    # Shooting star: bearish reversal — small body in lower half, long upper shadow ≥ 2× body
+    if (upper_shadow1 >= 2 * body1 and lower_shadow1 <= 0.3 * body1
+            and max(o1, c1) < (h1 + l1) / 2):
+        patterns.append("shooting_star")
+
+    # Bullish Engulfing: prev bar bearish, current bar bullish fully engulfs prev body
+    if c2 < o2 and c1 > o1 and o1 <= c2 and c1 >= o2:
+        patterns.append("bullish_engulfing")
+
+    # Bearish Engulfing: prev bar bullish, current bar bearish fully engulfs prev body
+    if c2 > o2 and c1 < o1 and o1 >= c2 and c1 <= o2:
+        patterns.append("bearish_engulfing")
+
+    # Bullish Marubozu: almost no shadows, full bullish body (≥ 90% of range)
+    if c1 > o1 and body1 >= range1 * 0.9:
+        patterns.append("bullish_marubozu")
+
+    # Bearish Marubozu: almost no shadows, full bearish body (≥ 90% of range)
+    if c1 < o1 and body1 >= range1 * 0.9:
+        patterns.append("bearish_marubozu")
+
+    return patterns
+
+
+def compute_obv_signal(df: pd.DataFrame) -> bool:
+    """OBV trending up faster than price over last 10 bars = stealth accumulation."""
+    if len(df) < 20:
+        return False
+    close = df["Close"].squeeze()
+    volume = df["Volume"].squeeze()
+    direction = close.diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    obv = (direction * volume).cumsum()
+    obv_10 = obv.iloc[-10:]
+    price_10 = close.iloc[-10:]
+    base_obv = float(obv_10.iloc[0]) or 1e-9
+    base_price = float(price_10.iloc[0]) or 1e-9
+    obv_slope   = (float(obv_10.iloc[-1])   - base_obv)   / abs(base_obv)
+    price_slope = (float(price_10.iloc[-1]) - base_price) / abs(base_price)
+    return bool(obv_slope > 0.01 and obv_slope > price_slope)
+
+
+def compute_bb_squeeze(df: pd.DataFrame, period: int = 20) -> bool:
+    """BB width currently below 50% of its 90-day average AND price broke outside the band."""
+    if len(df) < period + 5:
+        return False
+    close = df["Close"].squeeze()
+    sma = close.rolling(period).mean()
+    std = close.rolling(period).std()
+    upper = sma + 2 * std
+    lower = sma - 2 * std
+    bb_width = ((upper - lower) / sma).dropna()
+    if bb_width.empty:
+        return False
+    avg_width    = float(bb_width.mean())
+    recent_width = float(bb_width.iloc[-5:].mean())
+    price_now    = float(close.iloc[-1])
+    upper_now    = float(upper.iloc[-1])
+    lower_now    = float(lower.iloc[-1])
+    squeezed  = recent_width < avg_width * 0.5
+    broken_out = price_now > upper_now or price_now < lower_now
+    return bool(squeezed and broken_out)
+
+
+def enrich_with_technicals(
+    df: pd.DataFrame,
+    close: float,
+    atr: float,
+    nifty_20d_return: float | None = None,
+) -> dict:
+    """Return RSI, MACD, Wyckoff phase, pivot points, candlestick patterns, OBV, BB squeeze, RS."""
     close_series = df["Close"].squeeze()
-    rsi = compute_rsi(close_series)
+    rsi  = compute_rsi(close_series)
     macd = compute_macd_signal(close_series)
-    phase = classify_wyckoff_phase(df)
+    phase   = classify_wyckoff_phase(df)
+    pivots  = compute_pivot_points(df)
+    candles = detect_candlestick_patterns(df)
+    obv_acc = compute_obv_signal(df)
+    bb_sq   = compute_bb_squeeze(df)
 
     _BUY_PHASES  = {"ACCUMULATION_C", "ACCUMULATION_D", "MARKUP"}
     _SELL_PHASES = {"DISTRIBUTION_C", "DISTRIBUTION_D", "MARKDOWN"}
@@ -144,14 +295,23 @@ def enrich_with_technicals(df: pd.DataFrame, close: float, atr: float) -> dict:
     elif phase in _SELL_PHASES:
         direction = "sell"
     else:
-        direction = "watch"  # phase-B
+        direction = "watch"
 
-    # RSI overrides: if RSI contradicts phase, downgrade confidence
     rsi_agrees = (
         (direction == "buy"  and rsi < 70) or
         (direction == "sell" and rsi > 30) or
         (direction == "watch")
     )
+
+    # RSI scoring signals
+    rsi_momentum = bool(50 <= rsi <= 70)   # building momentum, not yet extended
+    rsi_extended = bool(rsi > 75)           # risky entry zone
+
+    # Relative strength vs Nifty over last 20 bars
+    rs_vs_nifty = False
+    if nifty_20d_return is not None and len(close_series) >= 20:
+        stock_20d = float(close_series.iloc[-1] / close_series.iloc[-20] - 1)
+        rs_vs_nifty = bool(stock_20d > nifty_20d_return + 0.02)
 
     levels = compute_entry_levels(close, atr, direction) if direction != "watch" else {}
 
@@ -161,5 +321,12 @@ def enrich_with_technicals(df: pd.DataFrame, close: float, atr: float) -> dict:
         "wyckoff_phase": phase,
         "direction": direction,
         "wyckoff_confidence": "HIGH" if rsi_agrees else "MEDIUM",
+        "candlestick_patterns": candles,
+        "rsi_momentum": rsi_momentum,
+        "rsi_extended": rsi_extended,
+        "rs_vs_nifty": rs_vs_nifty,
+        "obv_accumulation": obv_acc,
+        "bb_squeeze_breakout": bb_sq,
+        **pivots,
         **levels,
     }

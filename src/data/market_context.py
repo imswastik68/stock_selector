@@ -49,6 +49,35 @@ def _classify_trend(close: pd.Series) -> dict:
     }
 
 
+def _compute_nifty_regime(nifty_df: pd.DataFrame) -> str:
+    """
+    Returns 'low_vol', 'normal', or 'high_vol' based on where today's Nifty ATR-14%
+    sits within its own 252-day history.
+      < 30th percentile → low_vol  (signals more reliable — breakouts are clean)
+      > 70th percentile → high_vol (signals noisier — score all candidates -1)
+    """
+    if len(nifty_df) < 50:
+        return "normal"
+    high  = nifty_df["High"].squeeze()
+    low   = nifty_df["Low"].squeeze()
+    close = nifty_df["Close"].squeeze()
+    tr = pd.concat([
+        high - low,
+        (high - close.shift(1)).abs(),
+        (low  - close.shift(1)).abs(),
+    ], axis=1).max(axis=1)
+    atr_pct = (tr.ewm(alpha=1 / 14, adjust=False).mean() / close * 100).dropna()
+    if atr_pct.empty:
+        return "normal"
+    current = float(atr_pct.iloc[-1])
+    percentile = float((atr_pct < current).mean() * 100)
+    if percentile < 30:
+        return "low_vol"
+    if percentile > 70:
+        return "high_vol"
+    return "normal"
+
+
 def fetch_market_wide_context() -> dict:
     """
     Phase 1: fetch Nifty structure + sector heatmap + store Nifty returns for beta.
@@ -59,6 +88,7 @@ def fetch_market_wide_context() -> dict:
         "nifty_structure": {"trend": "ranging", "ema20": 0, "ema50": 0, "ema200": 0, "current_price": 0},
         "sector_heatmap": {},
         "nifty_returns": pd.Series(dtype=float),
+        "nifty_regime": "normal",
     }
 
     # Nifty 50 — 200d history for EMA + beta baseline
@@ -69,7 +99,8 @@ def fetch_market_wide_context() -> dict:
         if not nifty_df.empty:
             close = nifty_df["Close"].squeeze()
             result["nifty_structure"] = _classify_trend(close)
-            result["nifty_returns"] = close.pct_change().dropna()
+            result["nifty_returns"]   = close.pct_change().dropna()
+            result["nifty_regime"]    = _compute_nifty_regime(nifty_df)
     except Exception as exc:
         print(f"[market_context] Nifty fetch error: {exc}")
 
@@ -147,6 +178,11 @@ def enrich_candidate_context(tickers: list[str], base_ctx: dict) -> dict:
 
     nifty_returns: pd.Series = base_ctx.get("nifty_returns", pd.Series(dtype=float))
 
+    # Nifty 20-day cumulative return — used by enrich_with_technicals for RS signal
+    nifty_20d_return: float | None = None
+    if not nifty_returns.empty and len(nifty_returns) >= 20:
+        nifty_20d_return = float((1 + nifty_returns.iloc[-20:]).prod() - 1)
+
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -159,12 +195,17 @@ def enrich_candidate_context(tickers: list[str], base_ctx: dict) -> dict:
         print(f"[market_context] candidate OHLCV fetch error: {exc}")
         return ctx
 
-    # Normalise: single ticker returns a flat DataFrame; multi-ticker returns MultiIndex
-    if len(tickers) == 1:
-        ticker = tickers[0]
-        raw = {ticker: raw}
+    # Normalise: yfinance 1.x always returns MultiIndex (ticker, field) with group_by="ticker".
+    # Slice per-ticker so every df in raw has flat columns (Open, High, Low, Close, Volume).
+    if isinstance(raw.columns, pd.MultiIndex):
+        level0 = raw.columns.get_level_values(0).unique().tolist()
+        raw = {t: raw[t] for t in tickers if t in level0}
     else:
-        raw = {t: raw[t] for t in tickers if t in raw.columns.get_level_values(0)}
+        # Older yfinance: flat columns for single ticker
+        if len(tickers) == 1:
+            raw = {tickers[0]: raw}
+        else:
+            raw = {}
 
     for ticker, df in raw.items():
         if df.empty:
@@ -194,7 +235,9 @@ def enrich_candidate_context(tickers: list[str], base_ctx: dict) -> dict:
         close_val = float(df["Close"].squeeze().iloc[-1])
         atr_abs = atr_pct / 100 * close_val if atr_pct == atr_pct else 0
         try:
-            ctx["technicals"][ticker] = enrich_with_technicals(df, close_val, atr_abs)
+            ctx["technicals"][ticker] = enrich_with_technicals(
+                df, close_val, atr_abs, nifty_20d_return=nifty_20d_return
+            )
         except Exception as exc:
             print(f"[market_context] technicals error for {ticker}: {exc}")
 

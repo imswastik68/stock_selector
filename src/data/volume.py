@@ -115,7 +115,18 @@ def fetch_volume_gainers() -> list[dict]:
     """
     Return stocks with volume_ratio >= VOLUME_SURGE_THRESHOLD, sorted descending.
     Uses batch yfinance downloads for speed (~10× faster than per-ticker calls).
+    Results are cached to disk for the calendar day — subsequent same-day calls are instant.
     """
+    import os
+    from src.cache import load_today, load_latest, save_today
+    cached = load_today("volume_gainers")
+    if cached is not None:
+        return cached
+    if os.environ.get("SCAN_MODE") == "pre_market":
+        cached = load_latest("volume_gainers")
+        if cached is not None:
+            return cached  # pre-market: reuse yesterday's data, no new download
+
     universe = _load_universe()
     print(f"[volume] scanning {len(universe)} tickers in batches of {BATCH_SIZE}...")
 
@@ -136,4 +147,5 @@ def fetch_volume_gainers() -> list[dict]:
 
     surge_candidates.sort(key=lambda x: x["volume_ratio"], reverse=True)
     print(f"[volume] {len(all_records)} tickers processed, {len(surge_candidates)} volume surge candidates")
+    save_today("volume_gainers", surge_candidates)
     return surge_candidates

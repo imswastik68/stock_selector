@@ -26,7 +26,7 @@ _OLLAMA_MODEL = "qwen3:8b"
 
 _MAX_TOKENS = 600   # narrative only — ~5 stocks × 40 tokens each = ~200 tokens output
 
-UNCONFIRMED_SIGNALS = {"eps_surprise_15pct"}
+UNCONFIRMED_SIGNALS = {"results_due"}
 
 _BUY_PHASES  = {"ACCUMULATION_C", "ACCUMULATION_D", "MARKUP"}
 _SELL_PHASES = {"DISTRIBUTION_C", "DISTRIBUTION_D", "MARKDOWN"}
@@ -78,7 +78,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
 
     buy_list, sell_list, phase_b_list = [], [], []
 
-    for c in candidates[:5]:
+    for c in candidates[:20]:
         ticker = c["ticker"]
         tech   = technicals.get(ticker, {})
         beta   = beta_data.get(ticker, float("nan"))
@@ -117,6 +117,9 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             "risk_reward": tech.get("risk_reward", "1:2"),
         }
 
+        # Pivot points (daily/weekly/monthly)
+        pivots = {k: tech[k] for k in tech if k.endswith(("_pivot", "_r1", "_r2", "_s1", "_s2"))}
+
         base = {
             "ticker": ticker,
             "score": adjusted_score,
@@ -125,11 +128,15 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             "wyckoff_confidence": tech.get("wyckoff_confidence", "MEDIUM"),
             "rsi": tech.get("rsi", "N/A"),
             "macd_signal": tech.get("macd_signal", "none"),
+            "candlestick_patterns": tech.get("candlestick_patterns", []),
             "top_signals": signals,
             "timeframe": c.get("timeframe", "1-2d"),
             "risk": risk,
+            "promoter_pct": c.get("promoter_pct"),
+            "options_pcr": c.get("options_pcr"),
             "narrative": "",  # filled in by LLM below
             **levels,
+            **pivots,
         }
 
         if direction == "buy" and phase in _BUY_PHASES:

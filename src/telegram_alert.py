@@ -49,6 +49,27 @@ def _fmt_signals(signals: list) -> str:
 
 # ── new formatters ────────────────────────────────────────────────────────────
 
+def _fmt_candles(patterns: list) -> str:
+    if not patterns:
+        return ""
+    return " · ".join(p.replace("_", " ") for p in patterns)
+
+
+def _fmt_pivots(entry: dict) -> str:
+    p  = entry.get("daily_pivot")
+    r1 = entry.get("daily_r1")
+    s1 = entry.get("daily_s1")
+    wp = entry.get("weekly_pivot")
+    if not any([p, r1, s1]):
+        return ""
+    parts = []
+    if p:  parts.append(f"P={_code(p)}")
+    if r1: parts.append(f"R1={_code(r1)}")
+    if s1: parts.append(f"S1={_code(s1)}")
+    if wp: parts.append(f"wP={_code(wp)}")
+    return " | ".join(parts)
+
+
 def _format_buy_entry(entry: dict, rank: int) -> str:
     ticker     = entry.get("ticker", "?")
     score      = entry.get("score", 0)
@@ -66,16 +87,34 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
     tf         = entry.get("timeframe", "?")
     signals    = entry.get("top_signals", [])
     narrative  = entry.get("narrative", "")
+    candles    = entry.get("candlestick_patterns", [])
+    pcr        = entry.get("options_pcr")
+    prom_pct   = entry.get("promoter_pct")
 
     risk_icon  = RISK_EMOJI.get(risk, "⚪")
     phase_icon = WYCKOFF_EMOJI.get(phase, "")
     tf_label   = TIMEFRAME_LABEL.get(tf, tf)
     tags_str   = _fmt_tags(tags)
+    pivot_str  = _fmt_pivots(entry)
+    candle_str = _fmt_candles(candles)
 
     lines = [
         f"{_b(f'{rank}. {ticker}')} {risk_icon}",
         f"  Score: {_code(score)} | {phase_icon} {_code(phase)} ({_e(confidence)})",
         f"  RSI: {_code(rsi)} | MACD: {_code(macd)}" + (f" | {tags_str}" if tags_str else ""),
+    ]
+    if candle_str:
+        lines.append(f"  Candle: {_i(candle_str)}")
+    if pivot_str:
+        lines.append(f"  Pivots: {pivot_str}")
+    extra = []
+    if pcr is not None:
+        extra.append(f"PCR={_code(pcr)}")
+    if prom_pct is not None:
+        extra.append(f"Promoter={_code(f'{prom_pct}%')}")
+    if extra:
+        lines.append("  " + " | ".join(extra))
+    lines += [
         f"  Entry: {_code(entry_zone)} | SL: {_code(stop)}",
         f"  T1: {_code(t1)} | T2: {_code(t2)} | R:R: {_code(rr)}",
         f"  {_e(tf_label)}",
@@ -103,16 +142,28 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
     tf         = entry.get("timeframe", "?")
     signals    = entry.get("top_signals", [])
     narrative  = entry.get("narrative", "")
+    candles    = entry.get("candlestick_patterns", [])
+    pcr        = entry.get("options_pcr")
 
     risk_icon  = RISK_EMOJI.get(risk, "⚪")
     phase_icon = WYCKOFF_EMOJI.get(phase, "")
     tf_label   = TIMEFRAME_LABEL.get(tf, tf)
     tags_str   = _fmt_tags(tags)
+    pivot_str  = _fmt_pivots(entry)
+    candle_str = _fmt_candles(candles)
 
     lines = [
         f"{_b(f'{rank}. {ticker}')} {risk_icon}",
         f"  Score: {_code(score)} | {phase_icon} {_code(phase)} ({_e(confidence)})",
         f"  RSI: {_code(rsi)} | MACD: {_code(macd)}" + (f" | {tags_str}" if tags_str else ""),
+    ]
+    if candle_str:
+        lines.append(f"  Candle: {_i(candle_str)}")
+    if pivot_str:
+        lines.append(f"  Pivots: {pivot_str}")
+    if pcr is not None:
+        lines.append(f"  PCR={_code(pcr)}")
+    lines += [
         f"  Short entry: {_code(entry_zone)} | SL: {_code(stop)}",
         f"  Cover T1: {_code(t1)} | Cover T2: {_code(t2)} | R:R: {_code(rr)}",
         f"  {_e(tf_label)}",
@@ -159,6 +210,46 @@ def _format_entry_legacy(entry: dict, rank: int) -> str:
         f"  Entry: {_code(entry_zone)} | Stop: {_code(invalidation)}\n"
         f"  Signals:\n    • {sigs_str}"
     )
+
+
+# ── mid-day message builder ───────────────────────────────────────────────────
+
+def _build_midday_message(data: dict) -> str:
+    scan_date  = data.get("scan_date", "?")
+    scan_time  = data.get("scan_time", "12:30")
+    confirmed  = data.get("intraday_confirmed", {})
+    all_checks = data.get("intraday_checked", {})
+    holding    = {t: v for t, v in all_checks.items() if not v.get("intraday_surge")}
+
+    header = (
+        f"<b>Mid-day Momentum Check — {_e(scan_date)}</b>\n"
+        f"<i>Snapshot at {_e(scan_time)} IST | {len(all_checks)} candidates checked</i>\n"
+        f"{'─' * 32}"
+    )
+    lines = [header]
+
+    if confirmed:
+        lines.append(f"\n🔥 <b>INTRADAY CONFIRMED ({len(confirmed)} stocks)</b>\n")
+        for i, (ticker, v) in enumerate(confirmed.items(), 1):
+            direction = "▲" if v["price_above_prev_close"] else "▼"
+            pct = v.get("pct_vs_prev_close", 0)
+            vol_str   = f"{v['volume_ratio_projected']:.1f}x"
+            price_str = f"Rs{v['price_current']}"
+            lines.append(
+                f"{_b(f'{i}. {ticker}')}\n"
+                f"  Vol: {_code(vol_str)} projected"
+                f" | {_code(price_str)} "
+                f"({direction}{abs(pct):.1f}% vs prev close)"
+            )
+    else:
+        lines.append("\n<i>No intraday surges yet — watchlist unchanged from morning.</i>")
+
+    if holding:
+        names = ", ".join(holding.keys())
+        lines.append(f"\n<i>Holding steady: {_e(names)}</i>")
+
+    lines.append("\n⚠️ <i>Projected volume is approximate. Not investment advice.</i>")
+    return "\n\n".join(lines)
 
 
 # ── message builder ───────────────────────────────────────────────────────────
@@ -227,18 +318,35 @@ def _build_message(watchlist_data: dict) -> str:
     return header + "\n\n" + "\n\n".join(entries) + footer
 
 
+def _safe_chunks(text: str, limit: int = 4000) -> list[str]:
+    """Split message on newlines so no chunk ever cuts inside an HTML tag."""
+    chunks: list[str] = []
+    current = ""
+    for line in text.split("\n"):
+        # +1 for the newline we'll re-add
+        candidate = (current + "\n" + line) if current else line
+        if len(candidate.encode("utf-8")) > limit:
+            if current:
+                chunks.append(current)
+            current = line
+        else:
+            current = candidate
+    if current:
+        chunks.append(current)
+    return chunks
+
+
 async def _send(token: str, chat_id: str, text: str) -> None:
     bot = telegram.Bot(token=token)
-    chunk_size = 4000
-    for i in range(0, len(text), chunk_size):
+    for chunk in _safe_chunks(text):
         await bot.send_message(
             chat_id=chat_id,
-            text=text[i : i + chunk_size],
+            text=chunk,
             parse_mode="HTML",
         )
 
 
-def send_telegram_alert(watchlist_data: dict) -> None:
+def send_telegram_alert(watchlist_data: dict, mode: str = "eod") -> None:
     token   = os.environ.get("TELEGRAM_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
@@ -246,7 +354,7 @@ def send_telegram_alert(watchlist_data: dict) -> None:
         print("[telegram] TELEGRAM_TOKEN or TELEGRAM_CHAT_ID not set — skipping alert")
         return
 
-    message = _build_message(watchlist_data)
+    message = _build_midday_message(watchlist_data) if mode == "mid_day" else _build_message(watchlist_data)
 
     try:
         asyncio.run(_send(token, chat_id, message))
