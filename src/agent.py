@@ -17,7 +17,7 @@ import json
 import math
 import os
 import re
-from datetime import date
+from datetime import date, datetime, timezone, timedelta
 
 _GROQ_BASE  = "https://api.groq.com/openai/v1"
 _GROQ_MODEL = "llama-3.3-70b-versatile"
@@ -66,6 +66,17 @@ def _volatility_tags(beta: float, atr_pct: float, volume_ratio: float | None) ->
     return tags
 
 
+def _watch_reason(direction: str, adj_score: int, raw_score: int, nifty_trend: str) -> str:
+    """Human-readable explanation of why this stock is in WATCH instead of BUY/SELL."""
+    if direction == "watch":
+        return "Phase building — no entry signal yet"
+    if nifty_trend == "downtrend" and direction == "buy":
+        return f"Nifty DOWNTREND — cautious on buys (raw score {raw_score} → {adj_score} after headwind penalty)"
+    if nifty_trend == "uptrend" and direction == "sell":
+        return f"Nifty UPTREND — cautious on shorts (raw score {raw_score} → {adj_score} after headwind penalty)"
+    return f"Score {adj_score} below entry threshold"
+
+
 # ── build deterministic watchlist entries ────────────────────────────────────
 
 def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: str) -> tuple[list, list, list]:
@@ -106,8 +117,9 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
                 "ticker": ticker,
                 "phase": phase,
                 "rsi": tech.get("rsi", "N/A"),
-                "alert_trigger": ", ".join(signals[:3]) or "none",
-                "estimated_days_to_phase_c": "5-15d",
+                "today_close": c.get("today_close"),
+                "alert_trigger": signals[:3],
+                "watch_reason": _watch_reason(direction, adjusted_score, score, nifty_trend),
             })
             continue
 
@@ -125,6 +137,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         base = {
             "ticker": ticker,
             "score": adjusted_score,
+            "today_close": c.get("today_close"),
             "volatility_tags": vtags,
             "wyckoff_phase": phase,
             "wyckoff_confidence": tech.get("wyckoff_confidence", "MEDIUM"),
@@ -281,8 +294,12 @@ def synthesize_watchlist(
                     entry["narrative"] = narratives[t]
                     print(f"[agent] narrative for {t}: {narratives[t][:80]}")
 
+    IST = timezone(timedelta(hours=5, minutes=30))
+    scan_time = datetime.now(IST).strftime("%I:%M %p IST").lstrip("0")
+
     return {
         "scan_date": scan_date.isoformat(),
+        "scan_time": scan_time,
         "nifty_context": nifty_trend,
         "total_screened": total_scanned,
         "buy_watchlist": buy_list,
