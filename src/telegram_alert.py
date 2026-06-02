@@ -373,7 +373,7 @@ def _build_midday_message(data: dict) -> str:
             price = v.get("price_current", "?")
             stop = v.get("stop_loss", "?")
             pct = v.get("pct_vs_stop", 0)
-            action = "BUY → close long" if direction == "buy" else "SELL → close short"
+            action = "SELL → exit long" if direction == "buy" else "BUY → cover short"
             lines.append(
                 f"{_b(ticker)}\n"
                 f"  Action: {_code(action)}\n"

@@ -9,8 +9,10 @@ Used as market-wide signal: heavy FII buying = reduce downtrend headwind.
 
 Thresholds (₹ crore):
   FII net buy  > +500cr  → fii_buying_strong  (reduce headwind by 1)
-  FII net sell > -500cr  → fii_selling_strong (increase headwind by 1)
-  DII net buy  > +500cr  → dii_buying_strong  (moderately bullish, DII often counter-cyclical)
+  FII net sell > -500cr  → fii_selling_strong (ease short headwind by 1)
+
+DII net amounts are shown in Telegram header for context only; DII is often
+counter-cyclical (buy when FII sells) so directional scoring is unreliable.
 """
 
 from __future__ import annotations
@@ -39,7 +41,6 @@ _EMPTY = {
     "dii_net_cr": None,
     "fii_buying_strong": False,
     "fii_selling_strong": False,
-    "dii_buying_strong": False,
     "available": False,
 }
 
@@ -91,7 +92,6 @@ def fetch_fii_dii_data() -> dict:
         "dii_net_cr": round(dii_net, 1) if dii_net is not None else None,
         "fii_buying_strong":  fii_net is not None and fii_net > _THRESHOLD_CR,
         "fii_selling_strong": fii_net is not None and fii_net < -_THRESHOLD_CR,
-        "dii_buying_strong":  dii_net is not None and dii_net > _THRESHOLD_CR,
         "available": True,
     }
     print(

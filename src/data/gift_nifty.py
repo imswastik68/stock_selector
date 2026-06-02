@@ -4,10 +4,13 @@ Gift Nifty (GIFT City) futures gap fetcher.
 Gift Nifty trades 6 AM–11:30 PM IST and is the primary pre-market indicator
 for Nifty 50 direction. A gap of > +1% = strong buy bias; < -1% = sell bias.
 
-Used in pre-market scan to modulate the headwind penalty applied to candidates.
+Used in pre-market and EOD scans to modulate the headwind penalty applied to candidates.
+In EOD context, Gift Nifty reflects where tomorrow's open is expected to be.
 
-NSE API: https://www.nseindia.com/api/liveNSEGIFT
-Returns current Gift Nifty futures price vs previous Nifty 50 close.
+NSE API endpoint: https://www.nseindia.com/api/liveNSEGIFT
+NOTE: This endpoint must be verified against the live NSE site — if it returns
+a 404 or unexpected schema, the function returns _EMPTY gracefully (no crash,
+feature simply disabled). Verify via browser devtools: Network tab → search "GIFT".
 """
 
 from __future__ import annotations
@@ -68,17 +71,16 @@ def fetch_gift_nifty() -> dict:
         resp = session.get(_GIFT_URL, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-        # Response is typically {"data": [{"lastPrice": 22345.5, ...}]} or similar
-        records = data.get("data", []) if isinstance(data, dict) else data
+        # Try multiple response shapes (NSE sometimes changes schema)
+        records = data.get("data", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
         if isinstance(records, list) and records:
             item = records[0]
-            gift_price = (
-                item.get("lastPrice") or
-                item.get("last") or
-                item.get("ltp")
-            )
-            if gift_price is not None:
-                gift_price = float(str(gift_price).replace(",", ""))
+            # Try known NSE field names in priority order
+            for field in ("lastPrice", "last", "ltp", "previousClose", "price"):
+                val = item.get(field)
+                if val is not None and val != 0:
+                    gift_price = float(str(val).replace(",", ""))
+                    break
     except Exception as exc:
         print(f"[gift_nifty] Gift Nifty fetch error: {exc}")
 

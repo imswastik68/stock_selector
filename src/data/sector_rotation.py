@@ -75,7 +75,9 @@ def _fetch_constituents(session: requests.Session, nse_index: str) -> set[str]:
         tickers = set()
         for row in records:
             symbol = row.get("symbol", "")
-            if symbol and symbol.upper() not in ("NIFTY BANK", "NIFTY 50"):
+            # NSE stock tickers never have spaces; index names do (e.g. "NIFTY BANK", "NIFTY AUTO").
+            # Skip any row that's the index itself rather than a constituent stock.
+            if symbol and " " not in symbol:
                 tickers.add(f"{symbol.upper()}.NS")
         return tickers
     except Exception as exc:

@@ -28,6 +28,7 @@ import warnings
 from datetime import date, timedelta
 from pathlib import Path
 
+import pandas as pd
 import yfinance as yf
 
 _PERF_FILE = Path(__file__).parent.parent / "outputs" / "performance.json"
@@ -136,7 +137,6 @@ def evaluate_prior_picks(lookback_days: int = 7) -> dict:
         print(f"[performance] OHLC fetch error: {exc}")
         return perf
 
-    import pandas as pd
     updated = 0
     for ticker, entries in open_by_ticker.items():
         try:
