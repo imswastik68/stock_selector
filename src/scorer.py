@@ -24,6 +24,7 @@ SHORT_TERM_WEIGHTS = {
     "bb_squeeze_breakout": 2,   # BB width ≤50% of 90d avg AND price broke outside band
     "bullish_candle": 1,        # hammer / bullish_engulfing / bullish_marubozu on last bar
     "weekly_trend_aligned": 1,  # weekly EMA10 > EMA20: daily signal aligns with larger timeframe
+    "sector_in_momentum": 1,    # stock is in a top-2 performing NSE sector index (5d return)
 }
 
 SWING_WEIGHTS = {
@@ -66,6 +67,7 @@ def _build_signal_map(
     delivery_data: dict | None = None,
     fo_ban_current: set[str] | None = None,
     announcements_data: dict | None = None,
+    hot_sector_tickers: set[str] | None = None,
 ) -> dict[str, bool]:
     """Build a boolean signal map for a single ticker."""
     signals: dict[str, bool] = {k: False for k in list(SHORT_TERM_WEIGHTS) + list(SWING_WEIGHTS) + list(DISQUALIFIER_WEIGHTS)}
@@ -135,6 +137,9 @@ def _build_signal_map(
         signals["contract_win"]           = ann.get("contract_win", False)
         signals["dividend_announced"]     = ann.get("dividend_announced", False)
 
+    # Sector rotation: ticker is in top-2 performing NSE sector index (5d return)
+    signals["sector_in_momentum"] = ticker in (hot_sector_tickers or set())
+
     # --- SWING signals ---
 
     # Upcoming results — weak informational flag; real PEAD requires confirmed post-beat data
@@ -194,6 +199,7 @@ def score_candidates(
     fo_ban_current: set[str] | None = None,
     market_regime: str = "normal",
     announcements: list[dict] | None = None,
+    hot_sector_tickers: set[str] | None = None,
 ) -> list[dict]:
     """
     Score every unique ticker across all data sources and return qualifying candidates.
@@ -237,6 +243,7 @@ def score_candidates(
             promoter_data=prom, options_data=opts, technical_data=tech,
             delivery_data=deliv, fo_ban_current=fo_ban_current,
             announcements_data={ticker: ann} if ann else None,
+            hot_sector_tickers=hot_sector_tickers,
         )
 
         score, timeframe = _compute_score(signals, market_regime)

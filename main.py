@@ -42,7 +42,10 @@ from src.data.bulk_deals import fetch_bulk_deals
 from src.data.bse_announcements import fetch_bse_announcements
 from src.data.delivery import fetch_delivery_signals
 from src.data.breakouts import fetch_breakouts
+from src.data.fii_dii import fetch_fii_dii_data
 from src.data.fo_ban import fetch_fo_ban_delta
+from src.data.gift_nifty import fetch_gift_nifty
+from src.data.sector_rotation import fetch_hot_sector_tickers
 from src.data.market_context import enrich_candidate_context, fetch_market_wide_context
 from src.data.options import fetch_options_signals
 from src.data.promoter import fetch_promoter_signals
@@ -50,17 +53,18 @@ from src.data.results import fetch_results_calendar
 from src.data.volume import fetch_volume_gainers
 from src.scorer import score_candidates
 from src.agent import synthesize_watchlist
+from src.performance import performance_summary, record_picks
 from src.telegram_alert import send_telegram_alert
 
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
 
-def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, list]:
-    """Fetch all data sources concurrently. Returns 9-tuple; includes bse_announcements."""
+def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, list, dict, dict, set]:
+    """Fetch all data sources concurrently. Returns 12-tuple."""
     print("[main] fetching market data...")
     t0 = time.time()
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=10) as pool:
         futures = {
             "bulk_deals": pool.submit(fetch_bulk_deals),
             "volume": pool.submit(fetch_volume_gainers),
@@ -70,6 +74,8 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, lis
             "market_wide": pool.submit(fetch_market_wide_context),
             "delivery": pool.submit(fetch_delivery_signals),
             "announcements": pool.submit(fetch_bse_announcements),
+            "fii_dii": pool.submit(fetch_fii_dii_data),
+            "gift_nifty": pool.submit(fetch_gift_nifty),
         }
 
         results = {}
@@ -78,7 +84,15 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, lis
                 results[name] = future.result()
             except Exception as exc:
                 print(f"[main] {name} fetch error (continuing): {exc}")
-                results[name] = [] if name not in ("market_wide", "delivery") else {}
+                results[name] = [] if name not in ("market_wide", "delivery", "fii_dii", "gift_nifty") else {}
+
+    # Sector rotation depends on market_wide (sector heatmap); run sequentially after
+    try:
+        heatmap = results["market_wide"].get("sector_heatmap", {})
+        hot_sector_tickers = fetch_hot_sector_tickers(heatmap)
+    except Exception as exc:
+        print(f"[main] sector_rotation fetch error (continuing): {exc}")
+        hot_sector_tickers = set()
 
     elapsed = time.time() - t0
     print(f"[main] all data fetched in {elapsed:.1f}s")
@@ -100,6 +114,9 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, lis
         results["delivery"],
         fo_ban_current,
         results["announcements"],
+        results["fii_dii"],
+        results["gift_nifty"],
+        hot_sector_tickers,
     )
 
 
@@ -145,8 +162,46 @@ def run_mid_day_scan() -> int:
         print("[main] no candidates from prior run — nothing to check")
         return 0
 
+    # Build stop_loss map from prior watchlist for SL hit detection
+    def _parse_price_str(s) -> float | None:
+        try:
+            return float(str(s).replace("₹", "").replace(",", "").strip())
+        except (ValueError, TypeError):
+            return None
+
+    sl_map: dict[str, dict] = {}
+    for entry in prior.get("buy_watchlist", []):
+        t = entry.get("ticker", "")
+        sl = _parse_price_str(entry.get("stop_loss"))
+        if t and sl is not None:
+            sl_map[t] = {"stop_loss": sl, "direction": "buy"}
+    for entry in prior.get("sell_watchlist", []):
+        t = entry.get("ticker", "")
+        sl = _parse_price_str(entry.get("stop_loss"))
+        if t and sl is not None:
+            sl_map[t] = {"stop_loss": sl, "direction": "sell"}
+
     intraday = fetch_intraday_signals(tickers)
     confirmed = {t: v for t, v in intraday.items() if v["intraday_surge"]}
+
+    # Detect stop-loss hits
+    sl_hits: dict[str, dict] = {}
+    for ticker, v in intraday.items():
+        if ticker not in sl_map:
+            continue
+        sl_info = sl_map[ticker]
+        price = v.get("price_current")
+        stop = sl_info["stop_loss"]
+        direction = sl_info["direction"]
+        hit = (direction == "buy" and price is not None and price <= stop) or \
+              (direction == "sell" and price is not None and price >= stop)
+        if hit:
+            sl_hits[ticker] = {
+                "price_current": price,
+                "stop_loss": stop,
+                "direction": direction,
+                "pct_vs_stop": round((price / stop - 1) * 100, 1) if stop else 0,
+            }
 
     print(f"\n[main] === MID-DAY CONFIRMED ({len(confirmed)} / {len(intraday)} checked) ===")
     for ticker, v in confirmed.items():
@@ -155,6 +210,10 @@ def run_mid_day_scan() -> int:
             f"  {ticker:<22} proj={v['volume_ratio_projected']:.1f}x  "
             f"price={v['price_current']} ({pct:+.1f}% vs prev)"
         )
+    if sl_hits:
+        print(f"\n[main] === STOP-LOSS HITS ({len(sl_hits)}) ===")
+        for ticker, v in sl_hits.items():
+            print(f"  {ticker:<22} price={v['price_current']} SL={v['stop_loss']}")
 
     send_telegram_alert(
         {
@@ -162,6 +221,7 @@ def run_mid_day_scan() -> int:
             "scan_time":          scan_time,
             "intraday_confirmed": confirmed,
             "intraday_checked":   intraday,
+            "sl_hits":            sl_hits,
         },
         mode="mid_day",
     )
@@ -178,7 +238,7 @@ def main() -> int:
     print(f"[main] === Stock Selector run: {date.today().isoformat()}  mode={scan_mode} ===")
 
     # 1. Fetch (parallel)
-    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals, fo_ban_current, announcements = fetch_all_data()
+    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals, fo_ban_current, announcements, fii_dii, gift_nifty, hot_sector_tickers = fetch_all_data()
 
     # Count total unique tickers across all sources for the report
     all_tickers: set[str] = set()
@@ -199,6 +259,7 @@ def main() -> int:
         fo_ban_current=fo_ban_current,
         market_regime=nifty_regime,
         announcements=announcements,
+        hot_sector_tickers=hot_sector_tickers,
     )
 
     # 3. Enrich top 20 candidates with options PCR + promoter buying
@@ -224,6 +285,7 @@ def main() -> int:
             fo_ban_current=fo_ban_current,
             market_regime=nifty_regime,
             announcements=announcements,
+            hot_sector_tickers=hot_sector_tickers,
         )
     else:
         options_signals = {}
@@ -252,6 +314,8 @@ def main() -> int:
     market_context["bulk_deals"] = bulk_deals
     market_context["fo_ban_delta"] = fo_ban_removed
     market_context["results_calendar"] = results_calendar
+    market_context["fii_dii"] = fii_dii
+    market_context["gift_nifty"] = gift_nifty
 
     # 5. Third re-score: incorporate RSI, RS vs Nifty, OBV, BB squeeze from technicals
     #    (only top 20 have technical data — rest get no delta, preserving their rank)
@@ -283,6 +347,7 @@ def main() -> int:
             fo_ban_current=fo_ban_current,
             market_regime=nifty_regime,
             announcements=announcements,
+            hot_sector_tickers=hot_sector_tickers,
         )
 
     # 6. LLM synthesis (Wyckoff + SMC + VSA)
@@ -291,6 +356,15 @@ def main() -> int:
 
     # 7. Save
     save_output(watchlist_data)
+
+    # 7b. Performance tracking: record today's picks + evaluate prior
+    try:
+        record_picks(watchlist_data)
+        perf = performance_summary(lookback_days=30)
+        watchlist_data["performance"] = perf
+        print(f"[main] performance: {perf}")
+    except Exception as exc:
+        print(f"[main] performance tracking error (non-fatal): {exc}")
 
     # 8. Telegram alert
     send_telegram_alert(watchlist_data)

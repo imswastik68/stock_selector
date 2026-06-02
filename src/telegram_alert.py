@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import math
 import os
 
 import telegram
@@ -67,6 +68,8 @@ SIGNAL_LABELS = {
     "buyback_announced":       "buyback announced",
     "contract_win":            "order/contract win",
     "dividend_announced":      "dividend declared",
+    # sector rotation
+    "sector_in_momentum":      "hot sector",
 }
 
 # Short readable label for MACD signal state
@@ -174,6 +177,7 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
     prom_pct      = entry.get("promoter_pct")
     delivery_pct  = entry.get("delivery_pct")
     price         = entry.get("today_close")
+    atr_pct_val   = entry.get("atr_pct")
 
     risk_icon  = RISK_EMOJI.get(risk, "⚪")
     phase_icon = WYCKOFF_EMOJI.get(phase, "📊")
@@ -201,6 +205,13 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
         extra.append(f"Promoter={_code(f'{prom_pct}%')}")
     if delivery_pct is not None and "delivery_surge" in " ".join(str(s) for s in signals):
         extra.append(f"Delivery={_code(f'{delivery_pct}%')}")
+    if (atr_pct_val is not None and math.isfinite(atr_pct_val)
+            and price is not None and price > 0):
+        atr_abs = price * atr_pct_val / 100
+        if atr_abs > 0:
+            shares = int(1000 / atr_abs)
+            if shares > 0:
+                extra.append(f"Size={_code(f'{shares}sh')} <i>(1ATR=₹{atr_abs:.0f})</i>")
     if extra:
         lines.append("  " + " | ".join(extra))
     lines += [
@@ -236,6 +247,7 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
     pcr        = entry.get("options_pcr")
     prom_pct   = entry.get("promoter_pct")
     price      = entry.get("today_close")
+    atr_pct_val = entry.get("atr_pct")
 
     risk_icon  = RISK_EMOJI.get(risk, "⚪")
     phase_icon = WYCKOFF_EMOJI.get(phase, "📊")
@@ -261,6 +273,13 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
         extra.append(f"PCR={_code(pcr)}")
     if prom_pct is not None:
         extra.append(f"Promoter={_code(f'{prom_pct}%')}")
+    if (atr_pct_val is not None and math.isfinite(atr_pct_val)
+            and price is not None and price > 0):
+        atr_abs = price * atr_pct_val / 100
+        if atr_abs > 0:
+            shares = int(1000 / atr_abs)
+            if shares > 0:
+                extra.append(f"Size={_code(f'{shares}sh')} <i>(1ATR=₹{atr_abs:.0f})</i>")
     if extra:
         lines.append("  " + " | ".join(extra))
     lines += [
@@ -337,7 +356,8 @@ def _build_midday_message(data: dict) -> str:
     scan_time  = data.get("scan_time", "12:30 PM IST")
     confirmed  = data.get("intraday_confirmed", {})
     all_checks = data.get("intraday_checked", {})
-    holding    = {t: v for t, v in all_checks.items() if not v.get("intraday_surge")}
+    sl_hits    = data.get("sl_hits", {})
+    holding    = {t: v for t, v in all_checks.items() if not v.get("intraday_surge") and t not in sl_hits}
 
     header = (
         f"<b>Mid-day Momentum Check — {_e(scan_date)}</b>\n"
@@ -345,6 +365,20 @@ def _build_midday_message(data: dict) -> str:
         f"{'─' * 32}"
     )
     lines = [header]
+
+    if sl_hits:
+        lines.append(f"\n🚨 <b>STOP-LOSS HIT — EXIT NOW ({len(sl_hits)} stocks)</b>\n")
+        for ticker, v in sl_hits.items():
+            direction = v.get("direction", "buy")
+            price = v.get("price_current", "?")
+            stop = v.get("stop_loss", "?")
+            pct = v.get("pct_vs_stop", 0)
+            action = "BUY → close long" if direction == "buy" else "SELL → close short"
+            lines.append(
+                f"{_b(ticker)}\n"
+                f"  Action: {_code(action)}\n"
+                f"  Price: {_code(f'₹{price}')} | SL: {_code(f'₹{stop}')} ({pct:+.1f}% vs SL)"
+            )
 
     if confirmed:
         lines.append(f"\n🔥 <b>INTRADAY CONFIRMED ({len(confirmed)} stocks)</b>\n")
@@ -394,9 +428,25 @@ def _build_message(watchlist_data: dict) -> str:
             )
 
         nifty_arrow = {"UPTREND": " ↗", "DOWNTREND": " ↘", "RANGING": " ↔"}.get(nifty_ctx, "")
+        fii_dii     = watchlist_data.get("fii_dii", {})
+        gift_nifty  = watchlist_data.get("gift_nifty", {})
+        fii_net     = fii_dii.get("fii_net_cr")
+        dii_net     = fii_dii.get("dii_net_cr")
+        fii_str = ""
+        if fii_net is not None:
+            arrow = "↑" if fii_net > 0 else "↓"
+            fii_str = f" | FII {arrow}₹{abs(fii_net):.0f}cr"
+            if dii_net is not None:
+                d_arrow = "↑" if dii_net > 0 else "↓"
+                fii_str += f" DII {d_arrow}₹{abs(dii_net):.0f}cr"
+        gift_str = ""
+        gap_pct = gift_nifty.get("gap_pct")
+        if gap_pct is not None:
+            g_arrow = "↑" if gap_pct > 0 else "↓"
+            gift_str = f" | Gift {g_arrow}{abs(gap_pct):.1f}%"
         header = (
             f"<b>NSE/BSE Stock Scanner — {_e(scan_date)}{time_str}</b>\n"
-            f"<i>Nifty 50: {_e(nifty_ctx)}{nifty_arrow} | {total} stocks screened</i>\n"
+            f"<i>Nifty 50: {_e(nifty_ctx)}{nifty_arrow} | {total} stocks screened{_e(fii_str)}{_e(gift_str)}</i>\n"
             f"{'─' * 32}"
         )
         sections = [header]
@@ -416,6 +466,16 @@ def _build_message(watchlist_data: dict) -> str:
 
         if warnings:
             sections.append("\n⚠ <b>Data warnings:</b>\n" + "\n".join(f"  • {_e(w)}" for w in warnings))
+
+        perf = watchlist_data.get("performance", {})
+        if perf and perf.get("total_picks", 0) > 0:
+            wr = perf.get("win_rate_pct")
+            wr_str = f"{wr}%" if wr is not None else "N/A"
+            sections.append(
+                f"\n📊 <i>30d signal track record: "
+                f"{perf['t1_hit']}T1 / {perf['sl_hit']}SL / {perf['open']} open "
+                f"({perf['total_picks']} picks) — win rate {wr_str}</i>"
+            )
 
         sections.append("\n\n⚠️ <i>Not investment advice. Do your own due diligence.</i>")
         return "\n\n".join(sections)

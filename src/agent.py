@@ -93,6 +93,8 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
     technicals: dict = market_context.get("technicals", {})
     beta_data:  dict = market_context.get("beta", {})
     atr_data:   dict = market_context.get("atr_pct", {})
+    fii_dii:    dict = market_context.get("fii_dii", {})
+    gift_nifty: dict = market_context.get("gift_nifty", {})
 
     buy_list, sell_list, phase_b_list = [], [], []
 
@@ -114,13 +116,28 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         active_signals = c.get("active_signals", [])
         adjusted_score = score
         headwind_penalty = 0
+        # FII strong buying in downtrend = institutional dip-buying; ease penalty by 1
+        fii_easing  = fii_dii.get("fii_buying_strong", False)
+        # FII strong selling in uptrend = distribution; ease short penalty by 1
+        fii_selling = fii_dii.get("fii_selling_strong", False)
+        # Gift Nifty gap: strong gap-up in downtrend = global tailwind → ease by 1 more
+        gift_gap_up   = gift_nifty.get("gap_up_strong", False)
+        gift_gap_down = gift_nifty.get("gap_down_strong", False)
         if nifty_trend == "downtrend" and direction == "buy":
             has_breakout = "actual_52w_breakout" in active_signals
             headwind_penalty = 2 if has_breakout else 4
+            if fii_easing:
+                headwind_penalty = max(0, headwind_penalty - 1)
+            if gift_gap_up:
+                headwind_penalty = max(0, headwind_penalty - 1)
             adjusted_score -= headwind_penalty
         elif nifty_trend == "uptrend" and direction == "sell":
             has_breakdown = "distribution_signal" in active_signals
             headwind_penalty = 2 if has_breakdown else 4
+            if fii_selling:
+                headwind_penalty = max(0, headwind_penalty - 1)
+            if gift_gap_down:
+                headwind_penalty = max(0, headwind_penalty - 1)
             adjusted_score -= headwind_penalty
 
         vtags = _volatility_tags(beta, atr_pct, vol_ratio)
@@ -170,6 +187,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             "risk": risk,
             "promoter_pct": c.get("promoter_pct"),
             "options_pcr": c.get("options_pcr"),
+            "atr_pct": atr_pct,
             "narrative": "",  # filled in by LLM below
             **levels,
             **pivots,
@@ -320,6 +338,9 @@ def synthesize_watchlist(
     IST = timezone(timedelta(hours=5, minutes=30))
     scan_time = datetime.now(IST).strftime("%I:%M %p IST").lstrip("0")
 
+    fii_dii    = market_context.get("fii_dii", {}) if market_context else {}
+    gift_nifty = market_context.get("gift_nifty", {}) if market_context else {}
+
     return {
         "scan_date": scan_date.isoformat(),
         "scan_time": scan_time,
@@ -328,5 +349,7 @@ def synthesize_watchlist(
         "buy_watchlist": buy_list,
         "sell_watchlist": sell_list,
         "phase_b_watchlist": phase_b_list,
+        "fii_dii": fii_dii,
+        "gift_nifty": gift_nifty,
         "data_quality_warnings": [],
     }
