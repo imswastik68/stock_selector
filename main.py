@@ -39,6 +39,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.data.bulk_deals import fetch_bulk_deals
+from src.data.bse_announcements import fetch_bse_announcements
 from src.data.delivery import fetch_delivery_signals
 from src.data.breakouts import fetch_breakouts
 from src.data.fo_ban import fetch_fo_ban_delta
@@ -54,12 +55,12 @@ from src.telegram_alert import send_telegram_alert
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
 
-def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set]:
-    """Fetch all data sources concurrently. Returns 8-tuple; last element is current F&O ban set."""
+def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, list]:
+    """Fetch all data sources concurrently. Returns 9-tuple; includes bse_announcements."""
     print("[main] fetching market data...")
     t0 = time.time()
 
-    with ThreadPoolExecutor(max_workers=7) as pool:
+    with ThreadPoolExecutor(max_workers=8) as pool:
         futures = {
             "bulk_deals": pool.submit(fetch_bulk_deals),
             "volume": pool.submit(fetch_volume_gainers),
@@ -68,6 +69,7 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set]:
             "breakouts": pool.submit(fetch_breakouts),
             "market_wide": pool.submit(fetch_market_wide_context),
             "delivery": pool.submit(fetch_delivery_signals),
+            "announcements": pool.submit(fetch_bse_announcements),
         }
 
         results = {}
@@ -97,6 +99,7 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set]:
         results["market_wide"],
         results["delivery"],
         fo_ban_current,
+        results["announcements"],
     )
 
 
@@ -175,7 +178,7 @@ def main() -> int:
     print(f"[main] === Stock Selector run: {date.today().isoformat()}  mode={scan_mode} ===")
 
     # 1. Fetch (parallel)
-    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals, fo_ban_current = fetch_all_data()
+    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals, fo_ban_current, announcements = fetch_all_data()
 
     # Count total unique tickers across all sources for the report
     all_tickers: set[str] = set()
@@ -184,6 +187,7 @@ def main() -> int:
     all_tickers.update(fo_ban_removed)
     all_tickers.update(r["ticker"] for r in results_calendar)
     all_tickers.update(b["ticker"] for b in breakouts)
+    all_tickers.update(a["ticker"] for a in announcements)
     total_scanned = len(all_tickers)
 
     # 2. Initial score (without options/promoter — those need per-ticker API calls)
@@ -194,6 +198,7 @@ def main() -> int:
         delivery_signals=delivery_signals,
         fo_ban_current=fo_ban_current,
         market_regime=nifty_regime,
+        announcements=announcements,
     )
 
     # 3. Enrich top 20 candidates with options PCR + promoter buying
@@ -218,6 +223,7 @@ def main() -> int:
             delivery_signals=delivery_signals,
             fo_ban_current=fo_ban_current,
             market_regime=nifty_regime,
+            announcements=announcements,
         )
     else:
         options_signals = {}
@@ -252,12 +258,17 @@ def main() -> int:
     # 2 technical signals after research review (rsi_extended, obv, bb_squeeze removed)
     tech_signals = {
         ticker: {
-            "rsi_momentum":       t.get("rsi_momentum", False),
-            "rs_vs_nifty":        t.get("rs_vs_nifty", False),
-            "rsi_bearish_div":    t.get("rsi_bearish_div", False),
-            "rsi_bullish_div":    t.get("rsi_bullish_div", False),
-            "macd_bullish_cross": t.get("macd_bullish_cross", False),
-            "macd_bearish_cross": t.get("macd_bearish_cross", False),
+            "rsi_momentum":        t.get("rsi_momentum", False),
+            "rs_vs_nifty":         t.get("rs_vs_nifty", False),
+            "rsi_bearish_div":     t.get("rsi_bearish_div", False),
+            "rsi_bullish_div":     t.get("rsi_bullish_div", False),
+            "macd_bullish_cross":  t.get("macd_bullish_cross", False),
+            "macd_bearish_cross":  t.get("macd_bearish_cross", False),
+            "obv_accumulation":    t.get("obv_accumulation", False),
+            "bb_squeeze_breakout": t.get("bb_squeeze_breakout", False),
+            "bullish_candle":      t.get("bullish_candle", False),
+            "bearish_candle":      t.get("bearish_candle", False),
+            "weekly_trend_aligned":t.get("weekly_trend_aligned", False),
         }
         for ticker, t in market_context.get("technicals", {}).items()
     }
@@ -271,6 +282,7 @@ def main() -> int:
             delivery_signals=delivery_signals,
             fo_ban_current=fo_ban_current,
             market_regime=nifty_regime,
+            announcements=announcements,
         )
 
     # 6. LLM synthesis (Wyckoff + SMC + VSA)

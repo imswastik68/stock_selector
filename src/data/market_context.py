@@ -187,7 +187,7 @@ def enrich_candidate_context(tickers: list[str], base_ctx: dict) -> dict:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             raw = yf.download(
-                tickers, period="90d", auto_adjust=True, progress=False, group_by="ticker"
+                tickers, period="200d", auto_adjust=True, progress=False, group_by="ticker"
             )
         if raw.empty:
             return ctx
@@ -240,6 +240,20 @@ def enrich_candidate_context(tickers: list[str], base_ctx: dict) -> dict:
             )
         except Exception as exc:
             print(f"[market_context] technicals error for {ticker}: {exc}")
+            ctx["technicals"][ticker] = {}
+
+        # Weekly trend: resample daily → weekly closes, compute EMA10 vs EMA20.
+        # Requires ≥20 weekly bars (~100 trading days). With 200d download we get ~28 weeks.
+        try:
+            weekly = df["Close"].squeeze().resample("W").last().dropna()
+            if len(weekly) >= 20:
+                w_ema10 = float(weekly.ewm(span=10, adjust=False).mean().iloc[-1])
+                w_ema20 = float(weekly.ewm(span=20, adjust=False).mean().iloc[-1])
+                ctx["technicals"][ticker]["weekly_trend_aligned"] = w_ema10 > w_ema20
+            else:
+                ctx["technicals"][ticker]["weekly_trend_aligned"] = False
+        except Exception:
+            ctx["technicals"][ticker]["weekly_trend_aligned"] = False
 
     print(f"[market_context] enriched {len(ctx['ohlcv_90d'])} candidates with OHLCV/beta/ATR/technicals")
     return ctx

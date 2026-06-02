@@ -482,6 +482,8 @@ def enrich_with_technicals(
     candles = detect_candlestick_patterns(df)
     obv_acc = compute_obv_signal(df)
     bb_sq   = compute_bb_squeeze(df)
+    bullish_candle = any(p in candles for p in ("hammer", "bullish_engulfing", "bullish_marubozu"))
+    bearish_candle = any(p in candles for p in ("shooting_star", "bearish_engulfing", "bearish_marubozu"))
 
     _BUY_PHASES  = {"ACCUMULATION_C", "ACCUMULATION_D", "MARKUP"}
     _SELL_PHASES = {"DISTRIBUTION_C", "DISTRIBUTION_D", "MARKDOWN"}
@@ -541,6 +543,8 @@ def enrich_with_technicals(
         "rs_vs_nifty":       rs_vs_nifty,
         "obv_accumulation":  obv_acc,
         "bb_squeeze_breakout": bb_sq,
+        "bullish_candle":    bullish_candle,
+        "bearish_candle":    bearish_candle,
         **pivots,
         **levels,
     }

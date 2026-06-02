@@ -19,12 +19,20 @@ SHORT_TERM_WEIGHTS = {
     "rsi_bullish_div": 1,       # price LL + RSI HL: sellers losing momentum
     "macd_bullish_cross": 1,    # histogram / zero-line crossed up in last 3-5 bars
     "fo_ban_lifted": 1,         # just removed from NSE F&O ban: liquidity restored, fresh positions allowed
+    "obv_accumulation": 1,      # OBV rising faster than price = stealth institutional buying
+    "bb_squeeze_breakout": 2,   # BB width ≤50% of 90d avg AND price broke outside band
+    "bullish_candle": 1,        # hammer / bullish_engulfing / bullish_marubozu on last bar
+    "weekly_trend_aligned": 1,  # weekly EMA10 > EMA20: daily signal aligns with larger timeframe
 }
 
 SWING_WEIGHTS = {
-    "results_due": 1,          # upcoming results — informational flag only (PEAD needs actual beat)
-    "promoter_buying": 3,      # sets timeframe → 5-7d
+    "results_due": 1,               # upcoming results — informational flag only (PEAD needs actual beat)
+    "promoter_buying": 3,           # sets timeframe → 5-7d
     "consolidation_breakout": 3,
+    "results_beat_announced": 3,    # post-3:30 PM filing: quarterly result filed (potential beat)
+    "buyback_announced": 2,         # board-approved buyback = promoter confidence, floor under price
+    "contract_win": 2,              # order/contract receipt — high-impact for mid/small caps
+    "dividend_announced": 1,        # dividend declared = shareholder reward signal
 }
 
 DISQUALIFIER_WEIGHTS = {
@@ -35,6 +43,7 @@ DISQUALIFIER_WEIGHTS = {
     "thin_market": -4,           # avg daily turnover < ₹5cr: unreliable signals + exit risk
     "options_short_buildup": -2,  # price down + OI up = fresh shorts entering
     "options_pcr_greed": -1,      # PCR < 0.5: extreme complacency (min OI required)
+    "bearish_candle": -1,         # shooting_star / bearish_engulfing / bearish_marubozu on last bar
 }
 
 MIN_SCORE = 3
@@ -54,6 +63,7 @@ def _build_signal_map(
     technical_data: dict | None = None,
     delivery_data: dict | None = None,
     fo_ban_current: set[str] | None = None,
+    announcements_data: dict | None = None,
 ) -> dict[str, bool]:
     """Build a boolean signal map for a single ticker."""
     signals: dict[str, bool] = {k: False for k in list(SHORT_TERM_WEIGHTS) + list(SWING_WEIGHTS) + list(DISQUALIFIER_WEIGHTS)}
@@ -97,16 +107,29 @@ def _build_signal_map(
 
     # Technical signals (pass 3 only — after enrich_candidate_context)
     if technical_data:
-        signals["rsi_momentum"]      = technical_data.get("rsi_momentum", False)
-        signals["rs_vs_nifty"]       = technical_data.get("rs_vs_nifty", False)
-        signals["rsi_bearish_div"]   = technical_data.get("rsi_bearish_div", False)
-        signals["rsi_bullish_div"]   = technical_data.get("rsi_bullish_div", False)
-        signals["macd_bullish_cross"]= technical_data.get("macd_bullish_cross", False)
-        signals["macd_bearish_cross"]= technical_data.get("macd_bearish_cross", False)
+        signals["rsi_momentum"]        = technical_data.get("rsi_momentum", False)
+        signals["rs_vs_nifty"]         = technical_data.get("rs_vs_nifty", False)
+        signals["rsi_bearish_div"]     = technical_data.get("rsi_bearish_div", False)
+        signals["rsi_bullish_div"]     = technical_data.get("rsi_bullish_div", False)
+        signals["macd_bullish_cross"]  = technical_data.get("macd_bullish_cross", False)
+        signals["macd_bearish_cross"]  = technical_data.get("macd_bearish_cross", False)
+        signals["obv_accumulation"]    = technical_data.get("obv_accumulation", False)
+        signals["bb_squeeze_breakout"] = technical_data.get("bb_squeeze_breakout", False)
+        signals["bullish_candle"]      = technical_data.get("bullish_candle", False)
+        signals["bearish_candle"]      = technical_data.get("bearish_candle", False)
+        signals["weekly_trend_aligned"]= technical_data.get("weekly_trend_aligned", False)
 
     # Delivery volume signal from NSE bhav copy
     if delivery_data:
         signals["delivery_surge"] = delivery_data.get("delivery_surge", False)
+
+    # Corporate announcements filed post-3:30 PM (pre-market alpha)
+    if announcements_data:
+        ann = announcements_data.get(ticker, {})
+        signals["results_beat_announced"] = ann.get("results_beat_announced", False)
+        signals["buyback_announced"]      = ann.get("buyback_announced", False)
+        signals["contract_win"]           = ann.get("contract_win", False)
+        signals["dividend_announced"]     = ann.get("dividend_announced", False)
 
     # --- SWING signals ---
 
@@ -166,6 +189,7 @@ def score_candidates(
     delivery_signals: dict | None = None,
     fo_ban_current: set[str] | None = None,
     market_regime: str = "normal",
+    announcements: list[dict] | None = None,
 ) -> list[dict]:
     """
     Score every unique ticker across all data sources and return qualifying candidates.
@@ -185,6 +209,15 @@ def score_candidates(
     volume_map: dict[str, dict] = {d["ticker"]: d for d in volume_gainers}
     breakout_map: dict[str, dict] = {b["ticker"]: b for b in breakouts}
 
+    # Build announcements lookup: {ticker: {signal_key: True, ...}}
+    # A ticker can have multiple announcements; last one per signal_key wins (all are True anyway).
+    ann_map: dict[str, dict] = {}
+    for ann in (announcements or []):
+        t = ann.get("ticker", "")
+        if t:
+            all_tickers.add(t)  # announced ticker enters universe even without price data
+            ann_map.setdefault(t, {})[ann.get("signal_key", "")] = True
+
     candidates = []
     for ticker in all_tickers:
         vol = volume_map.get(ticker)
@@ -193,11 +226,13 @@ def score_candidates(
         opts = (options_signals or {}).get(ticker)
         tech  = (technical_signals or {}).get(ticker)
         deliv = (delivery_signals or {}).get(ticker)
+        ann   = ann_map.get(ticker)
 
         signals = _build_signal_map(
             ticker, bulk_deals, vol, fo_ban_removed, results_calendar, brk,
             promoter_data=prom, options_data=opts, technical_data=tech,
             delivery_data=deliv, fo_ban_current=fo_ban_current,
+            announcements_data={ticker: ann} if ann else None,
         )
 
         score, timeframe = _compute_score(signals, market_regime)
