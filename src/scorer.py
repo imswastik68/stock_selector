@@ -13,8 +13,9 @@ SHORT_TERM_WEIGHTS = {
     "actual_52w_breakout": 3,   # price broke through prior 52w high
     "delivery_surge": 2,        # DELIV_PER >= 50% on EQ series — institutional accumulation
     "rs_vs_nifty": 2,           # stock outperforming Nifty by 2%+ over 20d
-    "options_pcr_fear": 1,      # PCR > 1.5: extreme fear = contrarian bullish (min OI required)
-    "options_long_buildup": 1,  # price up + OI up = fresh longs (min OI required)
+    "options_pcr_fear": 1,        # PCR > 1.5: extreme fear = contrarian bullish (min OI required)
+    "options_long_buildup": 1,    # price up + OI up = fresh longs (min OI required)
+    "options_short_covering": 1,  # price up + OI down = shorts exiting = bullish (min OI required)
     "rsi_momentum": 1,          # RSI 50-75: momentum building
     "rsi_bullish_div": 1,       # price LL + RSI HL: sellers losing momentum
     "macd_bullish_cross": 1,    # histogram / zero-line crossed up in last 3-5 bars
@@ -41,8 +42,9 @@ DISQUALIFIER_WEIGHTS = {
     "rsi_bearish_div": -2,        # price HH + RSI LH: momentum fading (valid even above RSI 70)
     "macd_bearish_cross": -1,    # histogram / zero-line crossed down in last 3-5 bars
     "thin_market": -4,           # avg daily turnover < ₹5cr: unreliable signals + exit risk
-    "options_short_buildup": -2,  # price down + OI up = fresh shorts entering
-    "options_pcr_greed": -1,      # PCR < 0.5: extreme complacency (min OI required)
+    "options_short_buildup": -2,   # price down + OI up = fresh shorts entering
+    "options_pcr_greed": -1,       # PCR < 0.5: extreme complacency (min OI required)
+    "options_long_unwinding": -1,  # price down + OI down = longs exiting (min OI required)
     "bearish_candle": -1,         # shooting_star / bearish_engulfing / bearish_marubozu on last bar
 }
 
@@ -100,10 +102,12 @@ def _build_signal_map(
 
     # Options signals — PCR only at extremes; long_buildup gated by min OI in options.py
     if options_data:
-        signals["options_pcr_fear"]      = options_data.get("pcr_fear", False)
-        signals["options_pcr_greed"]     = options_data.get("pcr_greed", False)
-        signals["options_long_buildup"]  = options_data.get("long_buildup", False)
-        signals["options_short_buildup"] = options_data.get("short_buildup", False)
+        signals["options_pcr_fear"]        = options_data.get("pcr_fear", False)
+        signals["options_pcr_greed"]       = options_data.get("pcr_greed", False)
+        signals["options_long_buildup"]    = options_data.get("long_buildup", False)
+        signals["options_short_buildup"]   = options_data.get("short_buildup", False)
+        signals["options_short_covering"]  = options_data.get("short_covering", False)
+        signals["options_long_unwinding"]  = options_data.get("long_unwinding", False)
 
     # Technical signals (pass 3 only — after enrich_candidate_context)
     if technical_data:
@@ -264,6 +268,8 @@ def score_candidates(
             "promoter_pct": (prom or {}).get("promoter_pct"),
             "promoter_bought": (prom or {}).get("promoter_bought", False),
             "options_pcr": (opts or {}).get("pcr"),
+            "delivery_pct": (deliv or {}).get("delivery_pct"),
+            "delivery_spike_pp": (deliv or {}).get("delivery_spike_pp"),
             # Pass through raw deal info for LLM context
             "bulk_deals": [d for d in bulk_deals if d["ticker"] == ticker],
             "upcoming_results": [r for r in results_calendar if r["ticker"] == ticker],

@@ -157,6 +157,8 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             "ticker": ticker,
             "score": adjusted_score,
             "today_close": c.get("today_close"),
+            "delivery_pct": c.get("delivery_pct"),
+            "delivery_spike_pp": c.get("delivery_spike_pp"),
             "volatility_tags": vtags,
             "wyckoff_phase": phase,
             "wyckoff_confidence": tech.get("wyckoff_confidence", "MEDIUM"),

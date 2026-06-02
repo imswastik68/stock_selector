@@ -44,16 +44,29 @@ SIGNAL_LABELS = {
     "macd_bullish_cross":    "MACD bullish cross",
     "rsi_bearish_div":       "RSI bearish divergence",
     "macd_bearish_cross":    "MACD bearish cross",
-    "options_pcr_fear":      "PCR extreme fear",
-    "options_long_buildup":  "OI long buildup",
-    "options_short_buildup": "OI short buildup",
-    "options_pcr_greed":     "PCR extreme greed",
-    "promoter_buying":       "promoter buying",
-    "results_due":           "results due",
-    "fo_ban_lifted":         "F&O ban lifted",
-    "distribution_signal":   "distribution (sell-on-rise)",
-    "thin_market":           "thin market",
-    "f_group":               "on F&O ban list",
+    "options_pcr_fear":        "PCR extreme fear",
+    "options_long_buildup":    "OI long buildup",
+    "options_short_buildup":   "OI short buildup",
+    "options_pcr_greed":       "PCR extreme greed",
+    "options_short_covering":  "OI short covering",
+    "options_long_unwinding":  "OI long unwinding",
+    "promoter_buying":         "promoter buying",
+    "results_due":             "results due",
+    "fo_ban_lifted":           "F&O ban lifted",
+    "distribution_signal":     "distribution (sell-on-rise)",
+    "thin_market":             "thin market",
+    "f_group":                 "on F&O ban list",
+    # technical signals added in alpha upgrade
+    "obv_accumulation":        "OBV accumulation",
+    "bb_squeeze_breakout":     "BB squeeze breakout",
+    "bullish_candle":          "bullish candle",
+    "bearish_candle":          "bearish candle",
+    "weekly_trend_aligned":    "weekly trend aligned",
+    # announcement signals
+    "results_beat_announced":  "results filed",
+    "buyback_announced":       "buyback announced",
+    "contract_win":            "order/contract win",
+    "dividend_announced":      "dividend declared",
 }
 
 # Short readable label for MACD signal state
@@ -156,10 +169,11 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
     tf         = entry.get("timeframe", "?")
     signals    = entry.get("top_signals", [])
     narrative  = entry.get("narrative", "")
-    candles    = entry.get("candlestick_patterns", [])
-    pcr        = entry.get("options_pcr")
-    prom_pct   = entry.get("promoter_pct")
-    price      = entry.get("today_close")
+    candles       = entry.get("candlestick_patterns", [])
+    pcr           = entry.get("options_pcr")
+    prom_pct      = entry.get("promoter_pct")
+    delivery_pct  = entry.get("delivery_pct")
+    price         = entry.get("today_close")
 
     risk_icon  = RISK_EMOJI.get(risk, "⚪")
     phase_icon = WYCKOFF_EMOJI.get(phase, "📊")
@@ -185,6 +199,8 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
         extra.append(f"PCR={_code(pcr)}")
     if prom_pct is not None:
         extra.append(f"Promoter={_code(f'{prom_pct}%')}")
+    if delivery_pct is not None and "delivery_surge" in " ".join(str(s) for s in signals):
+        extra.append(f"Delivery={_code(f'{delivery_pct}%')}")
     if extra:
         lines.append("  " + " | ".join(extra))
     lines += [
@@ -218,6 +234,7 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
     narrative  = entry.get("narrative", "")
     candles    = entry.get("candlestick_patterns", [])
     pcr        = entry.get("options_pcr")
+    prom_pct   = entry.get("promoter_pct")
     price      = entry.get("today_close")
 
     risk_icon  = RISK_EMOJI.get(risk, "⚪")
@@ -239,8 +256,13 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
         lines.append(f"  Candle: {_i(candle_str)}")
     if pivot_str:
         lines.append(f"  Pivots: {pivot_str}")
+    extra = []
     if pcr is not None:
-        lines.append(f"  PCR={_code(pcr)}")
+        extra.append(f"PCR={_code(pcr)}")
+    if prom_pct is not None:
+        extra.append(f"Promoter={_code(f'{prom_pct}%')}")
+    if extra:
+        lines.append("  " + " | ".join(extra))
     lines += [
         "",
         f"  Short entry: {_code(entry_zone)} | SL: {_code(stop)}",

@@ -113,9 +113,11 @@ def _parse_option_chain(data: dict, prev_close: float | None) -> dict:
     pcr_fear  = bool(liquid and pcr is not None and pcr > 1.5)
     pcr_greed = bool(liquid and pcr is not None and pcr < 0.5)
 
-    # OI buildup only meaningful on liquid chains
-    long_buildup  = bool(liquid and long_buildup)
-    short_buildup = bool(liquid and short_buildup)
+    # OI signals only meaningful on liquid chains
+    long_buildup   = bool(liquid and long_buildup)
+    short_buildup  = bool(liquid and short_buildup)
+    short_covering = bool(liquid and short_covering)
+    long_unwinding = bool(liquid and long_unwinding)
 
     return {
         "pcr": pcr,
