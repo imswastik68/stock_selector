@@ -47,6 +47,17 @@ jobs:
           key: fo-ban-cache-${{ runner.os }}
           restore-keys: fo-ban-cache-
 
+      # Pin SCAN_MODE from the cron that fired so mode is correct even when
+      # GitHub Actions delays the job by minutes or hours.
+      # Without this, a 31-min delay on the 8:45 AM IST cron silently becomes an EOD run.
+      - name: Set scan mode
+        run: |
+          case "${{ github.event.schedule }}" in
+            "15 3 * * 1-5") echo "SCAN_MODE=pre_market" >> $GITHUB_ENV ;;
+            "0 7 * * 1-5")  echo "SCAN_MODE=mid_day"    >> $GITHUB_ENV ;;
+            *)               echo "SCAN_MODE=eod"         >> $GITHUB_ENV ;;
+          esac
+
       - name: Run stock scan
         run: python main.py
         env:
