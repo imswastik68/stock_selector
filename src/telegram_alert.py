@@ -256,6 +256,7 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
 def _format_phase_b_entry(entry: dict, rank: int) -> str:
     ticker       = entry.get("ticker", "?")
     phase        = entry.get("phase", "?")
+    score        = entry.get("score")
     rsi          = entry.get("rsi", "")
     price        = entry.get("today_close")
     trigger      = entry.get("alert_trigger", "—")
@@ -263,6 +264,7 @@ def _format_phase_b_entry(entry: dict, rank: int) -> str:
 
     phase_icon = WYCKOFF_EMOJI.get(phase, "📊")
     price_str  = f"  {_code(_fmt_price(price))}" if price is not None else ""
+    score_str  = f"Raw score: {_code(score)}" if score is not None else ""
     rsi_str    = f"RSI: {_code(rsi)}" if rsi else ""
 
     lines = [
@@ -271,8 +273,9 @@ def _format_phase_b_entry(entry: dict, rank: int) -> str:
     ]
     if watch_reason:
         lines.append(f"  ⏳ {_i(_e(watch_reason))}")
-    if rsi_str:
-        lines.append(f"  {rsi_str}")
+    meta = " | ".join(x for x in [score_str, rsi_str] if x)
+    if meta:
+        lines.append(f"  {meta}")
     if isinstance(trigger, list):
         trigger_str = _fmt_signals(trigger, n=3) or "—"
     else:

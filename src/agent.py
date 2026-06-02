@@ -66,14 +66,20 @@ def _volatility_tags(beta: float, atr_pct: float, volume_ratio: float | None) ->
     return tags
 
 
-def _watch_reason(direction: str, adj_score: int, raw_score: int, nifty_trend: str) -> str:
+def _watch_reason(direction: str, adj_score: int, raw_score: int, nifty_trend: str, penalty: int = 4) -> str:
     """Human-readable explanation of why this stock is in WATCH instead of BUY/SELL."""
     if direction == "watch":
         return "Phase building — no entry signal yet"
     if nifty_trend == "downtrend" and direction == "buy":
-        return f"Nifty DOWNTREND — cautious on buys (raw score {raw_score} → {adj_score} after headwind penalty)"
+        return (
+            f"Nifty DOWNTREND — cautious on buys "
+            f"(score {raw_score} → {adj_score} after {penalty}pt headwind penalty)"
+        )
     if nifty_trend == "uptrend" and direction == "sell":
-        return f"Nifty UPTREND — cautious on shorts (raw score {raw_score} → {adj_score} after headwind penalty)"
+        return (
+            f"Nifty UPTREND — cautious on shorts "
+            f"(score {raw_score} → {adj_score} after {penalty}pt headwind penalty)"
+        )
     return f"Score {adj_score} below entry threshold"
 
 
@@ -100,15 +106,25 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         phase  = tech.get("wyckoff_phase", "ACCUMULATION_B")
         direction = tech.get("direction", "watch")
 
-        # Nifty trend adjustment to score
+        # Nifty trend adjustment to score.
+        # A stock breaking its 52-week high WITH volume is demonstrating genuine strength
+        # against the market trend — that's relative strength, not a reason to penalise more.
+        # Flat -4 on breakout stocks was silencing the strongest setups (CPPLUS, RUBICON etc
+        # going to WATCH despite score 8 with confirmed 52w breakout + volume surge).
+        active_signals = c.get("active_signals", [])
         adjusted_score = score
+        headwind_penalty = 0
         if nifty_trend == "downtrend" and direction == "buy":
-            adjusted_score -= 4  # downtrend headwind is real — raise the bar hard
+            has_breakout = "actual_52w_breakout" in active_signals
+            headwind_penalty = 2 if has_breakout else 4
+            adjusted_score -= headwind_penalty
         elif nifty_trend == "uptrend" and direction == "sell":
-            adjusted_score -= 4
+            has_breakdown = "distribution_signal" in active_signals
+            headwind_penalty = 2 if has_breakdown else 4
+            adjusted_score -= headwind_penalty
 
         vtags = _volatility_tags(beta, atr_pct, vol_ratio)
-        signals = _label_signals(c.get("active_signals", []))
+        signals = _label_signals(active_signals)
         risk = _risk(c, tech)
 
         phase_b_threshold = 5 if nifty_trend == "downtrend" else 4
@@ -116,10 +132,13 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             phase_b_list.append({
                 "ticker": ticker,
                 "phase": phase,
+                "score": score,
                 "rsi": tech.get("rsi", "N/A"),
                 "today_close": c.get("today_close"),
                 "alert_trigger": signals[:3],
-                "watch_reason": _watch_reason(direction, adjusted_score, score, nifty_trend),
+                "watch_reason": _watch_reason(
+                    direction, adjusted_score, score, nifty_trend, headwind_penalty
+                ),
             })
             continue
 
@@ -166,7 +185,9 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
     buy_list  = [e for e in combined if e.get("wyckoff_phase") in _BUY_PHASES]
     sell_list = [e for e in combined if e.get("wyckoff_phase") in _SELL_PHASES]
 
-    return buy_list, sell_list, phase_b_list[:5]
+    # Sort watch list by raw score so the strongest setups appear first, cap at 8
+    phase_b_list.sort(key=lambda e: e.get("score", 0), reverse=True)
+    return buy_list, sell_list, phase_b_list[:8]
 
 
 # ── LLM narrative request ─────────────────────────────────────────────────────
