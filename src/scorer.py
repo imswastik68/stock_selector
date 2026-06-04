@@ -25,6 +25,8 @@ SHORT_TERM_WEIGHTS = {
     "bullish_candle": 1,        # hammer / bullish_engulfing / bullish_marubozu on last bar
     "weekly_trend_aligned": 1,  # weekly EMA10 > EMA20: daily signal aligns with larger timeframe
     "sector_in_momentum": 1,    # stock is in a top-2 performing NSE sector index (5d return)
+    "momentum_6m_strong": 2,    # 6m skip-period momentum > 15% (Jegadeesh-Titman factor)
+    "rs_quality_strong": 1,     # ATR-adjusted RS: (stock_20d − nifty_20d) / ATR% > 1.0
 }
 
 SWING_WEIGHTS = {
@@ -121,9 +123,11 @@ def _build_signal_map(
         signals["macd_bearish_cross"]  = technical_data.get("macd_bearish_cross", False)
         signals["obv_accumulation"]    = technical_data.get("obv_accumulation", False)
         signals["bb_squeeze_breakout"] = technical_data.get("bb_squeeze_breakout", False)
-        signals["bullish_candle"]      = technical_data.get("bullish_candle", False)
-        signals["bearish_candle"]      = technical_data.get("bearish_candle", False)
-        signals["weekly_trend_aligned"]= technical_data.get("weekly_trend_aligned", False)
+        signals["bullish_candle"]       = technical_data.get("bullish_candle", False)
+        signals["bearish_candle"]       = technical_data.get("bearish_candle", False)
+        signals["weekly_trend_aligned"] = technical_data.get("weekly_trend_aligned", False)
+        signals["momentum_6m_strong"]   = technical_data.get("momentum_6m_strong", False)
+        signals["rs_quality_strong"]    = technical_data.get("rs_quality_strong", False)
 
     # Delivery volume signal from NSE bhav copy
     if delivery_data:

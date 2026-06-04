@@ -70,6 +70,9 @@ SIGNAL_LABELS = {
     "dividend_announced":      "dividend declared",
     # sector rotation
     "sector_in_momentum":      "hot sector",
+    # momentum factor signals
+    "momentum_6m_strong":      "6m momentum",
+    "rs_quality_strong":       "quality RS",
 }
 
 # Short readable label for MACD signal state
@@ -212,6 +215,12 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
             shares = int(1000 / atr_abs)
             if shares > 0:
                 extra.append(f"Size={_code(f'{shares}sh')} <i>(1ATR=₹{atr_abs:.0f})</i>")
+    mom_6m = entry.get("momentum_6m")
+    rs_q   = entry.get("rs_quality")
+    if mom_6m is not None:
+        extra.append(f"6m={_code(f'{mom_6m:+.1f}%')}")
+    if rs_q is not None and math.isfinite(rs_q):
+        extra.append(f"RS-Q={_code(f'{rs_q:.2f}x')}")
     if extra:
         lines.append("  " + " | ".join(extra))
     lines += [
@@ -280,6 +289,12 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
             shares = int(1000 / atr_abs)
             if shares > 0:
                 extra.append(f"Size={_code(f'{shares}sh')} <i>(1ATR=₹{atr_abs:.0f})</i>")
+    mom_6m = entry.get("momentum_6m")
+    rs_q   = entry.get("rs_quality")
+    if mom_6m is not None:
+        extra.append(f"6m={_code(f'{mom_6m:+.1f}%')}")
+    if rs_q is not None and math.isfinite(rs_q):
+        extra.append(f"RS-Q={_code(f'{rs_q:.2f}x')}")
     if extra:
         lines.append("  " + " | ".join(extra))
     lines += [

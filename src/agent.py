@@ -124,16 +124,31 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         gift_gap_up   = gift_nifty.get("gap_up_strong", False)
         gift_gap_down = gift_nifty.get("gap_down_strong", False)
         if nifty_trend == "downtrend" and direction == "buy":
-            has_breakout = "actual_52w_breakout" in active_signals
-            headwind_penalty = 2 if has_breakout else 4
+            has_breakout    = "actual_52w_breakout"  in active_signals
+            has_6m_momentum = "momentum_6m_strong"   in active_signals
+            # Graduated penalty: sustained 6m momentum proves relative strength is real,
+            # not just a single-day volume pop. Each confirmed layer reduces friction.
+            if has_breakout and has_6m_momentum:
+                headwind_penalty = 1      # genuine multi-month RS leader — minimal friction
+            elif has_breakout:
+                headwind_penalty = 2      # 52w breakout but no 6m confirmation
+            else:
+                headwind_penalty = 4      # no structural relative strength
             if fii_easing:
                 headwind_penalty = max(0, headwind_penalty - 1)
             if gift_gap_up:
                 headwind_penalty = max(0, headwind_penalty - 1)
             adjusted_score -= headwind_penalty
         elif nifty_trend == "uptrend" and direction == "sell":
-            has_breakdown = "distribution_signal" in active_signals
-            headwind_penalty = 2 if has_breakdown else 4
+            has_breakdown   = "distribution_signal"  in active_signals
+            lacks_6m_momentum = "momentum_6m_strong" not in active_signals
+            # Stock breaking down AND losing 6m momentum = confirmed weakness
+            if has_breakdown and lacks_6m_momentum:
+                headwind_penalty = 1
+            elif has_breakdown:
+                headwind_penalty = 2
+            else:
+                headwind_penalty = 4
             if fii_selling:
                 headwind_penalty = max(0, headwind_penalty - 1)
             if gift_gap_down:
@@ -188,6 +203,8 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             "promoter_pct": c.get("promoter_pct"),
             "options_pcr": c.get("options_pcr"),
             "atr_pct": atr_pct,
+            "momentum_6m": tech.get("momentum_6m"),
+            "rs_quality":  tech.get("rs_quality"),
             "narrative": "",  # filled in by LLM below
             **levels,
             **pivots,

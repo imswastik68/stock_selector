@@ -333,6 +333,8 @@ def main() -> int:
             "bullish_candle":      t.get("bullish_candle", False),
             "bearish_candle":      t.get("bearish_candle", False),
             "weekly_trend_aligned":t.get("weekly_trend_aligned", False),
+            "momentum_6m_strong":  t.get("momentum_6m_strong", False),
+            "rs_quality_strong":   t.get("rs_quality_strong", False),
         }
         for ticker, t in market_context.get("technicals", {}).items()
     }
