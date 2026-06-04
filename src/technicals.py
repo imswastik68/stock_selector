@@ -528,8 +528,8 @@ def enrich_with_technicals(
         rs_vs_nifty = bool(stock_20d > nifty_20d_return + 0.02)
 
     # ATR-adjusted RS quality: excess return / ATR% — penalises volatile stocks.
-    # rs_quality > 1.0 means outperformance equals ≥1 full ATR% unit of daily volatility,
-    # i.e. the edge is real relative to the stock's own noise floor.
+    # rs_quality > 5.0 means outperformance equals ≥5 ATR% units of daily volatility,
+    # i.e. the edge is real and sustained, not just noise.
     rs_quality: float | None = None
     rs_quality_strong = False
     atr_pct_val = (atr / close * 100) if (close > 0 and atr > 0) else 0.0

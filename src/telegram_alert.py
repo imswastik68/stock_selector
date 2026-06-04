@@ -55,7 +55,8 @@ SIGNAL_LABELS = {
     "results_due":             "results due",
     "fo_ban_lifted":           "F&O ban lifted",
     "distribution_signal":     "distribution (sell-on-rise)",
-    "thin_market":             "thin market",
+    "thin_market_extreme":     "very thin market (<₹1cr)",
+    "thin_market_light":       "thin market (₹1–5cr)",
     "f_group":                 "on F&O ban list",
     # technical signals added in alpha upgrade
     "obv_accumulation":        "OBV accumulation",
@@ -73,6 +74,8 @@ SIGNAL_LABELS = {
     # momentum factor signals
     "momentum_6m_strong":      "6m momentum",
     "rs_quality_strong":       "quality RS",
+    # insider / SAST
+    "sast_insider_buying":     "SAST insider buying",
 }
 
 # Short readable label for MACD signal state

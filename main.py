@@ -11,7 +11,7 @@ import json
 import os
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 
@@ -49,6 +49,7 @@ from src.data.sector_rotation import fetch_hot_sector_tickers
 from src.data.market_context import enrich_candidate_context, fetch_market_wide_context
 from src.data.options import fetch_options_signals
 from src.data.promoter import fetch_promoter_signals
+from src.data.sast import fetch_sast_signals
 from src.data.results import fetch_results_calendar
 from src.data.volume import fetch_volume_gainers
 from src.scorer import score_candidates
@@ -264,6 +265,7 @@ def main() -> int:
 
     # 3. Enrich top 20 candidates with options PCR + promoter buying
     #    Done AFTER scoring so we only call APIs for qualified stocks, not the whole universe
+    sast_signals: dict[str, bool] = {}
     if candidates:
         top_tickers = [c["ticker"] for c in candidates[:20]]
         print(f"[main] fetching options data for {len(top_tickers)} candidates...")
@@ -277,6 +279,9 @@ def main() -> int:
         print(f"[main] fetching promoter signals for {len(top_tickers)} candidates...")
         promoter_signals = fetch_promoter_signals(top_tickers, bulk_deals)
 
+        print(f"[main] fetching SAST signals for {len(top_tickers)} candidates...")
+        sast_signals = fetch_sast_signals(top_tickers)
+
         # Re-score with new signals so they affect sorting
         candidates = score_candidates(
             bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts,
@@ -286,6 +291,7 @@ def main() -> int:
             market_regime=nifty_regime,
             announcements=announcements,
             hot_sector_tickers=hot_sector_tickers,
+            sast_signals=sast_signals,
         )
     else:
         options_signals = {}
@@ -350,6 +356,7 @@ def main() -> int:
             market_regime=nifty_regime,
             announcements=announcements,
             hot_sector_tickers=hot_sector_tickers,
+            sast_signals=sast_signals,
         )
 
     # 6. LLM synthesis (Wyckoff + SMC + VSA)

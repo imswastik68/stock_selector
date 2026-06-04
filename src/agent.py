@@ -13,6 +13,7 @@ Backend selection via INFERENCE_BACKEND env var:
 
 from __future__ import annotations
 
+import calendar
 import json
 import math
 import os
@@ -81,6 +82,23 @@ def _watch_reason(direction: str, adj_score: int, raw_score: int, nifty_trend: s
             f"(score {raw_score} → {adj_score} after {penalty}pt headwind penalty)"
         )
     return f"Score {adj_score} below entry threshold"
+
+
+def _is_expiry_proximity(today: date) -> bool:
+    """
+    True on days near F&O expiry where artificial OI unwinding inflates SELL signals.
+      - Nifty weekly: every Tuesday (effective Sep 2025). Monday included as pre-expiry.
+      - Monthly stock F&O: last Thursday of the month (unchanged SEBI schedule).
+    Only suppresses SELL entries by -1; BUY entries are unaffected.
+    """
+    wd = today.weekday()  # Mon=0, Tue=1, Wed=2, Thu=3, Fri=4
+    if wd in (0, 1):  # Monday / Tuesday — Nifty weekly expiry proximity
+        return True
+    if wd == 3:       # Thursday — check if it's the last Thursday of the month
+        days_left = calendar.monthrange(today.year, today.month)[1] - today.day
+        if days_left < 7:
+            return True
+    return False
 
 
 # ── build deterministic watchlist entries ────────────────────────────────────
@@ -155,6 +173,12 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
                 headwind_penalty = max(0, headwind_penalty - 1)
             adjusted_score -= headwind_penalty
 
+        # F&O expiry proximity: artificial OI unwinding suppresses SELL reliability
+        expiry_suppressed = False
+        if direction == "sell" and _is_expiry_proximity(date.today()):
+            adjusted_score -= 1
+            expiry_suppressed = True
+
         vtags = _volatility_tags(beta, atr_pct, vol_ratio)
         signals = _label_signals(active_signals)
         risk = _risk(c, tech)
@@ -205,6 +229,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             "atr_pct": atr_pct,
             "momentum_6m": tech.get("momentum_6m"),
             "rs_quality":  tech.get("rs_quality"),
+            "expiry_suppressed": expiry_suppressed,
             "narrative": "",  # filled in by LLM below
             **levels,
             **pivots,

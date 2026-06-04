@@ -26,12 +26,13 @@ SHORT_TERM_WEIGHTS = {
     "weekly_trend_aligned": 1,  # weekly EMA10 > EMA20: daily signal aligns with larger timeframe
     "sector_in_momentum": 1,    # stock is in a top-2 performing NSE sector index (5d return)
     "momentum_6m_strong": 2,    # 6m skip-period momentum > 15% (Jegadeesh-Titman factor)
-    "rs_quality_strong": 1,     # ATR-adjusted RS: (stock_20d − nifty_20d) / ATR% > 1.0
+    "rs_quality_strong": 1,     # ATR-adjusted RS: (stock_20d − nifty_20d) / ATR% > 5.0
 }
 
 SWING_WEIGHTS = {
     "results_due": 1,               # upcoming results — informational flag only (PEAD needs actual beat)
     "promoter_buying": 3,           # sets timeframe → 5-7d
+    "sast_insider_buying": 3,       # SEBI SAST filing: entity acquiring ≥5% stake — creeping accumulation
     "consolidation_breakout": 3,
     "results_beat_announced": 3,    # post-3:30 PM filing: quarterly result filed (potential beat)
     "buyback_announced": 2,         # board-approved buyback = promoter confidence, floor under price
@@ -44,14 +45,16 @@ DISQUALIFIER_WEIGHTS = {
     "distribution_signal": -5,  # volume spike + price DOWN = institutional selling
     "rsi_bearish_div": -2,        # price HH + RSI LH: momentum fading (valid even above RSI 70)
     "macd_bearish_cross": -1,    # histogram / zero-line crossed down in last 3-5 bars
-    "thin_market": -4,           # avg daily turnover < ₹5cr: unreliable signals + exit risk
+    "thin_market_extreme": -4,   # avg daily turnover < ₹1cr: unreliable signals + exit risk
+    "thin_market_light": -2,     # avg daily turnover ₹1cr–₹5cr: reduced liquidity, higher spread
     "options_short_buildup": -2,   # price down + OI up = fresh shorts entering
     "options_pcr_greed": -1,       # PCR < 0.5: extreme complacency (min OI required)
     "options_long_unwinding": -1,  # price down + OI down = longs exiting (min OI required)
     "bearish_candle": -1,         # shooting_star / bearish_engulfing / bearish_marubozu on last bar
 }
 
-MIN_SCORE = 3
+# Lowered to 2 to prevent dropping single-signal stocks before Pass 2 options/SAST fetch
+MIN_SCORE = 2
 MIN_SIGNALS = 1
 PENNY_THRESHOLD = 10.0  # ₹10
 
@@ -70,6 +73,7 @@ def _build_signal_map(
     fo_ban_current: set[str] | None = None,
     announcements_data: dict | None = None,
     hot_sector_tickers: set[str] | None = None,
+    sast_data: bool = False,
 ) -> dict[str, bool]:
     """Build a boolean signal map for a single ticker."""
     signals: dict[str, bool] = {k: False for k in list(SHORT_TERM_WEIGHTS) + list(SWING_WEIGHTS) + list(DISQUALIFIER_WEIGHTS)}
@@ -97,7 +101,9 @@ def _build_signal_map(
         # Thin market: avg daily turnover < ₹5 crore — signal quality is unreliable
         avg_30d = volume_data.get("avg_30d_volume", 0) or 0
         price   = volume_data.get("today_close", 0) or 0
-        signals["thin_market"] = bool(avg_30d > 0 and price > 0 and avg_30d * price < 5e7)
+        daily_turnover = avg_30d * price if (avg_30d > 0 and price > 0) else 0
+        signals["thin_market_extreme"] = bool(0 < daily_turnover < 1e7)    # < ₹1cr
+        signals["thin_market_light"]   = bool(1e7 <= daily_turnover < 5e7) # ₹1cr–₹5cr
 
     # 52-week high: only actual breakout scores; proximity alone removed (redundant + noisy)
     if breakout_data:
@@ -155,6 +161,9 @@ def _build_signal_map(
     if promoter_data:
         signals["promoter_buying"] = promoter_data.get("promoter_bought", False)
 
+    # SAST filing: SEBI mandatory disclosure for creeping acquisitions ≥5% stake
+    signals["sast_insider_buying"] = bool(sast_data)
+
     return signals
 
 
@@ -204,6 +213,7 @@ def score_candidates(
     market_regime: str = "normal",
     announcements: list[dict] | None = None,
     hot_sector_tickers: set[str] | None = None,
+    sast_signals: dict[str, bool] | None = None,
 ) -> list[dict]:
     """
     Score every unique ticker across all data sources and return qualifying candidates.
@@ -241,6 +251,7 @@ def score_candidates(
         tech  = (technical_signals or {}).get(ticker)
         deliv = (delivery_signals or {}).get(ticker)
         ann   = ann_map.get(ticker)
+        sast  = bool((sast_signals or {}).get(ticker, False))
 
         signals = _build_signal_map(
             ticker, bulk_deals, vol, fo_ban_removed, results_calendar, brk,
@@ -248,6 +259,7 @@ def score_candidates(
             delivery_data=deliv, fo_ban_current=fo_ban_current,
             announcements_data={ticker: ann} if ann else None,
             hot_sector_tickers=hot_sector_tickers,
+            sast_data=sast,
         )
 
         score, timeframe = _compute_score(signals, market_regime)

@@ -24,11 +24,18 @@ homepage first. Fails gracefully: all signals default to False on any error.
 
 from __future__ import annotations
 
+import json
 import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import requests
+
+_OUTPUTS_DIR   = Path(__file__).parent.parent.parent / "outputs"
+_PCR_CACHE_FILE = _OUTPUTS_DIR / "pcr_cache.json"
+_PCR_HISTORY_LEN = 60   # rolling window: 60 trading days ≈ 3 months
+_PCR_MIN_POINTS  = 10   # fall back to fixed thresholds below this count
 
 _NSE_HOME = "https://www.nseindia.com/"
 _OC_EQUITIES = "https://www.nseindia.com/api/option-chain-equities?symbol={symbol}"
@@ -58,6 +65,30 @@ _EMPTY = {
     "total_put_oi": 0,
     "total_call_oi": 0,
 }
+
+
+def _load_pcr_cache() -> dict[str, list[float]]:
+    if _PCR_CACHE_FILE.exists():
+        try:
+            return json.loads(_PCR_CACHE_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def _save_pcr_cache(cache: dict[str, list[float]]) -> None:
+    _OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    _PCR_CACHE_FILE.write_text(json.dumps(cache))
+
+
+def _percentile(values: list[float], p: float) -> float:
+    """Linear interpolation percentile — no numpy needed."""
+    if not values:
+        return 0.0
+    s = sorted(values)
+    idx = (len(s) - 1) * p / 100.0
+    lo, hi = int(idx), min(int(idx) + 1, len(s) - 1)
+    return s[lo] + (s[hi] - s[lo]) * (idx - lo)
 
 
 def _make_session() -> requests.Session:
@@ -177,9 +208,30 @@ def fetch_options_signals(
         for fut in as_completed(futures):
             ticker, sig = fut.result()
             results[ticker] = sig
-            if sig.get("pcr") is not None:
-                print(f"[options] {ticker}: PCR={sig['pcr']} "
-                      f"long_buildup={sig['long_buildup']} pcr_fear={sig['pcr_fear']} pcr_greed={sig['pcr_greed']}")
+
+    # Percentile-based PCR signals: update rolling history, override fixed-threshold flags
+    cache = _load_pcr_cache()
+    for ticker, sig in results.items():
+        pcr = sig.get("pcr")
+        if pcr is None:
+            continue
+        history = cache.get(ticker, [])
+        history.append(float(pcr))
+        cache[ticker] = history[-_PCR_HISTORY_LEN:]
+
+        liquid = sig.get("total_call_oi", 0) >= _MIN_CALL_OI
+        if liquid and len(history) >= _PCR_MIN_POINTS:
+            p80 = _percentile(history, 80)
+            p20 = _percentile(history, 20)
+            sig["pcr_fear"]  = bool(pcr > p80)
+            sig["pcr_greed"] = bool(pcr < p20)
+        # else: keep fixed-threshold values from _parse_option_chain (cold-start fallback)
+
+        print(f"[options] {ticker}: PCR={pcr} "
+              f"long_buildup={sig['long_buildup']} pcr_fear={sig['pcr_fear']} "
+              f"pcr_greed={sig['pcr_greed']} history_len={len(history)}")
+
+    _save_pcr_cache(cache)
 
     no_data = sum(1 for v in results.values() if v["pcr"] is None)
     print(f"[options] {len(tickers)} tickers, {len(tickers) - no_data} with options data, "
