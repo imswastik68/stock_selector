@@ -9,7 +9,7 @@ import os
 
 import telegram
 
-RISK_EMOJI = {"LOW": "🟢", "MEDIUM": "🟡", "HIGH": "🔴"}
+RISK_EMOJI = {"LOW": "🟢", "MEDIUM": "🟡", "HIGH": "🟠"}
 TIMEFRAME_LABEL = {
     "1-2d": "Short-term (1–2d)", "5-7d": "Swing (5–7d)",
     "3-5d": "Swing (3–5d)", "5-10d": "Multi-day (5–10d)",
@@ -209,7 +209,7 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
         extra.append(f"PCR={_code(pcr)}")
     if prom_pct is not None:
         extra.append(f"Promoter={_code(f'{prom_pct}%')}")
-    if delivery_pct is not None and "delivery_surge" in " ".join(str(s) for s in signals):
+    if delivery_pct is not None:
         extra.append(f"Delivery={_code(f'{delivery_pct}%')}")
     if (atr_pct_val is not None and math.isfinite(atr_pct_val)
             and price is not None and price > 0):
@@ -217,13 +217,13 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
         if atr_abs > 0:
             shares = int(1000 / atr_abs)
             if shares > 0:
-                extra.append(f"Size={_code(f'{shares}sh')} <i>(1ATR=₹{atr_abs:.0f})</i>")
+                extra.append(f"Qty={_code(str(shares))} <i>(ATR ₹{atr_abs:.0f})</i>")
     mom_6m = entry.get("momentum_6m")
     rs_q   = entry.get("rs_quality")
     if mom_6m is not None:
         extra.append(f"6m={_code(f'{mom_6m:+.1f}%')}")
     if rs_q is not None and math.isfinite(rs_q):
-        extra.append(f"RS-Q={_code(f'{rs_q:.2f}x')}")
+        extra.append(f"RS={_code(f'{rs_q:.2f}')}")
     if extra:
         lines.append("  " + " | ".join(extra))
     lines += [
@@ -291,13 +291,13 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
         if atr_abs > 0:
             shares = int(1000 / atr_abs)
             if shares > 0:
-                extra.append(f"Size={_code(f'{shares}sh')} <i>(1ATR=₹{atr_abs:.0f})</i>")
+                extra.append(f"Qty={_code(str(shares))} <i>(ATR ₹{atr_abs:.0f})</i>")
     mom_6m = entry.get("momentum_6m")
     rs_q   = entry.get("rs_quality")
     if mom_6m is not None:
         extra.append(f"6m={_code(f'{mom_6m:+.1f}%')}")
     if rs_q is not None and math.isfinite(rs_q):
-        extra.append(f"RS-Q={_code(f'{rs_q:.2f}x')}")
+        extra.append(f"RS={_code(f'{rs_q:.2f}')}")
     if extra:
         lines.append("  " + " | ".join(extra))
     lines += [
