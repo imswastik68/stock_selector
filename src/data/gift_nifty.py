@@ -1,16 +1,15 @@
 """
-Gift Nifty (GIFT City) futures gap fetcher.
+Gift Nifty / Nifty intraday gap fetcher.
 
-Gift Nifty trades 6 AM–11:30 PM IST and is the primary pre-market indicator
-for Nifty 50 direction. A gap of > +1% = strong buy bias; < -1% = sell bias.
+NSE's liveNSEGIFT and equity-stockIndices endpoints were retired.
+We now use the allIndices endpoint which returns live Nifty 50 last price
+and previousClose — sufficient to compute the intraday gap signal.
 
-Used in pre-market and EOD scans to modulate the headwind penalty applied to candidates.
-In EOD context, Gift Nifty reflects where tomorrow's open is expected to be.
-
-NSE API endpoint: https://www.nseindia.com/api/liveNSEGIFT
-NOTE: This endpoint must be verified against the live NSE site — if it returns
-a 404 or unexpected schema, the function returns _EMPTY gracefully (no crash,
-feature simply disabled). Verify via browser devtools: Network tab → search "GIFT".
+Gap interpretation:
+  pre-market (before 9:15 AM): last == previousClose → gap = 0 (neutral, correct)
+  EOD (after 3:30 PM): last = today's close → gap = full day % move (better signal)
+  > +1%  = gap_up_strong
+  < -1%  = gap_down_strong
 """
 
 from __future__ import annotations
@@ -19,9 +18,8 @@ import time
 
 import requests
 
-_NSE_HOME = "https://www.nseindia.com/"
-_GIFT_URL  = "https://www.nseindia.com/api/liveNSEGIFT"
-_NIFTY_URL = "https://www.nseindia.com/api/equity-stockIndices?index=NIFTY%2050"
+_NSE_HOME    = "https://www.nseindia.com/"
+_ALL_INDICES = "https://www.nseindia.com/api/allIndices"
 
 _HEADERS = {
     "User-Agent": (
@@ -37,8 +35,8 @@ _EMPTY = {
     "gift_price": None,
     "nifty_prev_close": None,
     "gap_pct": None,
-    "gap_up_strong": False,   # gap > +1%
-    "gap_down_strong": False, # gap < -1%
+    "gap_up_strong": False,
+    "gap_down_strong": False,
     "available": False,
 }
 
@@ -56,65 +54,48 @@ def _make_session() -> requests.Session:
 
 def fetch_gift_nifty() -> dict:
     """
-    Fetch current Gift Nifty price and compute gap vs prior Nifty close.
-    Returns gap_pct (positive = gap up, negative = gap down).
-    Only meaningful before 9:15 AM IST (pre-market). After market open,
-    Nifty itself is the better reference.
+    Fetch Nifty 50 last price and previousClose from allIndices.
+    Computes intraday gap: (last / previousClose - 1) * 100.
+    In pre-market this equals 0 (neutral); in EOD it reflects today's full move.
     """
     session = _make_session()
-
-    gift_price = None
-    nifty_prev = None
-
-    # Fetch Gift Nifty current price
     try:
-        resp = session.get(_GIFT_URL, timeout=15)
+        resp = session.get(_ALL_INDICES, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-        # Try multiple response shapes (NSE sometimes changes schema)
-        records = data.get("data", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-        if isinstance(records, list) and records:
-            item = records[0]
-            # Try known NSE field names in priority order
-            for field in ("lastPrice", "last", "ltp", "previousClose", "price"):
-                val = item.get(field)
-                if val is not None and val != 0:
-                    gift_price = float(str(val).replace(",", ""))
-                    break
-    except Exception as exc:
-        print(f"[gift_nifty] Gift Nifty fetch error: {exc}")
+        indices = data.get("data", [])
 
-    # Fetch Nifty 50 previous close
-    try:
-        resp = session.get(_NIFTY_URL, timeout=15)
-        resp.raise_for_status()
-        idx_data = resp.json()
-        # Returns {"data": [{"symbol": "NIFTY 50", "previousClose": 22200.5, ...}]}
-        records = idx_data.get("data", []) if isinstance(idx_data, dict) else []
-        for row in records:
-            if "NIFTY 50" in str(row.get("symbol", "")).upper() or \
-               "NIFTY50" in str(row.get("indexSymbol", "")).upper():
-                nifty_prev = float(str(row.get("previousClose", 0)).replace(",", ""))
-                break
-    except Exception as exc:
-        print(f"[gift_nifty] Nifty prev close fetch error: {exc}")
+        nifty_row = next(
+            (idx for idx in indices if idx.get("indexSymbol") == "NIFTY 50"),
+            None,
+        )
+        if nifty_row is None:
+            print("[gift_nifty] NIFTY 50 not found in allIndices")
+            return dict(_EMPTY)
 
-    if gift_price is None or nifty_prev is None or nifty_prev == 0:
-        print("[gift_nifty] insufficient data — skipping gap signal")
+        last       = float(nifty_row.get("last", 0) or 0)
+        prev_close = float(nifty_row.get("previousClose", 0) or 0)
+
+        if last == 0 or prev_close == 0:
+            print("[gift_nifty] zero price in allIndices — skipping gap signal")
+            return dict(_EMPTY)
+
+        gap_pct = round((last / prev_close - 1) * 100, 2)
+        result = {
+            "gift_price": round(last, 2),
+            "nifty_prev_close": round(prev_close, 2),
+            "gap_pct": gap_pct,
+            "gap_up_strong":   gap_pct > 1.0,
+            "gap_down_strong": gap_pct < -1.0,
+            "available": True,
+        }
+        print(
+            f"[gift_nifty] Nifty={result['gift_price']}  prev={result['nifty_prev_close']}"
+            f"  gap={result['gap_pct']:+.2f}%"
+            f"  gap_up={result['gap_up_strong']}  gap_down={result['gap_down_strong']}"
+        )
+        return result
+
+    except Exception as exc:
+        print(f"[gift_nifty] fetch error: {exc}")
         return dict(_EMPTY)
-
-    gap_pct = round((gift_price / nifty_prev - 1) * 100, 2)
-    result = {
-        "gift_price": round(gift_price, 2),
-        "nifty_prev_close": round(nifty_prev, 2),
-        "gap_pct": gap_pct,
-        "gap_up_strong":   gap_pct > 1.0,
-        "gap_down_strong": gap_pct < -1.0,
-        "available": True,
-    }
-    print(
-        f"[gift_nifty] Gift={result['gift_price']}  prev_close={result['nifty_prev_close']}"
-        f"  gap={result['gap_pct']:+.2f}%"
-        f"  gap_up={result['gap_up_strong']}  gap_down={result['gap_down_strong']}"
-    )
-    return result
