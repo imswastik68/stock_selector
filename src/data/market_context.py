@@ -211,6 +211,7 @@ def enrich_candidate_context(tickers: list[str], base_ctx: dict) -> dict:
         if df.empty:
             continue
         df = df.dropna(how="all")
+        df = df[df["Close"].notna()]   # drop incomplete rows (market not yet open for the day)
         if df.empty:
             continue
 

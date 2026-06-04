@@ -15,6 +15,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 
 
+def _pnsea_available() -> bool:
+    try:
+        import pnsea  # noqa: F401
+        return True
+    except ModuleNotFoundError:
+        return False
+
+
 def _sast_one(symbol: str, from_dt: str, to_dt: str) -> tuple[str, bool]:
     try:
         from pnsea import NSE
@@ -36,6 +44,10 @@ def fetch_sast_signals(tickers: list[str]) -> dict[str, bool]:
     Strips .NS suffix and [PENNY] prefix for NSE API compatibility.
     """
     if not tickers:
+        return {}
+
+    if not _pnsea_available():
+        print("[sast] pnsea not installed — skipping SAST signals (run: pip install pnsea)")
         return {}
 
     today   = date.today()
