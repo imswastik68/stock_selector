@@ -25,10 +25,12 @@ except ImportError:
 
 # ── config ────────────────────────────────────────────────────────────────────
 _HERE        = Path(__file__).parent
-_ENV         = _HERE.parent / ".env"
+_ROOT        = _HERE.parent
+_ENV         = _ROOT / ".env"
+_OUTPUTS     = _ROOT / "outputs"
 _SESSION     = _HERE / "tg_session"
-_HISTORY_OUT = _HERE / "telegram_history.json"
-_PICKS_OUT   = _HERE / "telegram_picks.json"
+_HISTORY_OUT = _OUTPUTS / "telegram_history.json"
+_PICKS_OUT   = _OUTPUTS / "telegram_picks.json"
 
 BOT_ENTITY_ID = 8987715797   # 'Stock Scanner' bot — discovered via iter_dialogs
 

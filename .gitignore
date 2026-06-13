@@ -1,10 +1,14 @@
 # credentials — never commit
 .env
 
+# Telethon auth — contains your Telegram session token
+*.session
+
 # runtime state
 data/fo_ban_prev.json
 data/promoter_shp.json
 outputs/
+cache/
 
 # Python
 __pycache__/

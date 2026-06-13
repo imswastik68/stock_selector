@@ -1,39 +1,68 @@
 """
-Backtest the stock scanner's signal quality.
+Real signal backtest — replays enrich_with_technicals over historical daily OHLCV.
 
-Strategy: for each trading week over the past 6 months, apply the scorer
-to the signals available on Friday close and measure the price change over
-the next 5 and 10 trading days vs Nifty 50.
+Key design decisions:
+  - Calls the REAL src/technicals.py functions (same code path as live system).
+  - Simulates real SL=2ATR / T1=3ATR trade mechanics via src/trade_sim.py.
+  - Caches OHLCV to cache/backtest_ohlcv.parquet (re-runs are instant).
+  - Emits outputs/backtest_trades.csv and outputs/backtest_signal_stats.json.
+
+Limitations (documented):
+  - Only OHLCV-derivable signals are tested (13/30). Event signals (bulk deals,
+    SAST, promoter, delivery, options PCR, BSE filings) have no free archive
+    and keep hand weights in the live scorer.
+  - Survivorship bias: universe = current NIFTY500 + SME constituents.
+  - Nifty 20d return computed from the same download (no point-in-time issue there).
 
 Usage:
-    python scripts/backtest.py
-    python scripts/backtest.py --weeks 12   # last 12 weeks only
-
-Output: per-week hit table + summary hit rate and average return.
+  python scripts/backtest.py                   # full decade, full universe
+  python scripts/backtest.py --weeks 52        # last 52 weeks
+  python scripts/backtest.py --sample 50       # top-50 liquid stocks (fast sanity check)
+  python scripts/backtest.py --weeks 52 --sample 50
 """
 
 from __future__ import annotations
 
 import argparse
+import sys
 import warnings
 from datetime import date, timedelta
 from pathlib import Path
 
-import pandas as pd
-import yfinance as yf
-
 ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
 
-_NIFTY = "^NSEI"
-_ARCHIVE_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
-    "Accept": "text/html,*/*",
-}
+try:
+    import pandas as pd
+    import yfinance as yf
+except ImportError:
+    sys.exit("Run: pip install yfinance pandas")
+
+from src.technicals import enrich_with_technicals, compute_entry_levels
+from src.trade_sim import simulate_raw
+
+CACHE_DIR   = ROOT / "cache"
+OUTPUTS     = ROOT / "outputs"
+_NIFTY      = "^NSEI"
+_CACHE_DIR2 = CACHE_DIR / "backtest_ohlcv"   # per-ticker CSV cache directory
+_NIFTY_CSV  = CACHE_DIR / "backtest_nifty.csv"
+
+# OHLCV-derivable signals (subset of SHORT_TERM_WEIGHTS that we can test)
+TESTABLE_SIGNALS = [
+    "rsi_momentum", "rs_vs_nifty", "rsi_bearish_div", "rsi_bullish_div",
+    "macd_bullish_cross", "macd_bearish_cross", "obv_accumulation",
+    "bb_squeeze_breakout", "bullish_candle", "bearish_candle",
+    "weekly_trend_aligned", "momentum_6m_strong", "rs_quality_strong",
+    # volume-derived (computed from OHLCV):
+    "volume_surge", "distribution",
+]
+
+BATCH = 50
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# ── universe ──────────────────────────────────────────────────────────────────
 
-def _load_universe() -> list[str]:
+def _load_universe(sample: int | None) -> list[str]:
     tickers: list[str] = []
     for csv_path in [ROOT / "data" / "nifty500.csv", ROOT / "data" / "sme_list.csv"]:
         if csv_path.exists():
@@ -41,203 +70,369 @@ def _load_universe() -> list[str]:
             col = next((c for c in df.columns if "symbol" in c.lower()), df.columns[0])
             tickers += [f"{s.strip().upper()}.NS" for s in df[col].dropna()]
     if not tickers:
-        print("[backtest] WARNING: no universe CSVs — using a small seed list")
+        print("[backtest] WARNING: no universe CSVs, using fallback 20 tickers")
         tickers = [
-            "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
-            "SBIN.NS", "AXISBANK.NS", "WIPRO.NS", "SUNPHARMA.NS", "HCLTECH.NS",
-            "MARUTI.NS", "TITAN.NS", "BAJFINANCE.NS", "NESTLEIND.NS", "LT.NS",
-            "ASIANPAINT.NS", "ULTRACEMCO.NS", "ITC.NS", "BHARTIARTL.NS", "KOTAKBANK.NS",
+            "RELIANCE.NS","TCS.NS","INFY.NS","HDFCBANK.NS","ICICIBANK.NS",
+            "SBIN.NS","AXISBANK.NS","WIPRO.NS","SUNPHARMA.NS","HCLTECH.NS",
+            "MARUTI.NS","TITAN.NS","BAJFINANCE.NS","NESTLEIND.NS","LT.NS",
+            "ASIANPAINT.NS","ULTRACEMCO.NS","ITC.NS","BHARTIARTL.NS","KOTAKBANK.NS",
         ]
-    return list(dict.fromkeys(tickers))
+    uniq = list(dict.fromkeys(tickers))
+    # For --sample, take the first N (NIFTY500 comes first → large/mid caps)
+    return uniq[:sample] if sample else uniq
 
 
-def _fetch_history(tickers: list[str], start: date, end: date) -> dict[str, pd.DataFrame]:
-    """Batch-download OHLCV and return per-ticker DataFrames."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        raw = yf.download(
-            tickers,
-            start=start.isoformat(),
-            end=end.isoformat(),
-            auto_adjust=True,
-            progress=False,
-            group_by="ticker",
-            threads=True,
-        )
-    if raw.empty:
-        return {}
-    if isinstance(raw.columns, pd.MultiIndex):
-        out = {}
+# ── OHLCV download with parquet cache ────────────────────────────────────────
+
+def _ticker_csv(ticker: str) -> Path:
+    safe = ticker.replace(".", "_").replace("/", "_")
+    return _CACHE_DIR2 / f"{safe}.csv"
+
+
+def _download_and_cache(tickers: list[str], start: date, end: date,
+                        force: bool = False) -> dict[str, pd.DataFrame]:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    _CACHE_DIR2.mkdir(parents=True, exist_ok=True)
+
+    cached_map: dict[str, pd.DataFrame] = {}
+    if not force:
         for t in tickers:
-            if t in raw.columns.get_level_values(0):
-                df = raw[t].dropna(how="all")
+            csv = _ticker_csv(t)
+            if csv.exists():
+                try:
+                    df = pd.read_csv(csv, index_col=0, parse_dates=True)
+                    df = df.dropna(how="all")
+                    df = df[df["Close"].notna()]
+                    if not df.empty:
+                        cached_map[t] = df
+                except Exception:
+                    pass
+        if cached_map:
+            print(f"[backtest] loaded {len(cached_map)}/{len(tickers)} tickers from CSV cache")
+
+    missing = [t for t in tickers if t not in cached_map]
+    if not missing:
+        return {t: cached_map[t] for t in tickers if t in cached_map}
+
+    print(f"[backtest] downloading {len(missing)} tickers in batches of {BATCH} ...")
+    fresh: dict[str, pd.DataFrame] = {}
+    batches = [missing[i:i+BATCH] for i in range(0, len(missing), BATCH)]
+    for i, batch in enumerate(batches, 1):
+        print(f"[backtest] batch {i}/{len(batches)} ({len(batch)} tickers)...")
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                raw = yf.download(
+                    batch, start=start.isoformat(), end=end.isoformat(),
+                    auto_adjust=True, progress=False, group_by="ticker", threads=True,
+                )
+            if raw.empty:
+                continue
+            if isinstance(raw.columns, pd.MultiIndex):
+                for t in batch:
+                    if t in raw.columns.get_level_values(0):
+                        df = raw[t].dropna(how="all")
+                        df = df[df["Close"].notna()]
+                        if not df.empty:
+                            fresh[t] = df
+                            try:
+                                df.to_csv(_ticker_csv(t))
+                            except Exception:
+                                pass
+            elif len(batch) == 1:
+                df = raw.dropna(how="all")
+                df = df[df["Close"].notna()]
                 if not df.empty:
-                    out[t] = df
-        return out
-    # Single-ticker case
-    if len(tickers) == 1:
-        return {tickers[0]: raw.dropna(how="all")} if not raw.empty else {}
-    return {}
+                    fresh[batch[0]] = df
+                    try:
+                        df.to_csv(_ticker_csv(batch[0]))
+                    except Exception:
+                        pass
+        except Exception as exc:
+            print(f"[backtest] batch {i} error: {exc}")
+
+    all_map = {**cached_map, **fresh}
+    print(f"[backtest] {len(fresh)} new tickers downloaded, {len(all_map)} total")
+    return {t: all_map[t] for t in tickers if t in all_map}
 
 
-def _compute_signal_score(df: pd.DataFrame, as_of: pd.Timestamp) -> float:
-    """
-    Simplified signal score for a stock at a specific date.
-    Uses only OHLCV-derivable signals (volume surge + near 52w high + EMA trend).
-    Returns float score 0-6.
-    """
-    hist = df[df.index <= as_of].tail(40)
-    if len(hist) < 20:
-        return 0.0
-
-    closes = hist["Close"].squeeze()
-    volumes = hist["Volume"].squeeze()
-
-    score = 0.0
-
-    # Volume surge: today vs 30d avg
-    today_vol = float(volumes.iloc[-1])
-    avg_30d = float(volumes.iloc[:-1].mean()) if len(volumes) > 1 else today_vol
-    if avg_30d > 0 and today_vol / avg_30d >= 2.5:
-        score += 3.0
-
-    # Near 52w high (within 5%)
-    high_52w = float(closes.max())
-    today_close = float(closes.iloc[-1])
-    if high_52w > 0 and (high_52w - today_close) / high_52w <= 0.05:
-        score += 2.0
-
-    # EMA trend: EMA20 > EMA50 (bullish structure)
-    ema20 = float(closes.ewm(span=20, adjust=False).mean().iloc[-1])
-    ema50 = float(closes.ewm(span=50, adjust=False).mean().iloc[-1])
-    if ema20 > ema50:
-        score += 1.0
-
-    return score
-
-
-def _forward_return(df: pd.DataFrame, signal_date: pd.Timestamp, days: int) -> float | None:
-    """Return % gain from signal_date close to +days trading days later."""
-    future = df[df.index > signal_date]
-    if len(future) < days:
-        return None
-    entry = float(df[df.index <= signal_date]["Close"].squeeze().iloc[-1])
-    exit_ = float(future.iloc[days - 1]["Close"].squeeze())
-    if entry <= 0:
-        return None
-    return round((exit_ / entry - 1) * 100, 2)
-
-
-# ── main backtest ─────────────────────────────────────────────────────────────
-
-def run_backtest(weeks: int = 26) -> None:
-    today = date.today()
-    start = today - timedelta(days=weeks * 7 + 60)  # 60 extra days for history
-    end = today
-
-    universe = _load_universe()
-    print(f"[backtest] universe: {len(universe)} tickers | period: {start} to {end}")
-
-    # Download all OHLCV in one shot
-    print("[backtest] downloading history (this may take a minute)...")
-    BATCH = 100
-    all_hist: dict[str, pd.DataFrame] = {}
-    for i in range(0, len(universe), BATCH):
-        batch = universe[i:i + BATCH]
-        print(f"[backtest] batch {i // BATCH + 1}/{(len(universe) + BATCH - 1) // BATCH}...")
-        all_hist.update(_fetch_history(batch, start, end))
-
-    # Nifty benchmark
+def _download_nifty(start: date, end: date) -> pd.DataFrame:
+    if _NIFTY_CSV.exists():
+        try:
+            df = pd.read_csv(_NIFTY_CSV, index_col=0, parse_dates=True)
+            df = df.dropna(how="all")
+            df = df[df["Close"].notna()]
+            if not df.empty and df.index[-1].date() >= end - timedelta(days=5):
+                print(f"[backtest] Nifty loaded from cache ({len(df)} bars)")
+                return df
+        except Exception:
+            pass
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        nifty_raw = yf.download(_NIFTY, start=start.isoformat(), end=end.isoformat(),
-                                auto_adjust=True, progress=False)
-    nifty_close = nifty_raw["Close"].squeeze() if not nifty_raw.empty else pd.Series(dtype=float)
+        raw = yf.download(_NIFTY, start=start.isoformat(), end=end.isoformat(),
+                          auto_adjust=True, progress=False)
+    if raw.empty:
+        return pd.DataFrame()
+    if isinstance(raw.columns, pd.MultiIndex):
+        df = raw[_NIFTY].dropna(how="all") if _NIFTY in raw.columns.get_level_values(0) else raw.iloc[:, :5]
+    else:
+        df = raw
+    df = df.dropna(how="all")
+    df = df[df["Close"].notna()]
+    try:
+        df.to_csv(_NIFTY_CSV)
+    except Exception:
+        pass
+    return df
 
-    # Find all Friday signal dates within the backtest window
-    signal_date = start + timedelta(days=(4 - start.weekday()) % 7)  # first Friday
+
+# ── signal extraction ─────────────────────────────────────────────────────────
+
+def _volume_signals(df_slice: pd.DataFrame) -> dict[str, bool]:
+    """Volume surge and distribution from daily OHLCV slice."""
+    if len(df_slice) < 5:
+        return {"volume_surge": False, "distribution": False}
+    vol   = df_slice["Volume"].squeeze()
+    close = df_slice["Close"].squeeze()
+    today_vol = float(vol.iloc[-1])
+    avg_30d   = float(vol.iloc[:-1].tail(30).mean()) if len(vol) > 1 else today_vol
+    if avg_30d == 0:
+        return {"volume_surge": False, "distribution": False}
+    ratio = today_vol / avg_30d
+    surge = ratio >= 2.5
+    dist  = surge and float(close.iloc[-1]) < float(close.iloc[-2])
+    return {"volume_surge": surge, "distribution": dist}
+
+
+def _extract_signals(df_slice: pd.DataFrame, nifty_20d: float | None,
+                     atr: float, close: float) -> dict[str, bool]:
+    """Call real enrich_with_technicals + volume signals."""
+    if len(df_slice) < 50:
+        return {s: False for s in TESTABLE_SIGNALS}
+    try:
+        tech = enrich_with_technicals(df_slice, close, atr, nifty_20d_return=nifty_20d)
+    except Exception:
+        return {s: False for s in TESTABLE_SIGNALS}
+    vol_sigs = _volume_signals(df_slice)
+    return {
+        "rsi_momentum":        tech.get("rsi_momentum", False),
+        "rs_vs_nifty":         tech.get("rs_vs_nifty", False),
+        "rsi_bearish_div":     tech.get("rsi_bearish_div", False),
+        "rsi_bullish_div":     tech.get("rsi_bullish_div", False),
+        "macd_bullish_cross":  tech.get("macd_bullish_cross", False),
+        "macd_bearish_cross":  tech.get("macd_bearish_cross", False),
+        "obv_accumulation":    tech.get("obv_accumulation", False),
+        "bb_squeeze_breakout": tech.get("bb_squeeze_breakout", False),
+        "bullish_candle":      tech.get("bullish_candle", False),
+        "bearish_candle":      tech.get("bearish_candle", False),
+        "weekly_trend_aligned":tech.get("weekly_trend_aligned", False),
+        "momentum_6m_strong":  tech.get("momentum_6m_strong", False),
+        "rs_quality_strong":   tech.get("rs_quality_strong", False),
+        "volume_surge":        vol_sigs["volume_surge"],
+        "distribution":        vol_sigs["distribution"],
+    }
+
+
+def _compute_atr(df_slice: pd.DataFrame) -> float:
+    if len(df_slice) < 15:
+        return 0.0
+    h = df_slice["High"].squeeze()
+    l = df_slice["Low"].squeeze()
+    c = df_slice["Close"].squeeze()
+    tr = pd.concat([h-l, (h-c.shift(1)).abs(), (l-c.shift(1)).abs()], axis=1).max(axis=1)
+    return float(tr.ewm(alpha=1/14, adjust=False).mean().iloc[-1])
+
+
+# ── main backtest loop ────────────────────────────────────────────────────────
+
+def run_backtest(weeks: int, sample: int | None) -> None:
+    today = date.today()
+    end   = today
+    start = today - timedelta(days=weeks * 7 + 252)  # extra year for warmup
+    full_start = today - timedelta(days=30 * 365)     # 30-year max for cache
+
+    universe = _load_universe(sample)
+    print(f"[backtest] universe: {len(universe)} tickers | test window: {weeks} weeks back")
+
+    # Download / load cached OHLCV
+    ohlcv = _download_and_cache(universe, full_start, end)
+    nifty_df = _download_nifty(full_start, end)
+    nifty_close = nifty_df["Close"].squeeze() if not nifty_df.empty else pd.Series(dtype=float)
+
+    print(f"[backtest] got OHLCV for {len(ohlcv)}/{len(universe)} tickers, "
+          f"{len(nifty_close)} Nifty bars")
+
+    # Walk-forward: every 5 trading days over the test window
+    signal_dates: list[pd.Timestamp] = []
+    nifty_ts = nifty_close[nifty_close.index >= pd.Timestamp(start)]
+    step = 5
+    idxs = list(range(0, len(nifty_ts), step))
+    for i in idxs:
+        signal_dates.append(nifty_ts.index[i])
+    print(f"[backtest] {len(signal_dates)} signal dates × {len(ohlcv)} tickers ...")
+
     rows: list[dict] = []
+    total_evals = 0
 
-    while signal_date + timedelta(days=14) <= today:
-        # Convert to Timestamp for DataFrame indexing
-        ts = pd.Timestamp(signal_date)
+    for as_of in signal_dates:
+        # Nifty 20d return at this date
+        nifty_hist = nifty_close[nifty_close.index <= as_of]
+        nifty_20d: float | None = None
+        if len(nifty_hist) >= 20:
+            nifty_20d = float(nifty_hist.iloc[-1] / nifty_hist.iloc[-20] - 1)
 
-        # Find qualifying signals on this date
-        picks: list[tuple[str, float]] = []
-        for ticker, df in all_hist.items():
-            available = df[df.index <= ts]
-            if available.empty:
+        for ticker, full_df in ohlcv.items():
+            df_slice = full_df[full_df.index <= as_of]
+            if len(df_slice) < 60:
                 continue
-            score = _compute_signal_score(df, ts)
-            if score >= 4.0:
-                picks.append((ticker, score))
 
-        picks.sort(key=lambda x: x[1], reverse=True)
-        top5 = picks[:5]
+            close = float(df_slice["Close"].iloc[-1])
+            if close <= 0:
+                continue
+            atr = _compute_atr(df_slice)
+            if atr <= 0:
+                continue
 
-        # Nifty benchmark returns
-        nifty_available = nifty_close[nifty_close.index <= ts]
-        nifty_future = nifty_close[nifty_close.index > ts]
-        nifty_5d = nifty_10d = None
-        if not nifty_available.empty and len(nifty_future) >= 5:
-            n_entry = float(nifty_available.iloc[-1])
-            nifty_5d  = round((float(nifty_future.iloc[4]) / n_entry - 1) * 100, 2)
-        if not nifty_available.empty and len(nifty_future) >= 10:
-            n_entry = float(nifty_available.iloc[-1])
-            nifty_10d = round((float(nifty_future.iloc[9]) / n_entry - 1) * 100, 2)
+            signals = _extract_signals(df_slice, nifty_20d, atr, close)
 
-        for ticker, score in top5:
-            df = all_hist[ticker]
-            ret5  = _forward_return(df, ts, 5)
-            ret10 = _forward_return(df, ts, 10)
-            rows.append({
-                "signal_date": signal_date.isoformat(),
-                "ticker": ticker,
-                "score": score,
-                "ret_5d_%": ret5,
-                "ret_10d_%": ret10,
-                "nifty_5d_%": nifty_5d,
-                "nifty_10d_%": nifty_10d,
-                "beat_nifty_5d": (ret5 is not None and nifty_5d is not None and ret5 > nifty_5d),
-                "beat_nifty_10d": (ret10 is not None and nifty_10d is not None and ret10 > nifty_10d),
-            })
+            # Skip bars with zero active signals (no edge, no trade)
+            active = [s for s in TESTABLE_SIGNALS if signals.get(s) and "bearish" not in s and s != "distribution"]
+            if not active:
+                continue
 
-        signal_date += timedelta(days=7)
+            # Compute entry levels using the same function as the live system
+            from src.technicals import classify_wyckoff_phase
+            phase = classify_wyckoff_phase(df_slice.tail(90))
+            direction = "buy" if phase in {"MARKUP","ACCUMULATION_C","ACCUMULATION_D"} else \
+                        "sell" if phase in {"MARKDOWN","DISTRIBUTION_C","DISTRIBUTION_D"} else None
+            if direction is None:
+                continue
+
+            levels = compute_entry_levels(close, atr, direction)
+            if not levels:
+                continue
+
+            def _p(s: str) -> float:
+                return float(s.replace("₹", "").replace(",", ""))
+
+            entry_lo  = _p(levels["entry_zone"].split("-₹")[0].replace("₹",""))
+            entry_hi  = _p(levels["entry_zone"].split("-₹")[1])
+            entry_mid = (entry_lo + entry_hi) / 2
+            sl        = _p(levels["stop_loss"])
+            t1        = _p(levels["target_1"])
+
+            # Simulate trade forward (next N bars after as_of)
+            result = simulate_raw(entry_lo, entry_hi, entry_mid, sl, t1,
+                                  direction, as_of, full_df)
+            total_evals += 1
+
+            row = {
+                "as_of":     as_of.date().isoformat(),
+                "ticker":    ticker,
+                "direction": direction,
+                "phase":     phase,
+                "close":     close,
+                "atr_pct":   round(atr/close*100, 2),
+                "outcome":   result.get("outcome", "no_data"),
+                "return_pct":result.get("return_pct"),
+                "days_held": result.get("days_held"),
+                "mae_pct":   result.get("mae_pct"),
+                "mfe_pct":   result.get("mfe_pct"),
+                "fwd_5d":    result.get("fwd_5d_pct"),
+                "fwd_10d":   result.get("fwd_10d_pct"),
+                "fwd_20d":   result.get("fwd_20d_pct"),
+                "triggered": result.get("triggered", False),
+                **{f"sig_{s}": signals.get(s, False) for s in TESTABLE_SIGNALS},
+            }
+            rows.append(row)
+
+    print(f"[backtest] {total_evals} evaluations → {len(rows)} with active signals")
 
     if not rows:
-        print("[backtest] no qualifying picks found in the period.")
+        print("[backtest] no trades generated — check universe or date range")
         return
 
-    results = pd.DataFrame(rows)
-    print("\n" + "=" * 70)
-    print("BACKTEST RESULTS — last", weeks, "weeks")
-    print("=" * 70)
-    print(results.to_string(index=False))
+    df_trades = pd.DataFrame(rows)
+    OUTPUTS.mkdir(parents=True, exist_ok=True)
+    trades_path = OUTPUTS / "backtest_trades.csv"
+    df_trades.to_csv(trades_path, index=False)
+    print(f"[backtest] trades saved → {trades_path.name}")
 
-    # Summary
-    valid5  = results.dropna(subset=["ret_5d_%"])
-    valid10 = results.dropna(subset=["ret_10d_%"])
+    # ── per-signal stats ──────────────────────────────────────────────────────
+    triggered = df_trades[df_trades["triggered"] == True].copy()
+    closed    = triggered[triggered["outcome"].isin(["t1_hit", "sl_hit"])].copy()
+    print(f"[backtest] triggered={len(triggered)}, closed={len(closed)}")
 
-    print("\n── Summary ──")
-    print(f"  Total signals : {len(results)}")
-    if not valid5.empty:
-        hit5 = valid5["beat_nifty_5d"].mean() * 100
-        avg5 = valid5["ret_5d_%"].mean()
-        print(f"  5d  hit rate  : {hit5:.1f}%  (avg return: {avg5:+.2f}%)")
-    if not valid10.empty:
-        hit10 = valid10["beat_nifty_10d"].mean() * 100
-        avg10 = valid10["ret_10d_%"].mean()
-        print(f"  10d hit rate  : {hit10:.1f}%  (avg return: {avg10:+.2f}%)")
+    if closed.empty:
+        print("[backtest] no closed trades yet — extend window or wait for results")
+        return
 
-    # Save
-    out_path = ROOT / "outputs" / "backtest_results.csv"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    results.to_csv(out_path, index=False)
-    print(f"\n[backtest] full results saved to {out_path}")
+    baseline_wr  = (closed["outcome"] == "t1_hit").mean()
+    baseline_ret = closed["return_pct"].mean()
+    baseline_exp = (closed["return_pct"] * (2/3) - closed["return_pct"].abs() * (1/3)).mean()
+
+    sig_stats: dict[str, dict] = {}
+    for sig in TESTABLE_SIGNALS:
+        col = f"sig_{sig}"
+        if col not in closed.columns:
+            continue
+        with_sig    = closed[closed[col] == True]
+        without_sig = closed[closed[col] == False]
+        n = len(with_sig)
+        if n < 5:
+            continue
+        wr   = float((with_sig["outcome"] == "t1_hit").mean())
+        ret  = float(with_sig["return_pct"].mean())
+        wr_lift  = round((wr  - baseline_wr) * 100, 2)
+        ret_lift = round(ret  - baseline_ret, 2)
+        sig_stats[sig] = {
+            "n":          n,
+            "win_rate":   round(wr  * 100, 1),
+            "avg_return": round(ret, 2),
+            "wr_lift_pp": wr_lift,
+            "ret_lift":   ret_lift,
+            "n_without":  len(without_sig),
+            "wr_without": round(float((without_sig["outcome"]=="t1_hit").mean())*100,1) if len(without_sig) else None,
+        }
+
+    import json
+    stats_path = OUTPUTS / "backtest_signal_stats.json"
+    stats_path.write_text(json.dumps({
+        "meta": {
+            "weeks": weeks,
+            "universe": len(universe),
+            "tickers_with_data": len(ohlcv),
+            "signal_dates": len(signal_dates),
+            "triggered_trades": len(triggered),
+            "closed_trades": len(closed),
+            "baseline_win_rate_pct": round(baseline_wr*100,1),
+            "baseline_avg_return_pct": round(baseline_ret,2),
+            "note_survivorship_bias": "universe=current constituents only",
+            "note_untested_signals": "bulk_deals,sast,promoter,delivery,options,results,bse,fii_dii,gift_nifty,sector_rotation",
+        },
+        "signals": dict(sorted(sig_stats.items(), key=lambda x: -x[1]["wr_lift_pp"])),
+    }, indent=2))
+    print(f"[backtest] signal stats saved → {stats_path.name}")
+
+    # ── console summary ───────────────────────────────────────────────────────
+    print(f"\n{'='*60}")
+    print(f"  BACKTEST RESULTS — {weeks}w | {len(closed)} closed trades")
+    print(f"{'='*60}")
+    print(f"  Baseline win rate : {baseline_wr*100:.1f}%")
+    print(f"  Baseline avg ret  : {baseline_ret:+.2f}%")
+    print(f"\n  SIGNAL WIN-RATE LIFT (ranked):")
+    print(f"  {'Signal':<28}  {'N':>5}  {'WR%':>5}  {'Lift pp':>7}  {'Ret%':>6}")
+    for sig, st in sorted(sig_stats.items(), key=lambda x: -x[1]["wr_lift_pp"]):
+        print(f"  {sig:<28}  {st['n']:>5}  {st['win_rate']:>5}  "
+              f"{st['wr_lift_pp']:>+7.1f}  {st['avg_return']:>+6.2f}")
+    print(f"{'='*60}")
+    print(f"\nNext step: python scripts/calibrate_weights.py")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Backtest NSE/BSE signal quality")
-    parser.add_argument("--weeks", type=int, default=26, help="Number of weeks to backtest (default: 26)")
-    args = parser.parse_args()
-    run_backtest(weeks=args.weeks)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--weeks",  type=int, default=260, help="Weeks to test (default 260 = 5y)")
+    ap.add_argument("--sample", type=int, default=None, help="Limit universe to N tickers (fast sanity check)")
+    ap.add_argument("--force",  action="store_true", help="Re-download ignoring cache")
+    args = ap.parse_args()
+    run_backtest(args.weeks, args.sample)

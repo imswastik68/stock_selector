@@ -28,6 +28,10 @@ try:
 except ImportError:
     sys.exit("Run: pip install yfinance pandas")
 
+import sys as _sys
+_sys.path.insert(0, str(Path(__file__).parent.parent))
+from src.trade_sim import simulate_trade as _simulate_trade
+
 _HERE     = Path(__file__).parent
 _ROOT     = _HERE.parent
 _PICKS_IN = _ROOT / "outputs" / "telegram_picks.json"
@@ -76,176 +80,10 @@ def fetch_ohlcv(tickers: list[str], start: str) -> dict[str, pd.DataFrame]:
     return result
 
 
-# ── trade simulator ───────────────────────────────────────────────────────────
+# ── trade simulator (delegated to src/trade_sim.py) ──────────────────────────
 
 def simulate(pick: dict, df: pd.DataFrame) -> dict:
-    """
-    Simulate a single pick against actual OHLCV.
-
-    Entry rule:
-      Entry triggers if within the first 2 bars after rec_date,
-      the bar's low <= entry_hi (price dipped into or below the zone).
-      Entry price = entry_mid if within range, else entry_hi (bought at top of zone).
-
-    Exit rule (scanned bar by bar after entry):
-      BUY:  low <= sl → SL hit;  high >= t1 → T1 hit
-      SELL: high >= sl → SL hit; low  <= t1 → T1 hit
-      If both hit same bar → SL (conservative).
-    """
-    rec_date   = pd.Timestamp(pick["date"])
-    entry_lo   = pick.get("entry_lo") or pick["entry_mid"]
-    entry_hi   = pick.get("entry_hi") or pick["entry_mid"]
-    entry_mid  = pick["entry_mid"]
-    sl         = pick["sl"]
-    t1         = pick["t1"]
-    direction  = pick["direction"]  # "buy" or "sell"
-
-    df = df[df.index >= rec_date].copy()
-    if df.empty:
-        return {"triggered": False, "outcome": "no_data"}
-
-    today_close = float(df["Close"].iloc[-1])
-
-    # ── 1. Entry check (first 2 bars) ────────────────────────────────────────
-    entry_window = df.iloc[:2]
-    triggered    = False
-    entry_price  = None
-    entry_idx    = None
-
-    for idx, row in entry_window.iterrows():
-        bar_low  = float(row["Low"])
-        bar_high = float(row["High"])
-        bar_open = float(row["Open"])
-
-        if direction == "buy":
-            # Entry if price ever dipped into or through the entry zone
-            if bar_low <= entry_hi:
-                triggered   = True
-                entry_price = min(entry_mid, entry_hi) if bar_open <= entry_hi else entry_hi
-                entry_idx   = idx
-                break
-        else:
-            # Sell/short: entry if price rose into entry zone
-            if bar_high >= entry_lo:
-                triggered   = True
-                entry_price = max(entry_mid, entry_lo) if bar_open >= entry_lo else entry_lo
-                entry_idx   = idx
-                break
-
-    if not triggered:
-        gap = (today_close - entry_mid) / entry_mid * 100
-        return {
-            "triggered":    False,
-            "outcome":      "not_triggered",
-            "entry_mid":    entry_mid,
-            "current_price": today_close,
-            "gap_pct":      round(gap, 2),
-        }
-
-    # ── 2. Scan forward for T1 / SL ──────────────────────────────────────────
-    post_entry = df[df.index >= entry_idx]
-    outcome    = "open"
-    exit_price = today_close
-    exit_idx   = df.index[-1]
-
-    for idx, row in post_entry.iterrows():
-        bar_low  = float(row["Low"])
-        bar_high = float(row["High"])
-        bar_open = float(row["Open"])
-
-        if direction == "buy":
-            sl_hit = bar_low  <= sl
-            t1_hit = bar_high >= t1
-            # Gap open past SL
-            if bar_open <= sl:
-                outcome    = "sl_hit"
-                exit_price = bar_open   # exit at open, not SL (gap-down)
-                exit_idx   = idx
-                break
-            if sl_hit and t1_hit:        # both on same bar → SL (conservative)
-                outcome    = "sl_hit"
-                exit_price = sl
-                exit_idx   = idx
-                break
-            if sl_hit:
-                outcome    = "sl_hit"
-                exit_price = sl
-                exit_idx   = idx
-                break
-            if t1_hit:
-                outcome    = "t1_hit"
-                exit_price = t1
-                exit_idx   = idx
-                break
-        else:
-            sl_hit = bar_high >= sl
-            t1_hit = bar_low  <= t1
-            if bar_open >= sl:
-                outcome    = "sl_hit"
-                exit_price = bar_open
-                exit_idx   = idx
-                break
-            if sl_hit and t1_hit:
-                outcome    = "sl_hit"
-                exit_price = sl
-                exit_idx   = idx
-                break
-            if sl_hit:
-                outcome    = "sl_hit"
-                exit_price = sl
-                exit_idx   = idx
-                break
-            if t1_hit:
-                outcome    = "t1_hit"
-                exit_price = t1
-                exit_idx   = idx
-                break
-
-    days_held = (exit_idx - entry_idx).days
-
-    # ── 3. Return calculations ────────────────────────────────────────────────
-    if direction == "buy":
-        return_pct    = (exit_price - entry_price) / entry_price * 100
-        t1_return_pct = (t1         - entry_price) / entry_price * 100
-        sl_risk_pct   = (entry_price - sl)         / entry_price * 100  # positive = risk
-    else:
-        return_pct    = (entry_price - exit_price) / entry_price * 100
-        t1_return_pct = (entry_price - t1)         / entry_price * 100
-        sl_risk_pct   = (sl - entry_price)         / entry_price * 100
-
-    # Max adverse / favorable excursion from entry bar onwards
-    lows  = post_entry["Low"].astype(float).values
-    highs = post_entry["High"].astype(float).values
-    if direction == "buy":
-        mae = (min(lows)  - entry_price) / entry_price * 100
-        mfe = (max(highs) - entry_price) / entry_price * 100
-    else:
-        mae = (entry_price - max(highs)) / entry_price * 100
-        mfe = (entry_price - min(lows))  / entry_price * 100
-
-    # 1-week return (5 trading bars from entry)
-    week_return = None
-    if len(post_entry) >= 5:
-        week_close = float(post_entry.iloc[4]["Close"])
-        if direction == "buy":
-            week_return = round((week_close - entry_price) / entry_price * 100, 2)
-        else:
-            week_return = round((entry_price - week_close) / entry_price * 100, 2)
-
-    return {
-        "triggered":     True,
-        "outcome":       outcome,
-        "entry_price":   round(entry_price, 2),
-        "exit_price":    round(exit_price, 2),
-        "current_price": round(today_close, 2),
-        "return_pct":    round(return_pct, 2),
-        "t1_return_pct": round(t1_return_pct, 2),
-        "sl_risk_pct":   round(sl_risk_pct, 2),
-        "week_return":   week_return,
-        "days_held":     days_held,
-        "mae_pct":       round(mae, 2),
-        "mfe_pct":       round(mfe, 2),
-    }
+    return _simulate_trade(pick, df)
 
 
 # ── reporting ─────────────────────────────────────────────────────────────────
