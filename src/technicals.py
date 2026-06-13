@@ -305,14 +305,14 @@ def compute_entry_levels(close: float, atr: float, direction: str) -> dict:
         entry_lo = round(close - half_atr, 2)
         entry_hi = round(close + half_atr, 2)
         stop     = round(close - 2 * atr,  2)
-        target1  = round(close + 4 * atr,  2)
-        target2  = round(close + 6 * atr,  2)
+        target1  = round(close + 3 * atr,  2)  # 3×ATR → ~13% away, R:R 1.5:1
+        target2  = round(close + 5 * atr,  2)
     else:
         entry_lo = round(close - half_atr, 2)
         entry_hi = round(close + half_atr, 2)
         stop     = round(close + 2 * atr,  2)
-        target1  = round(close - 4 * atr,  2)
-        target2  = round(close - 6 * atr,  2)
+        target1  = round(close - 3 * atr,  2)
+        target2  = round(close - 5 * atr,  2)
 
     return {
         "entry_zone": f"₹{entry_lo}-₹{entry_hi}",

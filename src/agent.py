@@ -144,14 +144,15 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         if nifty_trend == "downtrend" and direction == "buy":
             has_breakout    = "actual_52w_breakout"  in active_signals
             has_6m_momentum = "momentum_6m_strong"   in active_signals
-            # Graduated penalty: sustained 6m momentum proves relative strength is real,
-            # not just a single-day volume pop. Each confirmed layer reduces friction.
+            # Heavy penalties: old penalties (1/2/4) barely filtered stocks scoring 10-16.
+            # 4/6/9: INOXINDIA-type (breakout+RSI momentum, raw 12) scores adj=8 → passes.
+            # Breakout-only needs raw >= 14; no-RS needs raw >= 17 (effectively blocked).
             if has_breakout and has_6m_momentum:
-                headwind_penalty = 1      # genuine multi-month RS leader — minimal friction
+                headwind_penalty = 4      # raw score must be 12+ to pass threshold=8
             elif has_breakout:
-                headwind_penalty = 2      # 52w breakout but no 6m confirmation
+                headwind_penalty = 6      # raw score must be 14+
             else:
-                headwind_penalty = 4      # no structural relative strength
+                headwind_penalty = 9      # raw score must be 17+ → effectively blocked
             if fii_easing:
                 headwind_penalty = max(0, headwind_penalty - 1)
             if gift_gap_up:
@@ -183,7 +184,10 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         signals = _label_signals(active_signals)
         risk = _risk(c, tech)
 
-        phase_b_threshold = 5 if nifty_trend == "downtrend" else 4
+        # In downtrend, only the strongest relative-strength breakouts get BUY.
+        # Threshold 8 means: even a score-9 stock with headwind_penalty=1 barely passes.
+        # Score-7 breakout stocks (adjusted to 5-6) fall to WATCH, not BUY.
+        phase_b_threshold = 8 if nifty_trend == "downtrend" else 4
         if direction == "watch" or adjusted_score < phase_b_threshold:
             phase_b_list.append({
                 "ticker": ticker,
