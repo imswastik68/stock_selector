@@ -9,24 +9,18 @@ from __future__ import annotations
 
 SHORT_TERM_WEIGHTS = {
     "bulk_deal_fii_dii": 3,
-    "volume_5x": 3,
-    "actual_52w_breakout": 3,   # price broke through prior 52w high
-    "delivery_surge": 2,        # DELIV_PER >= 50% on EQ series — institutional accumulation
-    "rs_vs_nifty": 2,           # stock outperforming Nifty by 2%+ over 20d
-    "options_pcr_fear": 1,        # PCR > 1.5: extreme fear = contrarian bullish (min OI required)
-    "options_long_buildup": 1,    # price up + OI up = fresh longs (min OI required)
-    "options_short_covering": 1,  # price up + OI down = shorts exiting = bullish (min OI required)
-    "rsi_momentum": 1,          # RSI 50-75: momentum building
-    "rsi_bullish_div": 1,       # price LL + RSI HL: sellers losing momentum
-    "macd_bullish_cross": 1,    # histogram / zero-line crossed up in last 3-5 bars
-    "fo_ban_lifted": 1,         # just removed from NSE F&O ban: liquidity restored, fresh positions allowed
-    "obv_accumulation": 1,      # OBV rising faster than price = stealth institutional buying
-    "bb_squeeze_breakout": 2,   # BB width ≤50% of 90d avg AND price broke outside band
-    "bullish_candle": 1,        # hammer / bullish_engulfing / bullish_marubozu on last bar
-    "weekly_trend_aligned": 1,  # weekly EMA10 > EMA20: daily signal aligns with larger timeframe
-    "sector_in_momentum": 1,    # stock is in a top-2 performing NSE sector index (5d return)
-    "momentum_6m_strong": 2,    # 6m skip-period momentum > 15% (Jegadeesh-Titman factor)
-    "rs_quality_strong": 1,     # ATR-adjusted RS: (stock_20d − nifty_20d) / ATR% > 5.0
+    "actual_52w_breakout": 3,      # price broke through prior 52w high
+    "delivery_surge": 2,           # DELIV_PER >= 50% on EQ series — institutional accumulation
+    "rsi_bearish_div": 3,          # price HH + RSI LH: data shows +1.04 lift over 15k trades
+    "rsi_momentum": 2,             # RSI 50-75: momentum building
+    "rs_quality_strong": 2,        # ATR-adjusted RS: (stock_20d − nifty_20d) / ATR% > 5.0
+    "rs_vs_nifty": 1,              # stock outperforming Nifty by 2%+ over 20d
+    "options_pcr_fear": 1,         # PCR > 1.5: extreme fear = contrarian bullish (min OI required)
+    "options_long_buildup": 1,     # price up + OI up = fresh longs (min OI required)
+    "options_short_covering": 1,   # price up + OI down = shorts exiting = bullish (min OI required)
+    "fo_ban_lifted": 1,            # just removed from NSE F&O ban: liquidity restored, fresh positions allowed
+    "weekly_trend_aligned": 1,     # weekly EMA10 > EMA20: daily signal aligns with larger timeframe
+    "sector_in_momentum": 1,       # stock is in a top-2 performing NSE sector index (5d return)
 }
 
 SWING_WEIGHTS = {
@@ -41,16 +35,19 @@ SWING_WEIGHTS = {
 }
 
 DISQUALIFIER_WEIGHTS = {
-    "f_group": -5,               # currently on NSE F&O ban list: liquidity risk, forced-exit danger
-    "distribution_signal": -5,  # volume spike + price DOWN = institutional selling
-    "rsi_bearish_div": -2,        # price HH + RSI LH: momentum fading (valid even above RSI 70)
-    "macd_bearish_cross": -1,    # histogram / zero-line crossed down in last 3-5 bars
-    "thin_market_extreme": -4,   # avg daily turnover < ₹1cr: unreliable signals + exit risk
-    "thin_market_light": -2,     # avg daily turnover ₹1cr–₹5cr: reduced liquidity, higher spread
+    "f_group": -5,                 # currently on NSE F&O ban list: liquidity risk, forced-exit danger
+    "rsi_bullish_div": -5,         # price LL + RSI HL: false bottoms — data shows −1.63 lift over 253 trades
+    "thin_market_extreme": -4,     # avg daily turnover < ₹1cr: unreliable signals + exit risk
+    "thin_market_light": -2,       # avg daily turnover ₹1cr–₹5cr: reduced liquidity, higher spread
     "options_short_buildup": -2,   # price down + OI up = fresh shorts entering
+    "distribution_signal": -1,     # volume spike + price DOWN = institutional selling
+    "volume_5x": -1,               # raw volume surge at entry: data shows −0.25 lift (noise, not edge)
+    "bb_squeeze_breakout": -1,     # BB squeeze at entry: exhaustion signal, −0.18 lift
+    "macd_bearish_cross": -1,      # histogram / zero-line crossed down in last 3-5 bars
+    "bullish_candle": -1,          # bullish candle at entry predicts underperformance (−0.43 lift)
+    "bearish_candle": -1,          # shooting_star / bearish_engulfing / bearish_marubozu on last bar
     "options_pcr_greed": -1,       # PCR < 0.5: extreme complacency (min OI required)
     "options_long_unwinding": -1,  # price down + OI down = longs exiting (min OI required)
-    "bearish_candle": -1,         # shooting_star / bearish_engulfing / bearish_marubozu on last bar
 }
 
 # Lowered to 2 to prevent dropping single-signal stocks before Pass 2 options/SAST fetch

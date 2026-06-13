@@ -38,24 +38,23 @@ TRADES_CSV  = ROOT / "outputs" / "backtest_trades.csv"
 OUT_WEIGHTS = ROOT / "outputs" / "calibrated_weights.json"
 OUT_WF      = ROOT / "outputs" / "walk_forward_results.json"
 
-# Current hand weights (from src/scorer.py SHORT_TERM_WEIGHTS, OHLCV-derivable only)
+# Current hand weights (from src/scorer.py SHORT_TERM_WEIGHTS + DISQUALIFIER_WEIGHTS, OHLCV-derivable only)
+# Updated to reflect calibrated weights applied 2026-06-13
 CURRENT_WEIGHTS: dict[str, int] = {
-    "volume_surge":        3,   # mapped from volume_5x
-    "rsi_momentum":        1,
-    "rs_vs_nifty":         2,
-    "macd_bullish_cross":  1,
-    "obv_accumulation":    1,
-    "bb_squeeze_breakout": 2,
-    "bullish_candle":      1,
+    "rsi_bearish_div":     3,   # mapped from SHORT_TERM_WEIGHTS (was -2 disqualifier)
+    "rsi_momentum":        2,
+    "rs_quality_strong":   2,
+    "rs_vs_nifty":         1,
     "weekly_trend_aligned":1,
-    "momentum_6m_strong":  2,
-    "rs_quality_strong":   1,
     # disqualifiers (negative)
-    "distribution":       -5,   # mapped from distribution_signal
-    "rsi_bearish_div":    -2,
-    "rsi_bullish_div":     1,   # positive — bullish divergence
+    "rsi_bullish_div":    -5,   # moved to DISQUALIFIER (was +1)
+    "distribution":       -1,   # mapped from distribution_signal (was -5)
+    "volume_surge":       -1,   # mapped from volume_5x (was +3)
+    "bb_squeeze_breakout":-1,   # moved to DISQUALIFIER (was +2)
     "macd_bearish_cross": -1,
+    "bullish_candle":     -1,   # moved to DISQUALIFIER (was +1)
     "bearish_candle":     -1,
+    # zero-weight (removed): momentum_6m_strong, macd_bullish_cross, obv_accumulation
 }
 
 SIGNAL_COLS = [f"sig_{s}" for s in [
