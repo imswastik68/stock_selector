@@ -211,7 +211,15 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
         extra.append(f"Promoter={_code(f'{prom_pct}%')}")
     if delivery_pct is not None:
         extra.append(f"Delivery={_code(f'{delivery_pct}%')}")
-    if (atr_pct_val is not None and math.isfinite(atr_pct_val)
+    pos = entry.get("position") or {}
+    if pos.get("shares", 0) > 0:
+        qty_str = (f"Qty={_code(str(pos['shares']))} | "
+                   f"₹{pos['notional']:,.0f} | "
+                   f"risk ₹{pos['risk_amount']:,.0f} ({pos['risk_pct_actual']:.1f}%)")
+        if pos.get("capped"):
+            qty_str += " [CAPPED]"
+        extra.append(qty_str)
+    elif (atr_pct_val is not None and math.isfinite(atr_pct_val)
             and price is not None and price > 0):
         atr_abs = price * atr_pct_val / 100
         if atr_abs > 0:
@@ -285,7 +293,15 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
         extra.append(f"PCR={_code(pcr)}")
     if prom_pct is not None:
         extra.append(f"Promoter={_code(f'{prom_pct}%')}")
-    if (atr_pct_val is not None and math.isfinite(atr_pct_val)
+    pos = entry.get("position") or {}
+    if pos.get("shares", 0) > 0:
+        qty_str = (f"Qty={_code(str(pos['shares']))} | "
+                   f"₹{pos['notional']:,.0f} | "
+                   f"risk ₹{pos['risk_amount']:,.0f} ({pos['risk_pct_actual']:.1f}%)")
+        if pos.get("capped"):
+            qty_str += " [CAPPED]"
+        extra.append(qty_str)
+    elif (atr_pct_val is not None and math.isfinite(atr_pct_val)
             and price is not None and price > 0):
         atr_abs = price * atr_pct_val / 100
         if atr_abs > 0:
@@ -493,6 +509,17 @@ def _build_message(watchlist_data: dict) -> str:
                 f"\n📊 <i>30d signal track record: "
                 f"{perf['t1_hit']}T1 / {perf['sl_hit']}SL / {perf['open']} open "
                 f"({perf['total_picks']} picks) — win rate {wr_str}</i>"
+            )
+
+        pf = watchlist_data.get("portfolio_risk")
+        if pf and pf.get("n_allocated", 0) > 0:
+            dropped_str = f" · {pf['n_dropped']} watch-only (budget full)" if pf["n_dropped"] else ""
+            sections.append(
+                f"\n💼 <i>Portfolio risk: ₹{pf['total_risk']:,.0f} at risk "
+                f"({pf['total_risk_pct']:.1f}% of ₹{pf['capital']:,.0f}) · "
+                f"₹{pf['total_deployed']:,.0f} deployed ({pf['total_deployed_pct']:.0f}%) · "
+                f"{pf['n_allocated']} picks{dropped_str} · "
+                f"₹{pf['budget_left']:,.0f} budget left</i>"
             )
 
         sections.append("\n\n⚠️ <i>Not investment advice. Do your own due diligence.</i>")

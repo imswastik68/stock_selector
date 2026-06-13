@@ -55,6 +55,7 @@ from src.data.volume import fetch_volume_gainers
 from src.scorer import score_candidates
 from src.agent import synthesize_watchlist
 from src.performance import performance_summary, record_picks
+from src.risk import size_position, portfolio_summary
 from src.telegram_alert import send_telegram_alert
 
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
@@ -362,6 +363,22 @@ def main() -> int:
     # 6. LLM synthesis (Wyckoff + SMC + VSA)
     print(f"[main] synthesising watchlist for {min(len(candidates), 20)} candidates...")
     watchlist_data = synthesize_watchlist(candidates, total_scanned, market_context=market_context)
+
+    # 6b. Advisory position sizing + portfolio risk
+    def _parse_sl(s) -> float | None:
+        try:
+            return float(str(s).replace("₹", "").replace(",", "").strip())
+        except (ValueError, TypeError):
+            return None
+
+    actionable = watchlist_data.get("buy_watchlist", []) + watchlist_data.get("sell_watchlist", [])
+    for entry in actionable:
+        price = entry.get("today_close")
+        sl    = _parse_sl(entry.get("stop_loss"))
+        if price and sl:
+            entry["position"] = size_position(float(price), float(sl))
+    if actionable:
+        watchlist_data["portfolio_risk"] = portfolio_summary(actionable)
 
     # 7. Save
     save_output(watchlist_data)

@@ -1,16 +1,24 @@
 """
 Shared trade simulator — single source of truth for SL/T1 mechanics.
 
-Used by scripts/analyse_picks.py and scripts/backtest.py.
+Exit policies (exit_policy kwarg to simulate_raw):
+  static          — first SL-or-T1 touch (default, original behavior)
+  time_10d        — static + force-exit at close after 10 bars if still open
+  breakeven_1r    — once price reaches entry+1R, raise SL→entry; target still T1
+  partial_t1_be   — book 50% at T1, move SL→breakeven, ride remainder to T2
+  trail_atr3      — chandelier trailing (3×ATR behind watermark); no fixed T1
+  partial_t1_trail— book 50% at T1, then trail remainder 3×ATR (requires atr kwarg)
 
-simulate_trade(pick, df) — simulate one pick from a structured dict.
-simulate_raw(entry_lo, entry_hi, entry_mid, sl, t1, direction, as_of_date, df)
-  — simulate from raw levels (used by backtest which builds them from technicals).
+WINNER_POLICY: set after running scripts/backtest_exits.py
 """
 
 from __future__ import annotations
 
 import pandas as pd
+
+# Applied in performance.py tracker and Telegram exit-plan line.
+# Run scripts/backtest_exits.py then update this constant.
+WINNER_POLICY: str = "static"
 
 
 def simulate_raw(
@@ -22,18 +30,19 @@ def simulate_raw(
     direction: str,
     as_of_date: pd.Timestamp,
     df: pd.DataFrame,
+    *,
+    t2: float | None = None,
+    atr: float | None = None,
+    exit_policy: str = "static",
 ) -> dict:
     """
     Core simulator. df must be full OHLCV; as_of_date is the signal date.
 
     Entry rule (first 2 bars after as_of_date):
-      BUY:  bar_low <= entry_hi → entry triggered at entry_mid (or entry_hi if opened above)
-      SELL: bar_high >= entry_lo → entry triggered at entry_mid (or entry_lo if opened below)
+      BUY:  bar_low <= entry_hi → triggered at entry_mid (or entry_hi if gap-up open)
+      SELL: bar_high >= entry_lo → triggered at entry_mid (or entry_lo if gap-down open)
 
-    Exit rule (bar by bar from entry):
-      BUY:  gap-open ≤ SL → exit at open; low ≤ SL and high ≥ T1 → SL (conservative);
-            low ≤ SL → SL; high ≥ T1 → T1.
-      SELL: mirror logic.
+    Exit policies: see module docstring. Default 'static' = original behavior.
     """
     future = df[df.index > as_of_date].copy()
     if future.empty:
@@ -75,51 +84,117 @@ def simulate_raw(
             "gap_pct":       round(gap, 2),
         }
 
-    # ── 2. Scan forward for T1 / SL ──────────────────────────────────────────
+    # ── 2. Exit scan ─────────────────────────────────────────────────────────
     post_entry = future[future.index >= entry_idx]
     outcome    = "open"
     exit_price = today_close
     exit_idx   = future.index[-1]
 
-    for idx, row in post_entry.iterrows():
-        bar_low  = float(row["Low"])
-        bar_high = float(row["High"])
-        bar_open = float(row["Open"])
+    # Policy state
+    dynamic_sl   = sl               # may ratchet for trailing / breakeven policies
+    partial_done = False            # True once 50% booked at T1 (partial policies)
+    partial_price: float | None = None
+    watermark    = entry_price      # running high (buy) / low (sell) for trailing
 
-        if direction == "buy":
-            if bar_open <= sl:
-                outcome = "sl_hit"; exit_price = bar_open; exit_idx = idx; break
-            sl_hit = bar_low  <= sl
-            t1_hit = bar_high >= t1
-            if sl_hit and t1_hit:
-                outcome = "sl_hit"; exit_price = sl;       exit_idx = idx; break
-            if sl_hit:
-                outcome = "sl_hit"; exit_price = sl;       exit_idx = idx; break
-            if t1_hit:
-                outcome = "t1_hit"; exit_price = t1;       exit_idx = idx; break
+    R = abs(entry_price - sl)       # 1 risk unit
+
+    for bar_n, (idx, row) in enumerate(post_entry.iterrows()):
+        bar_low   = float(row["Low"])
+        bar_high  = float(row["High"])
+        bar_open  = float(row["Open"])
+        bar_close = float(row["Close"])
+
+        # ── time stop ─────────────────────────────────────────────────────
+        if exit_policy == "time_10d" and bar_n >= 10:
+            outcome = "timeout"; exit_price = bar_close; exit_idx = idx; break
+
+        # ── trailing stop ratchet (before exit checks) ────────────────────
+        if exit_policy in ("trail_atr3", "partial_t1_trail") and atr and atr > 0:
+            if direction == "buy":
+                watermark  = max(watermark, bar_high)
+                dynamic_sl = max(dynamic_sl, watermark - 3 * atr)
+            else:
+                watermark  = min(watermark, bar_low)
+                dynamic_sl = min(dynamic_sl, watermark + 3 * atr)
+
+        # ── breakeven SL ratchet (before exit checks) ─────────────────────
+        if exit_policy == "breakeven_1r":
+            if direction == "buy" and bar_high >= entry_price + R:
+                dynamic_sl = max(dynamic_sl, entry_price)
+            elif direction == "sell" and bar_low <= entry_price - R:
+                dynamic_sl = min(dynamic_sl, entry_price)
+
+        # ── gap-open SL (highest priority) ───────────────────────────────
+        if direction == "buy" and bar_open <= dynamic_sl:
+            outcome = "sl_hit"; exit_price = bar_open; exit_idx = idx; break
+        if direction == "sell" and bar_open >= dynamic_sl:
+            outcome = "sl_hit"; exit_price = bar_open; exit_idx = idx; break
+
+        # ── partial T1 booking (first time only) ──────────────────────────
+        if not partial_done and exit_policy in ("partial_t1_be", "partial_t1_trail"):
+            hit = (direction == "buy" and bar_high >= t1) or \
+                  (direction == "sell" and bar_low  <= t1)
+            if hit:
+                partial_done  = True
+                partial_price = t1
+                if exit_policy == "partial_t1_be":
+                    dynamic_sl = entry_price   # SL → breakeven for remainder
+                continue   # 50% booked; remainder continues next bar
+
+        # ── active target for remainder ───────────────────────────────────
+        if exit_policy in ("trail_atr3", "partial_t1_trail"):
+            active_target: float | None = None          # trailing only, no fixed target
+        elif exit_policy == "partial_t1_be" and partial_done:
+            active_target = t2                           # None → no upper target
         else:
-            if bar_open >= sl:
-                outcome = "sl_hit"; exit_price = bar_open; exit_idx = idx; break
-            sl_hit = bar_high >= sl
-            t1_hit = bar_low  <= t1
+            active_target = t1
+
+        # ── normal SL / target exit ───────────────────────────────────────
+        if direction == "buy":
+            sl_hit = bar_low  <= dynamic_sl
+            t1_hit = active_target is not None and bar_high >= active_target
             if sl_hit and t1_hit:
-                outcome = "sl_hit"; exit_price = sl;       exit_idx = idx; break
+                outcome = "sl_hit"; exit_price = dynamic_sl; exit_idx = idx; break
             if sl_hit:
-                outcome = "sl_hit"; exit_price = sl;       exit_idx = idx; break
+                outcome = "sl_hit"; exit_price = dynamic_sl; exit_idx = idx; break
             if t1_hit:
-                outcome = "t1_hit"; exit_price = t1;       exit_idx = idx; break
+                lbl = "t2_hit" if (exit_policy == "partial_t1_be" and partial_done and t2) else "t1_hit"
+                outcome = lbl; exit_price = active_target; exit_idx = idx; break
+        else:
+            sl_hit = bar_high >= dynamic_sl
+            t1_hit = active_target is not None and bar_low  <= active_target
+            if sl_hit and t1_hit:
+                outcome = "sl_hit"; exit_price = dynamic_sl; exit_idx = idx; break
+            if sl_hit:
+                outcome = "sl_hit"; exit_price = dynamic_sl; exit_idx = idx; break
+            if t1_hit:
+                lbl = "t2_hit" if (exit_policy == "partial_t1_be" and partial_done and t2) else "t1_hit"
+                outcome = lbl; exit_price = active_target; exit_idx = idx; break
 
     days_held = max(1, (exit_idx - entry_idx).days)
 
     # ── 3. Returns ───────────────────────────────────────────────────────────
     if direction == "buy":
-        return_pct    = (exit_price  - entry_price) / entry_price * 100
         t1_return_pct = (t1          - entry_price) / entry_price * 100
         sl_risk_pct   = (entry_price - sl)          / entry_price * 100
     else:
-        return_pct    = (entry_price - exit_price)  / entry_price * 100
         t1_return_pct = (entry_price - t1)          / entry_price * 100
         sl_risk_pct   = (sl          - entry_price) / entry_price * 100
+
+    # Blended return for partial policies (50% leg1 at T1 + 50% leg2 at final exit)
+    if partial_done and partial_price is not None:
+        if direction == "buy":
+            leg1 = (partial_price - entry_price) / entry_price * 100
+            leg2 = (exit_price    - entry_price) / entry_price * 100
+        else:
+            leg1 = (entry_price - partial_price) / entry_price * 100
+            leg2 = (entry_price - exit_price)    / entry_price * 100
+        return_pct = 0.5 * leg1 + 0.5 * leg2
+    else:
+        if direction == "buy":
+            return_pct = (exit_price - entry_price) / entry_price * 100
+        else:
+            return_pct = (entry_price - exit_price) / entry_price * 100
 
     lows  = post_entry["Low"].astype(float).values
     highs = post_entry["High"].astype(float).values
@@ -137,7 +212,6 @@ def simulate_raw(
                             if direction == "buy"
                             else ((entry_price - wc) / entry_price * 100), 2)
 
-    # Fixed-period returns for backtest analysis
     fwd: dict[str, float | None] = {}
     for n in (5, 10, 20):
         if len(post_entry) >= n:
@@ -165,7 +239,7 @@ def simulate_raw(
     }
 
 
-def simulate_trade(pick: dict, df: pd.DataFrame) -> dict:
+def simulate_trade(pick: dict, df: pd.DataFrame, exit_policy: str = "static") -> dict:
     """Convenience wrapper for structured pick dicts (from telegram_picks.json)."""
     rec_date  = pd.Timestamp(pick["date"])
     entry_lo  = pick.get("entry_lo")  or pick["entry_mid"]
@@ -173,16 +247,13 @@ def simulate_trade(pick: dict, df: pd.DataFrame) -> dict:
     entry_mid = pick["entry_mid"]
     sl        = pick["sl"]
     t1        = pick["t1"]
+    t2        = pick.get("t2")
     direction = pick["direction"]
 
-    # analyse_picks slices df from rec_date onwards; we need to pass as_of = day before
-    # so simulate_raw can use df[index > as_of] and still include rec_date bars.
-    # Simplest: pass as_of = rec_date - 1 business day, keeping rec_date in future.
     df_from = df[df.index >= rec_date].copy()
     if df_from.empty:
         return {"triggered": False, "outcome": "no_data"}
 
-    # Inject a synthetic "yesterday" row so simulate_raw's future slice works correctly
     fake_yesterday = rec_date - pd.tseries.offsets.BusinessDay(1)
     return simulate_raw(entry_lo, entry_hi, entry_mid, sl, t1, direction,
-                        fake_yesterday, df_from)
+                        fake_yesterday, df_from, t2=t2, exit_policy=exit_policy)

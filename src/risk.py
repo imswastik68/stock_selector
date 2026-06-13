@@ -1,0 +1,133 @@
+"""
+Advisory position sizing and portfolio risk summary.
+
+Default: capital ₹1,00,000, risk 1% per trade (₹1,000).
+Env overrides: RISK_CAPITAL, RISK_PER_TRADE_PCT,
+               RISK_MAX_POSITION_PCT, RISK_MAX_PORTFOLIO_PCT, RISK_MAX_POSITIONS
+
+Example (entry ₹250, SL ₹238):
+  risk/share = ₹12 → shares = floor(1000/12) = 83
+  notional   = 83 × ₹250 = ₹20,750  (20.8% of capital, under 25% cap)
+  risk_amount= 83 × ₹12  = ₹996     (≈ 1.0% of capital)
+"""
+
+from __future__ import annotations
+
+import math
+import os
+
+RISK_CONFIG = {
+    "capital":            float(os.environ.get("RISK_CAPITAL",            "100000")),
+    "risk_per_trade_pct": float(os.environ.get("RISK_PER_TRADE_PCT",      "0.01")),
+    "max_position_pct":   float(os.environ.get("RISK_MAX_POSITION_PCT",   "0.25")),
+    "max_portfolio_pct":  float(os.environ.get("RISK_MAX_PORTFOLIO_PCT",  "0.06")),
+    "max_positions":      int(os.environ.get("RISK_MAX_POSITIONS",        "8")),
+}
+
+
+def size_position(
+    entry: float,
+    sl: float,
+    *,
+    capital: float | None = None,
+    risk_pct: float | None = None,
+    max_position_pct: float | None = None,
+) -> dict:
+    """
+    Fixed-fractional position sizing.
+
+    shares = floor(capital × risk_pct / risk_per_share)
+    Capped when notional > capital × max_position_pct.
+
+    Returns dict: shares, notional, risk_amount, risk_pct_actual, position_pct, capped
+    """
+    cap  = capital          if capital          is not None else RISK_CONFIG["capital"]
+    rp   = risk_pct         if risk_pct         is not None else RISK_CONFIG["risk_per_trade_pct"]
+    maxp = max_position_pct if max_position_pct is not None else RISK_CONFIG["max_position_pct"]
+
+    risk_per_share = abs(entry - sl)
+    if risk_per_share <= 0 or entry <= 0:
+        return {"shares": 0, "notional": 0.0, "risk_amount": 0.0,
+                "risk_pct_actual": 0.0, "position_pct": 0.0, "capped": False}
+
+    risk_budget  = cap * rp
+    shares       = int(risk_budget / risk_per_share)
+    capped       = False
+    max_notional = cap * maxp
+
+    if shares > 0 and shares * entry > max_notional:
+        shares = int(max_notional / entry)
+        capped = True
+
+    if shares <= 0:
+        return {"shares": 0, "notional": 0.0, "risk_amount": 0.0,
+                "risk_pct_actual": 0.0, "position_pct": 0.0, "capped": capped}
+
+    notional        = round(shares * entry, 2)
+    risk_amount     = round(shares * risk_per_share, 2)
+    risk_pct_actual = round(risk_amount / cap * 100, 2)
+    position_pct    = round(notional   / cap * 100, 1)
+
+    return {
+        "shares":          shares,
+        "notional":        notional,
+        "risk_amount":     risk_amount,
+        "risk_pct_actual": risk_pct_actual,
+        "position_pct":    position_pct,
+        "capped":          capped,
+    }
+
+
+def portfolio_summary(
+    sized_picks: list[dict],
+    *,
+    capital: float | None = None,
+    max_portfolio_risk_pct: float | None = None,
+    max_positions: int | None = None,
+) -> dict:
+    """
+    Rank picks by score, allocate until risk budget or max_positions hit.
+    Mutates each pick: adds pick["allocate"] = True/False.
+
+    Returns: capital, total_deployed, total_deployed_pct, total_risk,
+             total_risk_pct, budget_left, n_allocated, n_dropped
+    """
+    cap     = capital               if capital               is not None else RISK_CONFIG["capital"]
+    max_rp  = max_portfolio_risk_pct if max_portfolio_risk_pct is not None else RISK_CONFIG["max_portfolio_pct"]
+    max_pos = max_positions          if max_positions          is not None else RISK_CONFIG["max_positions"]
+
+    risk_budget    = cap * max_rp
+    total_deployed = 0.0
+    total_risk     = 0.0
+    n_allocated    = 0
+    n_dropped      = 0
+
+    picks = sorted(sized_picks, key=lambda x: x.get("score", 0), reverse=True)
+
+    for pick in picks:
+        pos  = pick.get("position") or {}
+        risk = pos.get("risk_amount") or 0.0
+        notl = pos.get("notional")   or 0.0
+
+        budget_ok   = (total_risk + risk) <= risk_budget
+        position_ok = n_allocated < max_pos
+
+        if budget_ok and position_ok and risk > 0:
+            pick["allocate"]  = True
+            total_deployed   += notl
+            total_risk       += risk
+            n_allocated      += 1
+        else:
+            pick["allocate"] = False
+            n_dropped        += 1
+
+    return {
+        "capital":            cap,
+        "total_deployed":     round(total_deployed, 2),
+        "total_deployed_pct": round(total_deployed / cap * 100, 1) if cap else 0.0,
+        "total_risk":         round(total_risk, 2),
+        "total_risk_pct":     round(total_risk / cap * 100, 2) if cap else 0.0,
+        "budget_left":        round(risk_budget - total_risk, 2),
+        "n_allocated":        n_allocated,
+        "n_dropped":          n_dropped,
+    }
