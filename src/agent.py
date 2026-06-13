@@ -144,15 +144,15 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         if nifty_trend == "downtrend" and direction == "buy":
             has_breakout    = "actual_52w_breakout"  in active_signals
             has_6m_momentum = "momentum_6m_strong"   in active_signals
-            # Heavy penalties: old penalties (1/2/4) barely filtered stocks scoring 10-16.
-            # 4/6/9: INOXINDIA-type (breakout+RSI momentum, raw 12) scores adj=8 → passes.
-            # Breakout-only needs raw >= 14; no-RS needs raw >= 17 (effectively blocked).
+            # A stock at 52w high with 6m momentum WHILE Nifty is down/flat = genuine RS.
+            # These are exactly the picks we want — don't penalise them at all.
+            # Penalise only stocks riding index beta with no independent RS evidence.
             if has_breakout and has_6m_momentum:
-                headwind_penalty = 4      # raw score must be 12+ to pass threshold=8
+                headwind_penalty = 0      # confirmed RS leader: passes on its own merit
             elif has_breakout:
-                headwind_penalty = 6      # raw score must be 14+
+                headwind_penalty = 3      # 52w breakout but no 6m confirmation
             else:
-                headwind_penalty = 9      # raw score must be 17+ → effectively blocked
+                headwind_penalty = 12     # no RS: needs raw score 17+ to pass (rare)
             if fii_easing:
                 headwind_penalty = max(0, headwind_penalty - 1)
             if gift_gap_up:
@@ -184,10 +184,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         signals = _label_signals(active_signals)
         risk = _risk(c, tech)
 
-        # In downtrend, only the strongest relative-strength breakouts get BUY.
-        # Threshold 8 means: even a score-9 stock with headwind_penalty=1 barely passes.
-        # Score-7 breakout stocks (adjusted to 5-6) fall to WATCH, not BUY.
-        phase_b_threshold = 8 if nifty_trend == "downtrend" else 4
+        phase_b_threshold = 5 if nifty_trend == "downtrend" else 4
         if direction == "watch" or adjusted_score < phase_b_threshold:
             phase_b_list.append({
                 "ticker": ticker,
