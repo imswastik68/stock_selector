@@ -446,7 +446,8 @@ def main() -> int:
         price = entry.get("today_close")
         sl    = _parse_sl(entry.get("stop_loss"))
         if price and sl:
-            entry["position"] = size_position(float(price), float(sl))
+            entry["position"] = size_position(float(price), float(sl),
+                                              score=entry.get("score"))
         # Attach sector for concentration cap (unmapped → "other")
         t = entry.get("ticker", "")
         entry["sector"] = sector_map.get(t, "other")

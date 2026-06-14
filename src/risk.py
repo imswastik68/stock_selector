@@ -27,6 +27,27 @@ RISK_CONFIG = {
 }
 
 
+# Conviction scaling: only applied when score predicts win magnitude (run --score-magnitude first).
+# Set CONVICTION_SIZING = True after confirming monotone relationship.
+CONVICTION_SIZING: bool = False
+
+# Risk % tiers by score (used only when CONVICTION_SIZING is True)
+_SCORE_TIERS: list[tuple[int, float]] = [
+    (8,  0.0125),  # score ≥ 8 → 1.25%
+    (5,  0.0100),  # score 5–7 → 1.0%
+    (0,  0.0075),  # score < 5 → 0.75%
+]
+
+
+def _score_to_risk_pct(score: int | float | None) -> float:
+    if not CONVICTION_SIZING or score is None:
+        return RISK_CONFIG["risk_per_trade_pct"]
+    for threshold, pct in _SCORE_TIERS:
+        if score >= threshold:
+            return pct
+    return RISK_CONFIG["risk_per_trade_pct"]
+
+
 def size_position(
     entry: float,
     sl: float,
@@ -34,6 +55,7 @@ def size_position(
     capital: float | None = None,
     risk_pct: float | None = None,
     max_position_pct: float | None = None,
+    score: int | float | None = None,
 ) -> dict:
     """
     Fixed-fractional position sizing.
@@ -41,10 +63,13 @@ def size_position(
     shares = floor(capital × risk_pct / risk_per_share)
     Capped when notional > capital × max_position_pct.
 
+    If CONVICTION_SIZING is True and score is provided, risk_pct is scaled
+    by score tier (run --score-magnitude to verify monotone signal first).
+
     Returns dict: shares, notional, risk_amount, risk_pct_actual, position_pct, capped
     """
     cap  = capital          if capital          is not None else RISK_CONFIG["capital"]
-    rp   = risk_pct         if risk_pct         is not None else RISK_CONFIG["risk_per_trade_pct"]
+    rp   = risk_pct         if risk_pct         is not None else _score_to_risk_pct(score)
     maxp = max_position_pct if max_position_pct is not None else RISK_CONFIG["max_position_pct"]
 
     risk_per_share = abs(entry - sl)

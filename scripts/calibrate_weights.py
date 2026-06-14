@@ -371,6 +371,77 @@ def run_by_regime() -> dict[str, dict[str, int] | None]:
     return regime_weights
 
 
+# ── score-magnitude report ────────────────────────────────────────────────────
+
+def run_score_magnitude() -> bool:
+    """
+    Bucket trades by score tier and report avg win return per tier.
+    Returns True if score monotonically predicts win magnitude (conviction sizing justified).
+
+    Needs 'score' column in backtest_trades.csv. If missing, reports so and exits.
+    Output tells the user whether to enable conviction sizing in risk.py.
+    """
+    df_raw = pd.read_csv(TRADES_CSV, parse_dates=["as_of"])
+    if "score" not in df_raw.columns:
+        print("\n[score-magnitude] 'score' column not in backtest_trades.csv")
+        print("  → Re-run: python scripts/backtest.py  (it now saves score per trade)")
+        print("  → Cannot assess conviction sizing without score data.")
+        return False
+
+    df = df_raw[df_raw["triggered"] == True].copy()
+    df = df[df["outcome"].isin(["t1_hit", "sl_hit"])].copy()
+    df["score"] = pd.to_numeric(df["score"], errors="coerce")
+    df = df.dropna(subset=["score"])
+
+    # Define tiers
+    tiers = [
+        ("low  (<5)",  df["score"] < 5),
+        ("mid  (5-7)", (df["score"] >= 5) & (df["score"] < 8)),
+        ("high (≥8)",  df["score"] >= 8),
+    ]
+
+    print(f"\n{'='*60}")
+    print(f"  SCORE → WIN MAGNITUDE REPORT  ({len(df)} closed trades)")
+    print(f"{'='*60}")
+    print(f"  {'Tier':<14}  {'N':>5}  {'WR%':>6}  {'Avg win':>8}  {'Avg return':>10}")
+
+    tier_avg_wins: list[float] = []
+    monotone = True
+    prev_avg_win = None
+
+    for label, mask in tiers:
+        bucket = df[mask]
+        if bucket.empty:
+            print(f"  {label:<14}  {'—':>5}")
+            continue
+        wins   = bucket[bucket["outcome"] == "t1_hit"]
+        wr     = round(len(wins) / len(bucket) * 100, 1)
+        avg_win   = round(float(wins["return_pct"].mean()), 3) if len(wins) > 0 else 0.0
+        avg_ret   = round(float(bucket["return_pct"].mean()), 3)
+        print(f"  {label:<14}  {len(bucket):>5}  {wr:>5.1f}%  {avg_win:>+8.3f}%  {avg_ret:>+10.3f}%")
+        tier_avg_wins.append(avg_win)
+        if prev_avg_win is not None and avg_win <= prev_avg_win:
+            monotone = False
+        prev_avg_win = avg_win
+
+    print(f"\n  Score predicts win magnitude: {'YES — monotone ↑' if monotone else 'NO — not monotone'}")
+    if monotone:
+        print(f"  → Enable conviction sizing in risk.py size_position(score=...)")
+        print(f"  → Suggested tiers: <5 → 0.75%, 5-7 → 1.0%, ≥8 → 1.25% risk")
+    else:
+        print(f"  → Skip conviction sizing — score does not predict win size")
+    print(f"{'='*60}\n")
+
+    out = ROOT / "outputs" / "score_magnitude.json"
+    out.write_text(json.dumps({
+        "tiers": {label: {} for label, _ in tiers},
+        "monotone": monotone,
+        "recommendation": "enable" if monotone else "skip",
+    }, indent=2))
+    print(f"  Results → {out.name}")
+    return monotone
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -380,10 +451,16 @@ def main():
                     help="Print signal correlation matrix and exit")
     ap.add_argument("--by-regime", action="store_true",
                     help="Calibrate per Nifty trend regime (uptrend/ranging/downtrend)")
+    ap.add_argument("--score-magnitude", action="store_true",
+                    help="Report score-tier → win magnitude; decide if conviction sizing is justified")
     args = ap.parse_args()
 
     if args.collinearity:
         run_collinearity()
+        return
+
+    if getattr(args, "score_magnitude", False):
+        run_score_magnitude()
         return
 
     if args.by_regime:
