@@ -50,6 +50,7 @@ from src.data.market_context import enrich_candidate_context, fetch_market_wide_
 from src.data.options import fetch_options_signals
 from src.data.promoter import fetch_promoter_signals
 from src.data.sast import fetch_sast_signals
+from src.data.fundamentals import fetch_fundamental_signals
 from src.data.results import fetch_results_calendar
 from src.data.volume import fetch_volume_gainers
 from src.scorer import score_candidates
@@ -331,6 +332,9 @@ def main() -> int:
         print(f"[main] fetching SAST signals for {len(top_tickers)} candidates...")
         sast_signals = fetch_sast_signals(top_tickers)
 
+        print(f"[main] fetching fundamental signals for {len(top_tickers)} candidates...")
+        fundamental_signals = fetch_fundamental_signals(top_tickers)
+
         # Re-score with new signals so they affect sorting
         candidates = score_candidates(
             bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts,
@@ -343,10 +347,12 @@ def main() -> int:
             sast_signals=sast_signals,
             breadth_label=breadth_label,
             nifty_trend=nifty_trend,
+            fundamental_signals=fundamental_signals,
         )
     else:
-        options_signals = {}
-        promoter_signals = {}
+        options_signals     = {}
+        promoter_signals    = {}
+        fundamental_signals = {}
 
     if not candidates:
         print("[main] no qualifying candidates today")
@@ -407,14 +413,20 @@ def main() -> int:
             sast_signals=sast_signals,
             breadth_label=breadth_label,
             nifty_trend=nifty_trend,
+            fundamental_signals=fundamental_signals,
         )
 
     # 6. LLM synthesis (Wyckoff + SMC + VSA)
     print(f"[main] synthesising watchlist for {min(len(candidates), 20)} candidates...")
     watchlist_data = synthesize_watchlist(candidates, total_scanned, market_context=market_context)
 
-    # 6b. Stash breadth for alert rendering
+    # 6b. Stash breadth + fundamentals for alert rendering
     watchlist_data["breadth"] = market_wide_ctx.get("breadth", {})
+    for entry in (watchlist_data.get("buy_watchlist", []) +
+                  watchlist_data.get("sell_watchlist", [])):
+        t = entry.get("ticker", "")
+        if t in fundamental_signals:
+            entry["fundamental"] = fundamental_signals[t]
 
     # 6c. Advisory position sizing + portfolio risk
     def _parse_sl(s) -> float | None:

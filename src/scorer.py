@@ -8,6 +8,7 @@ Claude is NOT involved here — all scoring is rule-based and auditable.
 from __future__ import annotations
 
 SHORT_TERM_WEIGHTS = {
+    "fundamental_strong": 2,        # ROE>15% & D/E<1 & EPS-growth>0 (yfinance .info)
     "bulk_deal_fii_dii": 3,
     "actual_52w_breakout": 3,      # price broke through prior 52w high
     "delivery_surge": 2,           # DELIV_PER >= 50% on EQ series — institutional accumulation
@@ -35,6 +36,7 @@ SWING_WEIGHTS = {
 }
 
 DISQUALIFIER_WEIGHTS = {
+    "fundamental_weak": -2,          # net loss or D/E>3 (yfinance .info); missing data → neutral
     "f_group": -5,                 # currently on NSE F&O ban list: liquidity risk, forced-exit danger
     "rsi_bullish_div": -5,         # price LL + RSI HL: false bottoms — data shows −1.63 lift over 253 trades
     "thin_market_extreme": -4,     # avg daily turnover < ₹1cr: unreliable signals + exit risk
@@ -80,6 +82,7 @@ def _build_signal_map(
     announcements_data: dict | None = None,
     hot_sector_tickers: set[str] | None = None,
     sast_data: bool = False,
+    fundamental_data: dict | None = None,
 ) -> dict[str, bool]:
     """Build a boolean signal map for a single ticker."""
     signals: dict[str, bool] = {k: False for k in list(SHORT_TERM_WEIGHTS) + list(SWING_WEIGHTS) + list(DISQUALIFIER_WEIGHTS)}
@@ -167,6 +170,11 @@ def _build_signal_map(
     # SAST filing: SEBI mandatory disclosure for creeping acquisitions ≥5% stake
     signals["sast_insider_buying"] = bool(sast_data)
 
+    # Fundamental quality from yfinance .info (soft gate — missing data → neutral)
+    if fundamental_data:
+        signals["fundamental_strong"] = bool(fundamental_data.get("fundamental_strong", False))
+        signals["fundamental_weak"]   = bool(fundamental_data.get("fundamental_weak",   False))
+
     return signals
 
 
@@ -226,13 +234,15 @@ def score_candidates(
     sast_signals: dict[str, bool] | None = None,
     breadth_label: str = "neutral",
     nifty_trend: str = "ranging",
+    fundamental_signals: dict[str, dict] | None = None,
 ) -> list[dict]:
     """
     Score every unique ticker across all data sources and return qualifying candidates.
 
-    market_regime: "low_vol" | "normal" | "high_vol" — high_vol applies -1 to all scores.
-    breadth_label: "strong" | "neutral" | "weak" — weak applies -1 (stacks with high_vol).
-    nifty_trend:   "uptrend" | "ranging" | "downtrend" — selects REGIME_WEIGHTS override.
+    market_regime:       "low_vol" | "normal" | "high_vol" — high_vol applies -1 to all scores.
+    breadth_label:       "strong" | "neutral" | "weak" — weak applies -1 (stacks with high_vol).
+    nifty_trend:         "uptrend" | "ranging" | "downtrend" — selects REGIME_WEIGHTS override.
+    fundamental_signals: {ticker: {fundamental_strong, fundamental_weak, ...}} from fundamentals.py
     """
     # Collect all unique tickers across all data sources
     all_tickers: set[str] = set()
@@ -257,14 +267,15 @@ def score_candidates(
 
     candidates = []
     for ticker in all_tickers:
-        vol = volume_map.get(ticker)
-        brk = breakout_map.get(ticker)
+        vol  = volume_map.get(ticker)
+        brk  = breakout_map.get(ticker)
         prom = (promoter_signals or {}).get(ticker)
         opts = (options_signals or {}).get(ticker)
-        tech  = (technical_signals or {}).get(ticker)
+        tech = (technical_signals or {}).get(ticker)
         deliv = (delivery_signals or {}).get(ticker)
         ann   = ann_map.get(ticker)
         sast  = bool((sast_signals or {}).get(ticker, False))
+        fund  = (fundamental_signals or {}).get(ticker)
 
         signals = _build_signal_map(
             ticker, bulk_deals, vol, fo_ban_removed, results_calendar, brk,
@@ -273,6 +284,7 @@ def score_candidates(
             announcements_data={ticker: ann} if ann else None,
             hot_sector_tickers=hot_sector_tickers,
             sast_data=sast,
+            fundamental_data=fund,
         )
 
         score, timeframe = _compute_score(signals, market_regime, nifty_trend)

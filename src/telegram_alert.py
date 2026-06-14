@@ -230,6 +230,15 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
         extra.append(f"6m={_code(f'{mom_6m:+.1f}%')}")
     if rs_q is not None and math.isfinite(rs_q):
         extra.append(f"RS={_code(f'{rs_q:.2f}')}")
+    fund = entry.get("fundamental") or {}
+    if fund:
+        roe = fund.get("roe")
+        de  = fund.get("de_ratio")
+        if roe is not None or de is not None:
+            parts = []
+            if roe is not None: parts.append(f"ROE {roe:.0%}")
+            if de  is not None: parts.append(f"D/E {de:.1f}")
+            extra.append(f"Fund={_code(' '.join(parts))}")
     if extra:
         lines.append("  " + " | ".join(extra))
     exit_hint = EXIT_PLAN_HINT.get(WINNER_POLICY, WINNER_POLICY)
@@ -314,6 +323,15 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
         extra.append(f"6m={_code(f'{mom_6m:+.1f}%')}")
     if rs_q is not None and math.isfinite(rs_q):
         extra.append(f"RS={_code(f'{rs_q:.2f}')}")
+    fund = entry.get("fundamental") or {}
+    if fund:
+        roe = fund.get("roe")
+        de  = fund.get("de_ratio")
+        if roe is not None or de is not None:
+            parts = []
+            if roe is not None: parts.append(f"ROE {roe:.0%}")
+            if de  is not None: parts.append(f"D/E {de:.1f}")
+            extra.append(f"Fund={_code(' '.join(parts))}")
     if extra:
         lines.append("  " + " | ".join(extra))
     exit_hint = EXIT_PLAN_HINT.get(WINNER_POLICY, WINNER_POLICY)
