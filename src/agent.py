@@ -143,7 +143,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         gift_gap_down = gift_nifty.get("gap_down_strong", False)
         if nifty_trend == "downtrend" and direction == "buy":
             has_breakout    = "actual_52w_breakout"  in active_signals
-            has_6m_momentum = "momentum_6m_strong"   in active_signals
+            has_6m_momentum   = (tech.get("momentum_6m") or 0) > 15.0
             # A stock at 52w high with 6m momentum WHILE Nifty is down/flat = genuine RS.
             # These are exactly the picks we want — don't penalise them at all.
             # Penalise only stocks riding index beta with no independent RS evidence.
@@ -160,7 +160,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             adjusted_score -= headwind_penalty
         elif nifty_trend == "uptrend" and direction == "sell":
             has_breakdown   = "distribution_signal"  in active_signals
-            lacks_6m_momentum = "momentum_6m_strong" not in active_signals
+            lacks_6m_momentum = (tech.get("momentum_6m") or 0) <= 15.0
             # Stock breaking down AND losing 6m momentum = confirmed weakness
             if has_breakdown and lacks_6m_momentum:
                 headwind_penalty = 1

@@ -302,7 +302,7 @@ def score_candidates(
         if score < MIN_SCORE or len(active) < MIN_SIGNALS:
             continue
 
-        today_close = (vol or brk or {}).get("today_close") or (vol or {}).get("today_close")
+        today_close = (vol or brk or {}).get("today_close")
         is_penny = today_close is not None and today_close < PENNY_THRESHOLD
 
         candidates.append({

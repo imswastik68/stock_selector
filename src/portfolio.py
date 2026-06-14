@@ -119,7 +119,7 @@ def process_exits(today_bars: dict[str, pd.DataFrame]) -> list[dict]:
             pnl = (entry - exit_price) * qty
             ret_pct = (entry - exit_price) / entry * 100
 
-        state["cash"]         += qty * exit_price if direction == "buy" else qty * entry
+        state["cash"]         += qty * entry + pnl
         state["realized_pnl"] = round(state["realized_pnl"] + pnl, 2)
 
         closed_rec = {
@@ -234,7 +234,7 @@ def mark_to_market(today_closes: dict[str, float]) -> dict:
 
         holding["last_price"]     = round(float(price), 2)
         holding["unrealized_pnl"] = round(unreal, 2)
-        total_mkt    += float(price) * qty
+        total_mkt    += entry * qty + unreal
         total_unreal += unreal
 
     state["equity"] = round(state["cash"] + total_mkt, 2)

@@ -44,7 +44,6 @@ SIGNAL_LABELS = {
     "rs_vs_nifty":           "outperforming Nifty",
     "rsi_momentum":          "RSI momentum",
     "rsi_bullish_div":       "RSI bullish divergence",
-    "macd_bullish_cross":    "MACD bullish cross",
     "rsi_bearish_div":       "RSI bearish divergence",
     "macd_bearish_cross":    "MACD bearish cross",
     "options_pcr_fear":        "PCR extreme fear",

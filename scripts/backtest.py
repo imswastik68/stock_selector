@@ -40,6 +40,7 @@ except ImportError:
 
 from src.technicals import enrich_with_technicals, compute_entry_levels
 from src.trade_sim import simulate_raw
+from src.scorer import _compute_score
 
 CACHE_DIR   = ROOT / "cache"
 OUTPUTS     = ROOT / "outputs"
@@ -50,9 +51,9 @@ _NIFTY_CSV  = CACHE_DIR / "backtest_nifty.csv"
 # OHLCV-derivable signals (subset of SHORT_TERM_WEIGHTS that we can test)
 TESTABLE_SIGNALS = [
     "rsi_momentum", "rs_vs_nifty", "rsi_bearish_div", "rsi_bullish_div",
-    "macd_bullish_cross", "macd_bearish_cross", "obv_accumulation",
+    "macd_bearish_cross",
     "bb_squeeze_breakout", "bullish_candle", "bearish_candle",
-    "weekly_trend_aligned", "momentum_6m_strong", "rs_quality_strong",
+    "weekly_trend_aligned", "rs_quality_strong",
     # volume-derived (computed from OHLCV):
     "volume_surge", "distribution",
 ]
@@ -219,14 +220,11 @@ def _extract_signals(df_slice: pd.DataFrame, nifty_20d: float | None,
         "rs_vs_nifty":         tech.get("rs_vs_nifty", False),
         "rsi_bearish_div":     tech.get("rsi_bearish_div", False),
         "rsi_bullish_div":     tech.get("rsi_bullish_div", False),
-        "macd_bullish_cross":  tech.get("macd_bullish_cross", False),
         "macd_bearish_cross":  tech.get("macd_bearish_cross", False),
-        "obv_accumulation":    tech.get("obv_accumulation", False),
         "bb_squeeze_breakout": tech.get("bb_squeeze_breakout", False),
         "bullish_candle":      tech.get("bullish_candle", False),
         "bearish_candle":      tech.get("bearish_candle", False),
         "weekly_trend_aligned":tech.get("weekly_trend_aligned", False),
-        "momentum_6m_strong":  tech.get("momentum_6m_strong", False),
         "rs_quality_strong":   tech.get("rs_quality_strong", False),
         "volume_surge":        vol_sigs["volume_surge"],
         "distribution":        vol_sigs["distribution"],
@@ -326,6 +324,7 @@ def run_backtest(weeks: int, sample: int | None) -> None:
                                   direction, as_of, full_df)
             total_evals += 1
 
+            score, _ = _compute_score(signals)
             row = {
                 "as_of":     as_of.date().isoformat(),
                 "ticker":    ticker,
@@ -333,6 +332,7 @@ def run_backtest(weeks: int, sample: int | None) -> None:
                 "phase":     phase,
                 "close":     close,
                 "atr_pct":   round(atr/close*100, 2),
+                "score":     score,
                 "outcome":   result.get("outcome", "no_data"),
                 "return_pct":result.get("return_pct"),
                 "days_held": result.get("days_held"),

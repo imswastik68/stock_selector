@@ -480,7 +480,6 @@ def enrich_with_technicals(
     phase   = classify_wyckoff_phase(df)
     pivots  = compute_pivot_points(df)
     candles = detect_candlestick_patterns(df)
-    obv_acc = compute_obv_signal(df)
     bb_sq   = compute_bb_squeeze(df)
     bullish_candle = any(p in candles for p in ("hammer", "bullish_engulfing", "bullish_marubozu"))
     bearish_candle = any(p in candles for p in ("shooting_star", "bearish_engulfing", "bearish_marubozu"))
@@ -547,12 +546,10 @@ def enrich_with_technicals(
     # over 1-6 months in all documented India momentum studies.
     # Requires ≥127 bars; 200d download gives ~200 bars so coverage is reliable.
     momentum_6m: float | None = None
-    momentum_6m_strong = False
     if len(close_series) >= 127:
         ret_6m = float(close_series.iloc[-1] / close_series.iloc[-126] - 1)
         ret_1m = float(close_series.iloc[-1] / close_series.iloc[-21] - 1)
         momentum_6m = round((ret_6m - ret_1m) * 100, 1)   # percent, skip-adjusted
-        momentum_6m_strong = bool(momentum_6m > 15.0)      # top ~30% of NIFTY500
 
     levels = compute_entry_levels(close, atr, direction) if direction != "watch" else {}
 
