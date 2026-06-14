@@ -241,6 +241,136 @@ def run_collinearity() -> None:
     print(f"{'='*60}\n")
 
 
+# ── regime-dependent calibration ──────────────────────────────────────────────
+
+MIN_BUCKET_TRADES = 1000  # below this, fall back to flat weights for that bucket
+
+
+def _classify_nifty_trend(nifty_df: pd.DataFrame) -> pd.Series:
+    """
+    Classify each date in nifty_df as 'uptrend' | 'downtrend' | 'ranging'
+    based on EMA20 > EMA50 > EMA200 stack.
+    Returns a Series indexed by date with string labels.
+    """
+    close = nifty_df["Close"].squeeze()
+    ema20  = close.ewm(span=20,  adjust=False).mean()
+    ema50  = close.ewm(span=50,  adjust=False).mean()
+    ema200 = close.ewm(span=200, adjust=False).mean()
+
+    labels = pd.Series("ranging", index=close.index)
+    labels[ema20 > ema50] = "ranging"           # start neutral
+    labels[(ema20 > ema50) & (ema50 > ema200)] = "uptrend"
+    labels[(ema20 < ema50) & (ema50 < ema200)] = "downtrend"
+    return labels
+
+
+def run_by_regime() -> dict[str, dict[str, int] | None]:
+    """
+    Calibrate per signal, per Nifty trend regime (uptrend/ranging/downtrend).
+    Returns {regime: weights_dict or None} — None means fewer than MIN_BUCKET_TRADES.
+    Prints a table and writes outputs/regime_weights.json.
+    Prints the REGIME_WEIGHTS block to paste into scorer.py.
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        sys.exit("Run: pip install yfinance")
+
+    print("[by-regime] downloading ^NSEI history (7y) ...")
+    with __import__("warnings").catch_warnings():
+        __import__("warnings").simplefilter("ignore")
+        nifty_df = yf.download("^NSEI", period="7y", auto_adjust=True, progress=False)
+    if nifty_df.empty:
+        sys.exit("[by-regime] Nifty download failed")
+
+    trend_map = _classify_nifty_trend(nifty_df)
+    # Normalise to date (strip time)
+    trend_map.index = pd.to_datetime(trend_map.index).normalize()
+
+    df = _load_trades()
+    df["as_of"]  = pd.to_datetime(df["as_of"]).dt.normalize()
+    df["regime"] = df["as_of"].map(trend_map)
+    df["regime"] = df["regime"].fillna("ranging")
+
+    print(f"\n[by-regime] Regime distribution in {len(df)} trades:")
+    vc = df["regime"].value_counts()
+    for regime, count in vc.items():
+        print(f"  {regime:<12} {count:>6} trades ({count/len(df)*100:.1f}%)")
+
+    REGIMES = ["uptrend", "ranging", "downtrend"]
+    regime_weights: dict[str, dict[str, int] | None] = {}
+
+    print(f"\n{'='*70}")
+    print(f"  REGIME-DEPENDENT CALIBRATION (min {MIN_BUCKET_TRADES} trades/bucket)")
+    print(f"{'='*70}")
+
+    for regime in REGIMES:
+        bucket = df[df["regime"] == regime]
+        n = len(bucket)
+        if n < MIN_BUCKET_TRADES:
+            print(f"\n  [{regime}] {n} trades < {MIN_BUCKET_TRADES} — SKIP (use flat weights)")
+            regime_weights[regime] = None
+            continue
+
+        lifts = _signal_expectancy_lift(bucket)
+        cal_w = _simple_weights(lifts)
+        baseline = float(bucket["return_pct"].mean())
+
+        # 70/30 OOS check within bucket
+        bucket_sorted = bucket.sort_values("as_of")
+        split = int(len(bucket_sorted) * 0.7)
+        train_b = bucket_sorted.iloc[:split]
+        oos_b   = bucket_sorted.iloc[split:]
+
+        if len(oos_b) >= 5:
+            train_lifts = _signal_expectancy_lift(train_b)
+            train_w     = _simple_weights(train_lifts)
+            oos_cal_exp  = _expectancy_from_picks(oos_b, train_w)
+            oos_flat_exp = _expectancy_from_picks(oos_b, CURRENT_WEIGHTS)
+            oos_base     = float(oos_b["return_pct"].mean())
+            beats = oos_cal_exp is not None and oos_flat_exp is not None and oos_cal_exp > oos_flat_exp
+        else:
+            oos_cal_exp = oos_flat_exp = oos_base = None
+            beats = False
+
+        print(f"\n  [{regime}]  n={n}  baseline={baseline:+.3f}%  "
+              f"OOS cal={oos_cal_exp if oos_cal_exp is not None else 'n/a':>8}  "
+              f"OOS flat={oos_flat_exp if oos_flat_exp is not None else 'n/a':>8}  "
+              f"{'BEATS flat' if beats else 'LOSES to flat'}")
+        print(f"  {'Signal':<28}  {'Lift':>6}  {'Hand':>5}  {'Cal':>5}")
+        for sig, lift in sorted(lifts.items(), key=lambda x: -abs(x[1])):
+            print(f"  {sig:<28}  {lift:>+6.3f}  {str(CURRENT_WEIGHTS.get(sig,'—')):>5}  "
+                  f"{str(cal_w.get(sig,'—')):>5}")
+
+        # Only ship if beats flat OOS; otherwise store None to fall back to flat
+        if beats:
+            regime_weights[regime] = cal_w
+            print(f"  → SHIPPING regime weights for {regime}")
+        else:
+            regime_weights[regime] = None
+            print(f"  → USING flat weights for {regime} (no OOS improvement)")
+
+    print(f"\n{'='*70}")
+
+    # Emit Python block to paste into scorer.py
+    print(f"\n  Paste into src/scorer.py:\n")
+    print(f"REGIME_WEIGHTS: dict[str, dict[str, int] | None] = {{")
+    for regime in REGIMES:
+        w = regime_weights[regime]
+        if w is None:
+            print(f'    "{regime}": None,  # flat weights (no OOS improvement)')
+        else:
+            print(f'    "{regime}": {w!r},')
+    print(f"}}")
+
+    # Save JSON
+    out = ROOT / "outputs" / "regime_weights.json"
+    out.write_text(json.dumps({r: v for r, v in regime_weights.items()}, indent=2))
+    print(f"\n  Results → {out.name}")
+
+    return regime_weights
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -248,10 +378,16 @@ def main():
     ap.add_argument("--method", choices=["simple", "logistic"], default="simple")
     ap.add_argument("--collinearity", action="store_true",
                     help="Print signal correlation matrix and exit")
+    ap.add_argument("--by-regime", action="store_true",
+                    help="Calibrate per Nifty trend regime (uptrend/ranging/downtrend)")
     args = ap.parse_args()
 
     if args.collinearity:
         run_collinearity()
+        return
+
+    if args.by_regime:
+        run_by_regime()
         return
 
     df = _load_trades()

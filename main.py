@@ -299,7 +299,8 @@ def main() -> int:
     # 2. Initial score (without options/promoter — those need per-ticker API calls)
     nifty_regime  = market_wide_ctx.get("nifty_regime", "normal")
     breadth_label = market_wide_ctx.get("breadth", {}).get("breadth_label", "neutral")
-    print(f"[main] nifty_regime={nifty_regime}  breadth={breadth_label}")
+    nifty_trend   = market_wide_ctx.get("nifty_structure", {}).get("trend", "ranging")
+    print(f"[main] nifty_regime={nifty_regime}  breadth={breadth_label}  trend={nifty_trend}")
     candidates = score_candidates(
         bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts,
         delivery_signals=delivery_signals,
@@ -308,6 +309,7 @@ def main() -> int:
         announcements=announcements,
         hot_sector_tickers=hot_sector_tickers,
         breadth_label=breadth_label,
+        nifty_trend=nifty_trend,
     )
 
     # 3. Enrich top 20 candidates with options PCR + promoter buying
@@ -340,6 +342,7 @@ def main() -> int:
             hot_sector_tickers=hot_sector_tickers,
             sast_signals=sast_signals,
             breadth_label=breadth_label,
+            nifty_trend=nifty_trend,
         )
     else:
         options_signals = {}
@@ -403,6 +406,7 @@ def main() -> int:
             hot_sector_tickers=hot_sector_tickers,
             sast_signals=sast_signals,
             breadth_label=breadth_label,
+            nifty_trend=nifty_trend,
         )
 
     # 6. LLM synthesis (Wyckoff + SMC + VSA)
