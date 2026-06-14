@@ -10,13 +10,24 @@ Flow:
 The set is passed to scorer.py as hot_sector_tickers.
 Stocks in a hot sector get +1 (sector_in_momentum signal).
 
+Also provides build_sector_map() which downloads all 11 constituent CSVs once,
+inverts to {ticker: sector_name}, caches to data/sector_map.json (30-day TTL).
+Used by risk.py portfolio_summary for sector-concentration cap.
+
 NSE archives: https://archives.nseindia.com/content/indices/<filename>.csv
 CSV format: Company Name,Industry,Symbol,Series,ISIN Code
 """
 
 from __future__ import annotations
 
+import json
+from datetime import date, timedelta
+from pathlib import Path
+
 import requests
+
+_SECTOR_MAP_FILE = Path(__file__).parent.parent.parent / "data" / "sector_map.json"
+_SECTOR_MAP_TTL_DAYS = 30
 
 _ARCHIVES_BASE = "https://archives.nseindia.com/content/indices/"
 
@@ -117,3 +128,39 @@ def fetch_hot_sector_tickers(sector_heatmap: dict[str, float]) -> set[str]:
 
     print(f"[sector] total hot-sector tickers: {len(hot_tickers)}")
     return hot_tickers
+
+
+def build_sector_map() -> dict[str, str]:
+    """
+    Download all 11 NSE sector constituent CSVs, invert to {ticker: sector_name}.
+    Cached in data/sector_map.json with 30-day TTL.
+    Tickers not in any sector index map to "other" (handled by caller).
+    """
+    # Check cache freshness
+    if _SECTOR_MAP_FILE.exists():
+        try:
+            cached = json.loads(_SECTOR_MAP_FILE.read_text())
+            fetched = cached.get("_fetched_date", "")
+            if fetched:
+                age = (date.today() - date.fromisoformat(fetched)).days
+                if age < _SECTOR_MAP_TTL_DAYS:
+                    sector_map = {k: v for k, v in cached.items() if k != "_fetched_date"}
+                    print(f"[sector] sector_map loaded from cache ({len(sector_map)} tickers, {age}d old)")
+                    return sector_map
+        except Exception:
+            pass
+
+    sector_map: dict[str, str] = {}
+    for code, csv_file in _SECTOR_INDEX_TO_CSV.items():
+        sector_name = _SECTOR_INDEX_TO_NAME.get(code, code)
+        tickers = _fetch_constituents(csv_file, sector_name)
+        for t in tickers:
+            sector_map[t] = sector_name  # last-write wins if overlap
+
+    if sector_map:
+        _SECTOR_MAP_FILE.parent.mkdir(parents=True, exist_ok=True)
+        out = {**sector_map, "_fetched_date": date.today().isoformat()}
+        _SECTOR_MAP_FILE.write_text(json.dumps(out, indent=2))
+        print(f"[sector] sector_map built: {len(sector_map)} tickers → {_SECTOR_MAP_FILE.name}")
+
+    return sector_map

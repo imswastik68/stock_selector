@@ -45,7 +45,7 @@ from src.data.breakouts import fetch_breakouts
 from src.data.fii_dii import fetch_fii_dii_data
 from src.data.fo_ban import fetch_fo_ban_delta
 from src.data.gift_nifty import fetch_gift_nifty
-from src.data.sector_rotation import fetch_hot_sector_tickers
+from src.data.sector_rotation import fetch_hot_sector_tickers, build_sector_map
 from src.data.market_context import enrich_candidate_context, fetch_market_wide_context
 from src.data.options import fetch_options_signals
 from src.data.promoter import fetch_promoter_signals
@@ -428,12 +428,18 @@ def main() -> int:
         if t in fundamental_signals:
             entry["fundamental"] = fundamental_signals[t]
 
-    # 6c. Advisory position sizing + portfolio risk
+    # 6c. Advisory position sizing + sector tag + portfolio risk
     def _parse_sl(s) -> float | None:
         try:
             return float(str(s).replace("₹", "").replace(",", "").strip())
         except (ValueError, TypeError):
             return None
+
+    # Build sector map once for portfolio concentration cap
+    try:
+        sector_map = build_sector_map()
+    except Exception:
+        sector_map = {}
 
     actionable = watchlist_data.get("buy_watchlist", []) + watchlist_data.get("sell_watchlist", [])
     for entry in actionable:
@@ -441,6 +447,9 @@ def main() -> int:
         sl    = _parse_sl(entry.get("stop_loss"))
         if price and sl:
             entry["position"] = size_position(float(price), float(sl))
+        # Attach sector for concentration cap (unmapped → "other")
+        t = entry.get("ticker", "")
+        entry["sector"] = sector_map.get(t, "other")
     if actionable:
         watchlist_data["portfolio_risk"] = portfolio_summary(actionable)
 

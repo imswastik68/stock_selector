@@ -564,7 +564,14 @@ def _build_message(watchlist_data: dict) -> str:
 
         pf = watchlist_data.get("portfolio_risk")
         if pf and pf.get("n_allocated", 0) > 0:
-            dropped_str = f" · {pf['n_dropped']} watch-only (budget full)" if pf["n_dropped"] else ""
+            extra_parts = []
+            if pf.get("n_sector_capped", 0):
+                extra_parts.append(f"{pf['n_sector_capped']} sector-capped")
+            if pf.get("n_dropped", 0):
+                budget_only = pf["n_dropped"] - pf.get("n_sector_capped", 0)
+                if budget_only > 0:
+                    extra_parts.append(f"{budget_only} watch-only (budget)")
+            dropped_str = (" · " + " · ".join(extra_parts)) if extra_parts else ""
             sections.append(
                 f"\n💼 <i>Portfolio risk: ₹{pf['total_risk']:,.0f} at risk "
                 f"({pf['total_risk_pct']:.1f}% of ₹{pf['capital']:,.0f}) · "
