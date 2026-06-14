@@ -122,14 +122,11 @@ def _build_signal_map(
         signals["rs_vs_nifty"]         = technical_data.get("rs_vs_nifty", False)
         signals["rsi_bearish_div"]     = technical_data.get("rsi_bearish_div", False)
         signals["rsi_bullish_div"]     = technical_data.get("rsi_bullish_div", False)
-        signals["macd_bullish_cross"]  = technical_data.get("macd_bullish_cross", False)
         signals["macd_bearish_cross"]  = technical_data.get("macd_bearish_cross", False)
-        signals["obv_accumulation"]    = technical_data.get("obv_accumulation", False)
         signals["bb_squeeze_breakout"] = technical_data.get("bb_squeeze_breakout", False)
         signals["bullish_candle"]       = technical_data.get("bullish_candle", False)
         signals["bearish_candle"]       = technical_data.get("bearish_candle", False)
         signals["weekly_trend_aligned"] = technical_data.get("weekly_trend_aligned", False)
-        signals["momentum_6m_strong"]   = technical_data.get("momentum_6m_strong", False)
         signals["rs_quality_strong"]    = technical_data.get("rs_quality_strong", False)
 
     # Delivery volume signal from NSE bhav copy

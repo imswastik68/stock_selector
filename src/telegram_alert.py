@@ -60,8 +60,6 @@ SIGNAL_LABELS = {
     "thin_market_extreme":     "very thin market (<₹1cr)",
     "thin_market_light":       "thin market (₹1–5cr)",
     "f_group":                 "on F&O ban list",
-    # technical signals added in alpha upgrade
-    "obv_accumulation":        "OBV accumulation",
     "bb_squeeze_breakout":     "BB squeeze breakout",
     "bullish_candle":          "bullish candle",
     "bearish_candle":          "bearish candle",
@@ -73,8 +71,6 @@ SIGNAL_LABELS = {
     "dividend_announced":      "dividend declared",
     # sector rotation
     "sector_in_momentum":      "hot sector",
-    # momentum factor signals
-    "momentum_6m_strong":      "6m momentum",
     "rs_quality_strong":       "quality RS",
     # insider / SAST
     "sast_insider_buying":     "SAST insider buying",

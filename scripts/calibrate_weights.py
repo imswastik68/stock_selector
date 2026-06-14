@@ -59,10 +59,8 @@ CURRENT_WEIGHTS: dict[str, int] = {
 
 SIGNAL_COLS = [f"sig_{s}" for s in [
     "rsi_momentum","rs_vs_nifty","rsi_bearish_div","rsi_bullish_div",
-    "macd_bullish_cross","macd_bearish_cross","obv_accumulation",
-    "bb_squeeze_breakout","bullish_candle","bearish_candle",
-    "weekly_trend_aligned","momentum_6m_strong","rs_quality_strong",
-    "volume_surge","distribution",
+    "macd_bearish_cross","bb_squeeze_breakout","bullish_candle","bearish_candle",
+    "weekly_trend_aligned","rs_quality_strong","volume_surge","distribution",
 ]]
 
 
@@ -208,12 +206,53 @@ def walk_forward(df: pd.DataFrame, method: str) -> list[dict]:
     return results
 
 
+# ── collinearity report ───────────────────────────────────────────────────────
+
+def run_collinearity() -> None:
+    """
+    Correlation matrix of signal flags across the backtest trades.
+    Flags pairs with |r| > 0.7 (high collinearity → double-counting risk).
+    """
+    df = _load_trades()
+    cols = [c for c in SIGNAL_COLS if c in df.columns]
+    if not cols:
+        print("[collinearity] no signal columns found in CSV — run backtest.py first")
+        return
+
+    sig_df = df[cols].astype(float)
+    corr   = sig_df.corr()
+    threshold = 0.7
+
+    print(f"\n{'='*60}")
+    print(f"  SIGNAL COLLINEARITY REPORT (|r| > {threshold})")
+    print(f"  {len(cols)} signals, {len(df)} trades")
+    print(f"{'='*60}")
+    pairs_found = 0
+    for i, a in enumerate(cols):
+        for b in cols[i + 1:]:
+            r = float(corr.loc[a, b]) if (a in corr.index and b in corr.columns) else 0.0
+            if abs(r) > threshold:
+                sa = a.replace("sig_", "")
+                sb = b.replace("sig_", "")
+                print(f"  {sa:<28} ↔ {sb:<28}  r={r:+.3f}  ← HIGH")
+                pairs_found += 1
+    if pairs_found == 0:
+        print(f"  ✓ No pairs above {threshold} — no double-counting risk detected")
+    print(f"{'='*60}\n")
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--method", choices=["simple", "logistic"], default="simple")
+    ap.add_argument("--collinearity", action="store_true",
+                    help="Print signal correlation matrix and exit")
     args = ap.parse_args()
+
+    if args.collinearity:
+        run_collinearity()
+        return
 
     df = _load_trades()
 
