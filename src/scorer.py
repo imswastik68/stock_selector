@@ -208,12 +208,13 @@ def score_candidates(
     announcements: list[dict] | None = None,
     hot_sector_tickers: set[str] | None = None,
     sast_signals: dict[str, bool] | None = None,
+    breadth_label: str = "neutral",
 ) -> list[dict]:
     """
     Score every unique ticker across all data sources and return qualifying candidates.
 
-    market_regime: "low_vol" | "normal" | "high_vol" — in high_vol, all scores drop by 1
-    to account for increased false-signal rate.
+    market_regime: "low_vol" | "normal" | "high_vol" — high_vol applies -1 to all scores.
+    breadth_label: "strong" | "neutral" | "weak" — weak applies -1 (stacks with high_vol).
     """
     # Collect all unique tickers across all data sources
     all_tickers: set[str] = set()
@@ -260,6 +261,9 @@ def score_candidates(
 
         # High-volatility regime: all signals are noisier — reduce score by 1
         if market_regime == "high_vol":
+            score = max(0, score - 1)
+        # Weak breadth: market internals deteriorating — reduce score by 1 (stacks with high_vol)
+        if breadth_label == "weak":
             score = max(0, score - 1)
 
         active = _active_signals(signals)

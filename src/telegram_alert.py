@@ -503,9 +503,17 @@ def _build_message(watchlist_data: dict) -> str:
         if gap_pct is not None:
             g_arrow = "↑" if gap_pct > 0 else "↓"
             gift_str = f" | Gift {g_arrow}{abs(gap_pct):.1f}%"
+        breadth      = watchlist_data.get("breadth", {})
+        breadth_lbl  = breadth.get("breadth_label", "")
+        breadth_icon = {"strong": "🟢", "neutral": "🟡", "weak": "🔴"}.get(breadth_lbl, "")
+        breadth_str  = f" | Breadth: {breadth_icon}{_e(breadth_lbl)}" if breadth_lbl else ""
+        pct50        = breadth.get("pct_above_50dma")
+        if pct50 is not None and breadth_lbl:
+            breadth_str += f" ({pct50}% >50DMA)"
         header = (
             f"<b>NSE/BSE Stock Scanner — {_e(scan_date)}{time_str}</b>\n"
-            f"<i>Nifty 50: {_e(nifty_ctx)}{nifty_arrow} | {total} stocks screened{_e(fii_str)}{_e(gift_str)}</i>\n"
+            f"<i>Nifty 50: {_e(nifty_ctx)}{nifty_arrow} | {total} stocks screened"
+            f"{_e(fii_str)}{_e(gift_str)}{breadth_str}</i>\n"
             f"{'─' * 32}"
         )
         sections = [header]

@@ -22,6 +22,20 @@ SECTOR_INDICES = [
 _NIFTY = "^NSEI"
 _EMA_PERIODS = (20, 50, 200)
 
+# Nifty 50 constituent tickers for breadth calculation
+_NIFTY50_TICKERS = [
+    "RELIANCE.NS","TCS.NS","HDFCBANK.NS","BHARTIARTL.NS","ICICIBANK.NS",
+    "INFOSYS.NS","SBIN.NS","HINDUNILVR.NS","ITC.NS","LT.NS",
+    "HCLTECH.NS","BAJFINANCE.NS","KOTAKBANK.NS","MARUTI.NS","AXISBANK.NS",
+    "TITAN.NS","ASIANPAINT.NS","NTPC.NS","ULTRACEMCO.NS","WIPRO.NS",
+    "ONGC.NS","M&M.NS","POWERGRID.NS","BAJAJFINSV.NS","SUNPHARMA.NS",
+    "TATAMOTORS.NS","ADANIENT.NS","JSWSTEEL.NS","TATACONSUM.NS","COALINDIA.NS",
+    "NESTLEIND.NS","GRASIM.NS","TECHM.NS","ADANIPORTS.NS","BPCL.NS",
+    "CIPLA.NS","DRREDDY.NS","DIVISLAB.NS","HEROMOTOCO.NS","APOLLOHOSP.NS",
+    "TATASTEEL.NS","HINDALCO.NS","BAJAJ-AUTO.NS","EICHERMOT.NS","INDUSINDBK.NS",
+    "HDFCLIFE.NS","SBILIFE.NS","BRITANNIA.NS","SHRIRAMFIN.NS","TRENT.NS",
+]
+
 
 def _ema(series: pd.Series, span: int) -> float:
     return series.ewm(span=span, adjust=False).mean().iloc[-1]
@@ -78,10 +92,83 @@ def _compute_nifty_regime(nifty_df: pd.DataFrame) -> str:
     return "normal"
 
 
+def _compute_breadth(sector_heatmap: dict[str, float]) -> dict:
+    """
+    Market breadth from sector advance/decline and % Nifty-50 stocks above 50/200 DMA.
+
+    Sector A/D: count sectors with positive 5d return vs negative.
+    DMA breadth: % of Nifty-50 constituents above their 50-DMA and 200-DMA.
+
+    Returns:
+      sector_advancing, sector_declining,
+      pct_above_50dma, pct_above_200dma,
+      breadth_label: "strong" | "neutral" | "weak"
+    """
+    # Sector advance/decline from heatmap already computed
+    adv = sum(1 for v in sector_heatmap.values() if v > 0)
+    dec = sum(1 for v in sector_heatmap.values() if v < 0)
+
+    pct_50  = None
+    pct_200 = None
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            raw = yf.download(
+                _NIFTY50_TICKERS, period="252d", auto_adjust=True,
+                progress=False, group_by="ticker",
+            )
+        if not raw.empty:
+            above_50 = above_200 = total = 0
+            tickers = _NIFTY50_TICKERS
+            for t in tickers:
+                try:
+                    if isinstance(raw.columns, pd.MultiIndex):
+                        if t not in raw.columns.get_level_values(0):
+                            continue
+                        close = raw[t]["Close"].dropna()
+                    else:
+                        close = raw["Close"].dropna() if len(tickers) == 1 else None
+                    if close is None or len(close) < 50:
+                        continue
+                    price  = float(close.iloc[-1])
+                    sma50  = float(close.iloc[-50:].mean())
+                    sma200 = float(close.iloc[-200:].mean()) if len(close) >= 200 else float(close.mean())
+                    total  += 1
+                    if price > sma50:  above_50 += 1
+                    if price > sma200: above_200 += 1
+                except Exception:
+                    continue
+            if total > 0:
+                pct_50  = round(above_50  / total * 100, 1)
+                pct_200 = round(above_200 / total * 100, 1)
+    except Exception as exc:
+        print(f"[market_context] breadth DMA fetch error: {exc}")
+
+    # Label: strong when majority of sectors advancing AND stocks above key DMAs
+    sector_ratio = adv / max(adv + dec, 1)
+    dma_strong   = pct_50 is not None and pct_50 > 60
+    dma_weak     = pct_50 is not None and pct_50 < 40
+
+    if sector_ratio >= 0.6 and (dma_strong or pct_50 is None):
+        label = "strong"
+    elif sector_ratio <= 0.4 or dma_weak:
+        label = "weak"
+    else:
+        label = "neutral"
+
+    return {
+        "sector_advancing":  adv,
+        "sector_declining":  dec,
+        "pct_above_50dma":   pct_50,
+        "pct_above_200dma":  pct_200,
+        "breadth_label":     label,
+    }
+
+
 def fetch_market_wide_context() -> dict:
     """
-    Phase 1: fetch Nifty structure + sector heatmap + store Nifty returns for beta.
-    Returns dict with keys: nifty_structure, sector_heatmap, nifty_returns.
+    Phase 1: fetch Nifty structure + sector heatmap + breadth + store Nifty returns for beta.
+    Returns dict with keys: nifty_structure, sector_heatmap, nifty_returns, nifty_regime, breadth.
     Safe to call with no arguments; returns empty defaults on failure.
     """
     result = {
@@ -89,6 +176,8 @@ def fetch_market_wide_context() -> dict:
         "sector_heatmap": {},
         "nifty_returns": pd.Series(dtype=float),
         "nifty_regime": "normal",
+        "breadth": {"sector_advancing": 0, "sector_declining": 0,
+                    "pct_above_50dma": None, "pct_above_200dma": None, "breadth_label": "neutral"},
     }
 
     # Nifty 50 — 200d history for EMA + beta baseline
@@ -125,6 +214,18 @@ def fetch_market_wide_context() -> dict:
             result["sector_heatmap"] = heatmap
     except Exception as exc:
         print(f"[market_context] Sector heatmap error: {exc}")
+
+    # Market breadth (sector A/D + % above 50/200 DMA)
+    try:
+        result["breadth"] = _compute_breadth(result["sector_heatmap"])
+        bl = result["breadth"]["breadth_label"]
+        p50 = result["breadth"]["pct_above_50dma"]
+        print(f"[market_context] breadth={bl} "
+              f"(sectors {result['breadth']['sector_advancing']}↑ "
+              f"{result['breadth']['sector_declining']}↓"
+              + (f", {p50}% above 50DMA" if p50 is not None else "") + ")")
+    except Exception as exc:
+        print(f"[market_context] breadth error (non-fatal): {exc}")
 
     return result
 

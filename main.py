@@ -297,8 +297,9 @@ def main() -> int:
     total_scanned = len(all_tickers)
 
     # 2. Initial score (without options/promoter — those need per-ticker API calls)
-    nifty_regime = market_wide_ctx.get("nifty_regime", "normal")
-    print(f"[main] nifty_regime={nifty_regime}")
+    nifty_regime  = market_wide_ctx.get("nifty_regime", "normal")
+    breadth_label = market_wide_ctx.get("breadth", {}).get("breadth_label", "neutral")
+    print(f"[main] nifty_regime={nifty_regime}  breadth={breadth_label}")
     candidates = score_candidates(
         bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts,
         delivery_signals=delivery_signals,
@@ -306,6 +307,7 @@ def main() -> int:
         market_regime=nifty_regime,
         announcements=announcements,
         hot_sector_tickers=hot_sector_tickers,
+        breadth_label=breadth_label,
     )
 
     # 3. Enrich top 20 candidates with options PCR + promoter buying
@@ -337,6 +339,7 @@ def main() -> int:
             announcements=announcements,
             hot_sector_tickers=hot_sector_tickers,
             sast_signals=sast_signals,
+            breadth_label=breadth_label,
         )
     else:
         options_signals = {}
@@ -399,13 +402,17 @@ def main() -> int:
             announcements=announcements,
             hot_sector_tickers=hot_sector_tickers,
             sast_signals=sast_signals,
+            breadth_label=breadth_label,
         )
 
     # 6. LLM synthesis (Wyckoff + SMC + VSA)
     print(f"[main] synthesising watchlist for {min(len(candidates), 20)} candidates...")
     watchlist_data = synthesize_watchlist(candidates, total_scanned, market_context=market_context)
 
-    # 6b. Advisory position sizing + portfolio risk
+    # 6b. Stash breadth for alert rendering
+    watchlist_data["breadth"] = market_wide_ctx.get("breadth", {})
+
+    # 6c. Advisory position sizing + portfolio risk
     def _parse_sl(s) -> float | None:
         try:
             return float(str(s).replace("₹", "").replace(",", "").strip())
