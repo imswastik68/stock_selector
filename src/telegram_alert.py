@@ -580,6 +580,22 @@ def _build_message(watchlist_data: dict) -> str:
                 f"₹{pf['budget_left']:,.0f} budget left</i>"
             )
 
+        pf_live = watchlist_data.get("portfolio_live")
+        if pf_live and pf_live.get("n_holdings", 0) >= 0:
+            real_pnl = pf_live.get("realized_pnl", 0.0)
+            unreal   = pf_live.get("unrealized_pnl", 0.0)
+            pnl_sign = "+" if real_pnl >= 0 else ""
+            holdings_str = (f" · {pf_live['n_holdings']} open: "
+                            + ", ".join(pf_live.get("holdings", [])[:5])
+                            ) if pf_live.get("n_holdings") else ""
+            sections.append(
+                f"\n📊 <i>Book: equity ₹{pf_live['equity']:,.0f} · "
+                f"cash ₹{pf_live['cash']:,.0f} · "
+                f"realized {pnl_sign}₹{real_pnl:,.0f} · "
+                f"unrealized {'+' if unreal>=0 else ''}₹{unreal:,.0f}"
+                f"{holdings_str}</i>"
+            )
+
         sections.append("\n\n⚠️ <i>Not investment advice. Do your own due diligence.</i>")
         return "\n\n".join(sections)
 

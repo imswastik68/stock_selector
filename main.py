@@ -59,6 +59,7 @@ from src.performance import performance_summary, record_picks
 from src.risk import size_position, portfolio_summary
 from src.telegram_alert import send_telegram_alert
 from src.trade_sim import WINNER_POLICY
+from src.portfolio import mark_to_market, open_positions, process_exits, summary as portfolio_summary_live
 
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
@@ -453,6 +454,31 @@ def main() -> int:
         entry["sector"] = sector_map.get(t, "other")
     if actionable:
         watchlist_data["portfolio_risk"] = portfolio_summary(actionable)
+
+    # 6d. Live portfolio: exits → open → mark-to-market (order matters: free capital first)
+    try:
+        # Exits: check existing holdings against today's OHLCV (already in market_context)
+        today_bars = market_context.get("ohlcv_90d", {})
+        process_exits(today_bars)
+
+        # Open: deploy cash into newly allocated picks
+        open_positions(actionable)
+
+        # Mark: compute equity from latest closes
+        today_closes = {
+            t: float(df["Close"].iloc[-1])
+            for t, df in today_bars.items()
+            if not df.empty
+        }
+        pf_live = mark_to_market(today_closes)
+        watchlist_data["portfolio_live"] = pf_live
+        print(f"[main] portfolio: equity=₹{pf_live['equity']:,.0f}  "
+              f"cash=₹{pf_live['cash']:,.0f}  "
+              f"realized=₹{pf_live['realized_pnl']:+,.0f}  "
+              f"holdings={pf_live['n_holdings']}")
+    except Exception as exc:
+        print(f"[main] portfolio tracker error (non-fatal): {exc}")
+        watchlist_data["portfolio_live"] = portfolio_summary_live()
 
     # 7. Save
     save_output(watchlist_data)
