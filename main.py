@@ -57,6 +57,7 @@ from src.agent import synthesize_watchlist
 from src.performance import performance_summary, record_picks
 from src.risk import size_position, portfolio_summary
 from src.telegram_alert import send_telegram_alert
+from src.trade_sim import WINNER_POLICY
 
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
@@ -164,45 +165,78 @@ def run_mid_day_scan() -> int:
         print("[main] no candidates from prior run — nothing to check")
         return 0
 
-    # Build stop_loss map from prior watchlist for SL hit detection
+    # Build level maps from prior watchlist for SL/T2/time-stop detection
     def _parse_price_str(s) -> float | None:
         try:
             return float(str(s).replace("₹", "").replace(",", "").strip())
         except (ValueError, TypeError):
             return None
 
+    prior_date = prior.get("scan_date", "")
+    today_str  = date.today().isoformat()
+    try:
+        days_since_pick = (date.fromisoformat(today_str) - date.fromisoformat(prior_date)).days if prior_date else 0
+    except Exception:
+        days_since_pick = 0
+
     sl_map: dict[str, dict] = {}
-    for entry in prior.get("buy_watchlist", []):
-        t = entry.get("ticker", "")
-        sl = _parse_price_str(entry.get("stop_loss"))
-        if t and sl is not None:
-            sl_map[t] = {"stop_loss": sl, "direction": "buy"}
-    for entry in prior.get("sell_watchlist", []):
-        t = entry.get("ticker", "")
-        sl = _parse_price_str(entry.get("stop_loss"))
-        if t and sl is not None:
-            sl_map[t] = {"stop_loss": sl, "direction": "sell"}
+    for direction, key in [("buy", "buy_watchlist"), ("sell", "sell_watchlist")]:
+        for entry in prior.get(key, []):
+            t  = entry.get("ticker", "")
+            sl = _parse_price_str(entry.get("stop_loss"))
+            t2 = _parse_price_str(entry.get("target_2"))
+            if t and sl is not None:
+                sl_map[t] = {"stop_loss": sl, "target_2": t2, "direction": direction}
 
     intraday = fetch_intraday_signals(tickers)
     confirmed = {t: v for t, v in intraday.items() if v["intraday_surge"]}
 
     # Detect stop-loss hits
     sl_hits: dict[str, dict] = {}
+    # Detect T2-reached (consider booking — for all policies that use T2)
+    t2_hits: dict[str, dict] = {}
+    # Detect time-stop-due (when WINNER_POLICY includes a time stop)
+    time_stop_due: dict[str, dict] = {}
+
     for ticker, v in intraday.items():
         if ticker not in sl_map:
             continue
-        sl_info = sl_map[ticker]
-        price = v.get("price_current")
-        stop = sl_info["stop_loss"]
+        sl_info   = sl_map[ticker]
+        price     = v.get("price_current")
+        stop      = sl_info["stop_loss"]
+        t2_level  = sl_info["target_2"]
         direction = sl_info["direction"]
-        hit = (direction == "buy" and price is not None and price <= stop) or \
-              (direction == "sell" and price is not None and price >= stop)
-        if hit:
+
+        if price is None:
+            continue
+
+        # SL hit
+        sl_hit = (direction == "buy" and price <= stop) or \
+                 (direction == "sell" and price >= stop)
+        if sl_hit:
             sl_hits[ticker] = {
                 "price_current": price,
-                "stop_loss": stop,
-                "direction": direction,
-                "pct_vs_stop": round((price / stop - 1) * 100, 1) if stop else 0,
+                "stop_loss":     stop,
+                "direction":     direction,
+                "pct_vs_stop":   round((price / stop - 1) * 100, 1) if stop else 0,
+            }
+
+        # T2 reached — flag regardless of policy (useful advisory for any policy)
+        if t2_level:
+            t2_reached = (direction == "buy" and price >= t2_level) or \
+                         (direction == "sell" and price <= t2_level)
+            if t2_reached:
+                t2_hits[ticker] = {
+                    "price_current": price,
+                    "target_2":      t2_level,
+                    "direction":     direction,
+                }
+
+        # Time-stop: flag if WINNER_POLICY is time_10d and ≥10 days since pick
+        if WINNER_POLICY == "time_10d" and days_since_pick >= 10:
+            time_stop_due[ticker] = {
+                "price_current": price,
+                "days_held":     days_since_pick,
             }
 
     print(f"\n[main] === MID-DAY CONFIRMED ({len(confirmed)} / {len(intraday)} checked) ===")
@@ -216,14 +250,24 @@ def run_mid_day_scan() -> int:
         print(f"\n[main] === STOP-LOSS HITS ({len(sl_hits)}) ===")
         for ticker, v in sl_hits.items():
             print(f"  {ticker:<22} price={v['price_current']} SL={v['stop_loss']}")
+    if t2_hits:
+        print(f"\n[main] === T2 REACHED — consider booking ({len(t2_hits)}) ===")
+        for ticker, v in t2_hits.items():
+            print(f"  {ticker:<22} price={v['price_current']} T2={v['target_2']}")
+    if time_stop_due:
+        print(f"\n[main] === TIME-STOP DUE ({len(time_stop_due)} held ≥10d) ===")
+        for ticker, v in time_stop_due.items():
+            print(f"  {ticker:<22} price={v['price_current']} held={v['days_held']}d")
 
     send_telegram_alert(
         {
-            "scan_date":          date.today().isoformat(),
+            "scan_date":          today_str,
             "scan_time":          scan_time,
             "intraday_confirmed": confirmed,
             "intraday_checked":   intraday,
             "sl_hits":            sl_hits,
+            "t2_hits":            t2_hits,
+            "time_stop_due":      time_stop_due,
         },
         mode="mid_day",
     )

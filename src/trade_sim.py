@@ -20,6 +20,16 @@ import pandas as pd
 # Run scripts/backtest_exits.py then update this constant.
 WINNER_POLICY: str = "static"
 
+# Human-readable exit plan shown in Telegram alerts. Update alongside WINNER_POLICY.
+EXIT_PLAN_HINT: dict[str, str] = {
+    "static":           "first touch: exit at SL or T1",
+    "time_10d":         "first touch + force-exit day 10 if still open",
+    "breakeven_1r":     "SL → breakeven after +1R; target T1",
+    "partial_t1_be":    "book 50% @ T1 · SL → breakeven · ride to T2",
+    "trail_atr3":       "chandelier trail 3×ATR, no fixed target",
+    "partial_t1_trail": "book 50% @ T1 · trail rest 3×ATR",
+}
+
 
 def simulate_raw(
     entry_lo: float,
@@ -225,6 +235,7 @@ def simulate_raw(
     return {
         "triggered":     True,
         "outcome":       outcome,
+        "exit_date":     exit_idx.date().isoformat() if hasattr(exit_idx, "date") else str(exit_idx),
         "entry_price":   round(entry_price, 2),
         "exit_price":    round(exit_price, 2),
         "current_price": round(today_close, 2),

@@ -9,6 +9,8 @@ import os
 
 import telegram
 
+from src.trade_sim import EXIT_PLAN_HINT, WINNER_POLICY
+
 RISK_EMOJI = {"LOW": "🟢", "MEDIUM": "🟡", "HIGH": "🟠"}
 TIMEFRAME_LABEL = {
     "1-2d": "Short-term (1–2d)", "5-7d": "Swing (5–7d)",
@@ -234,10 +236,12 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
         extra.append(f"RS={_code(f'{rs_q:.2f}')}")
     if extra:
         lines.append("  " + " | ".join(extra))
+    exit_hint = EXIT_PLAN_HINT.get(WINNER_POLICY, WINNER_POLICY)
     lines += [
         "",
         f"  Entry: {_code(entry_zone)} | SL: {_code(stop)}",
         f"  T1: {_code(t1)} | T2: {_code(t2)} | R:R {_code(rr)}",
+        f"  Exit: {_i(_e(exit_hint))}",
         f"  {_i(_e(tf_label))}",
         f"  Signals: {_i(_fmt_signals(signals))}",
     ]
@@ -316,10 +320,12 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
         extra.append(f"RS={_code(f'{rs_q:.2f}')}")
     if extra:
         lines.append("  " + " | ".join(extra))
+    exit_hint = EXIT_PLAN_HINT.get(WINNER_POLICY, WINNER_POLICY)
     lines += [
         "",
         f"  Short entry: {_code(entry_zone)} | SL: {_code(stop)}",
         f"  Cover T1: {_code(t1)} | T2: {_code(t2)} | R:R {_code(rr)}",
+        f"  Exit: {_i(_e(exit_hint))}",
         f"  {_i(_e(tf_label))}",
         f"  Signals: {_i(_fmt_signals(signals))}",
     ]
@@ -386,12 +392,15 @@ def _format_entry_legacy(entry: dict, rank: int) -> str:
 # ── mid-day message builder ───────────────────────────────────────────────────
 
 def _build_midday_message(data: dict) -> str:
-    scan_date  = data.get("scan_date", "?")
-    scan_time  = data.get("scan_time", "12:30 PM IST")
-    confirmed  = data.get("intraday_confirmed", {})
-    all_checks = data.get("intraday_checked", {})
-    sl_hits    = data.get("sl_hits", {})
-    holding    = {t: v for t, v in all_checks.items() if not v.get("intraday_surge") and t not in sl_hits}
+    scan_date      = data.get("scan_date", "?")
+    scan_time      = data.get("scan_time", "12:30 PM IST")
+    confirmed      = data.get("intraday_confirmed", {})
+    all_checks     = data.get("intraday_checked", {})
+    sl_hits        = data.get("sl_hits", {})
+    t2_hits        = data.get("t2_hits", {})
+    time_stop_due  = data.get("time_stop_due", {})
+    holding        = {t: v for t, v in all_checks.items()
+                      if not v.get("intraday_surge") and t not in sl_hits}
 
     header = (
         f"<b>Mid-day Momentum Check — {_e(scan_date)}</b>\n"
@@ -412,6 +421,26 @@ def _build_midday_message(data: dict) -> str:
                 f"{_b(ticker)}\n"
                 f"  Action: {_code(action)}\n"
                 f"  Price: {_code(f'₹{price}')} | SL: {_code(f'₹{stop}')} ({pct:+.1f}% vs SL)"
+            )
+
+    if t2_hits:
+        lines.append(f"\n🎯 <b>T2 REACHED — consider booking ({len(t2_hits)} stocks)</b>\n")
+        for ticker, v in t2_hits.items():
+            price = v.get("price_current", "?")
+            t2    = v.get("target_2", "?")
+            lines.append(
+                f"{_b(ticker)}\n"
+                f"  Price: {_code(f'₹{price}')} hit T2: {_code(f'₹{t2}')}"
+            )
+
+    if time_stop_due:
+        lines.append(f"\n⏰ <b>TIME-STOP DUE — consider exiting ({len(time_stop_due)} stocks)</b>\n")
+        for ticker, v in time_stop_due.items():
+            price = v.get("price_current", "?")
+            days  = v.get("days_held", "?")
+            lines.append(
+                f"{_b(ticker)}\n"
+                f"  Price: {_code(f'₹{price}')} | Held {_code(str(days))} days"
             )
 
     if confirmed:
