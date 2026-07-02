@@ -195,9 +195,10 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
     pivot_str  = _fmt_pivots(entry)
     candle_str = _fmt_candles(candles)
     price_str  = f"  {_code(_fmt_price(price))}" if price is not None else ""
+    fire       = "🔥 " if entry.get("big_mover") else ""
 
     lines = [
-        f"{_b(f'{rank}. {ticker}')} {risk_icon}{price_str}",
+        f"{fire}{_b(f'{rank}. {ticker}')} {risk_icon}{price_str}",
         f"  {phase_icon} {_b(_fmt_phase(phase))}",
         f"  Score: {_code(score)} | Confidence: {_e(confidence)} | RSI: {_code(rsi)}",
         f"  MACD: {_code(macd_label)}" + (f"  |  {tags_str}" if tags_str else ""),
@@ -290,9 +291,10 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
     pivot_str  = _fmt_pivots(entry)
     candle_str = _fmt_candles(candles)
     price_str  = f"  {_code(_fmt_price(price))}" if price is not None else ""
+    fire       = "🔥 " if entry.get("big_mover") else ""
 
     lines = [
-        f"{_b(f'{rank}. {ticker}')} {risk_icon}{price_str}",
+        f"{fire}{_b(f'{rank}. {ticker}')} {risk_icon}{price_str}",
         f"  {phase_icon} {_b(_fmt_phase(phase))}",
         f"  Score: {_code(score)} | Confidence: {_e(confidence)} | RSI: {_code(rsi)}",
         f"  MACD: {_code(macd_label)}" + (f"  |  {tags_str}" if tags_str else ""),
@@ -553,6 +555,13 @@ def _build_message(watchlist_data: dict) -> str:
         if phase_b_list:
             sections.append(f"\n👀 <b>WATCH LIST ({len(phase_b_list)} stocks)</b>\n")
             sections.extend(_format_phase_b_entry(e, i + 1) for i, e in enumerate(phase_b_list))
+
+        big_movers = [e.get("ticker", "?") for e in (buy_list + sell_list) if e.get("big_mover")]
+        if big_movers:
+            sections.append(
+                f"\n🔥 <i>BIG MOVER (high ATR, informational only — not a validated "
+                f"higher-probability signal): {_e(', '.join(big_movers))}</i>"
+            )
 
         if warnings:
             sections.append("\n⚠ <b>Data warnings:</b>\n" + "\n".join(f"  • {_e(w)}" for w in warnings))

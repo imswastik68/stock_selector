@@ -55,6 +55,19 @@ BEARISH_ONLY_WEIGHTS = dict(BEARISH_EVENT_WEIGHTS)  # src/scorer.py — short-pi
 SELL_ENTRY_THRESHOLD_DOWNTREND = 6
 SELL_ENTRY_THRESHOLD_ELSE = 4
 
+# BIG MOVER tier — Phase 0 mining (outputs/big_mover_analysis.json chosen_gate) found
+# no atr/score/signal combination that clears the 1.5x-holdout-lift ship bar (best
+# candidate: atr>=5 + score>=4 -> 35.0% holdout P(big move) vs the 37.5% required).
+# Ships as an ATR-only INFORMATIONAL flag with no target/exit override, per the
+# plan's documented no-gate-found fallback: "more volatile," not a validated
+# "more likely to hit +-10%." Re-evaluate once Phase 5's 156-week mining runs.
+BIG_MOVER_GATE = {"min_atr_pct": 5.0, "status": "no_gate_found"}
+BIG_MOVER_MAX_PER_DAY = 3
+
+
+def _is_big_mover(atr_pct: float | None) -> bool:
+    return atr_pct is not None and math.isfinite(atr_pct) and atr_pct >= BIG_MOVER_GATE["min_atr_pct"]
+
 
 # ── risk rating ───────────────────────────────────────────────────────────────
 
@@ -288,8 +301,24 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
 
     # Sort by score descending, cap combined at 10
     combined = sorted(buy_list + sell_list, key=lambda e: e["score"], reverse=True)[:10]
+
+    # BIG MOVER flag: ATR-only informational tag, up to BIG_MOVER_MAX_PER_DAY/day,
+    # in score order. See BIG_MOVER_GATE comment — no target/exit override.
+    for e in combined:
+        e["big_mover"] = False
+    flagged = 0
+    for e in combined:
+        if flagged >= BIG_MOVER_MAX_PER_DAY:
+            break
+        if _is_big_mover(e.get("atr_pct")):
+            e["big_mover"] = True
+            flagged += 1
+
     buy_list  = [e for e in combined if e.get("wyckoff_phase") in _BUY_PHASES]
     sell_list = [e for e in combined if e.get("wyckoff_phase") in _SELL_PHASES]
+    # Big movers surface first within each list; score order otherwise.
+    buy_list.sort(key=lambda e: (not e["big_mover"], -e["score"]))
+    sell_list.sort(key=lambda e: (not e["big_mover"], -e["score"]))
 
     # Sort watch list by raw score so the strongest setups appear first, cap at 8
     phase_b_list.sort(key=lambda e: e.get("score", 0), reverse=True)
