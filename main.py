@@ -42,8 +42,10 @@ from src.data.bulk_deals import fetch_bulk_deals
 from src.data.bse_announcements import fetch_bse_announcements
 from src.data.delivery import fetch_delivery_signals
 from src.data.breakouts import fetch_breakouts
+from src.data.breakdowns import fetch_breakdowns
 from src.data.fii_dii import fetch_fii_dii_data
 from src.data.fo_ban import fetch_fo_ban_delta
+from src.data.fo_list import fetch_fo_eligible
 from src.data.gift_nifty import fetch_gift_nifty
 from src.data.sector_rotation import fetch_hot_sector_tickers, build_sector_map
 from src.data.market_context import enrich_candidate_context, fetch_market_wide_context
@@ -64,8 +66,8 @@ from src.portfolio import mark_to_market, open_positions, process_exits, summary
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
 
-def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, list, dict, dict, set]:
-    """Fetch all data sources concurrently. Returns 12-tuple."""
+def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, list, dict, dict, set, list, set]:
+    """Fetch all data sources concurrently. Returns 14-tuple."""
     print("[main] fetching market data...")
     t0 = time.time()
 
@@ -76,11 +78,13 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, lis
             "fo_ban": pool.submit(fetch_fo_ban_delta),
             "results": pool.submit(fetch_results_calendar),
             "breakouts": pool.submit(fetch_breakouts),
+            "breakdowns": pool.submit(fetch_breakdowns),
             "market_wide": pool.submit(fetch_market_wide_context),
             "delivery": pool.submit(fetch_delivery_signals),
             "announcements": pool.submit(fetch_bse_announcements),
             "fii_dii": pool.submit(fetch_fii_dii_data),
             "gift_nifty": pool.submit(fetch_gift_nifty),
+            "fo_eligible": pool.submit(fetch_fo_eligible),
         }
 
         results = {}
@@ -89,7 +93,12 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, lis
                 results[name] = future.result()
             except Exception as exc:
                 print(f"[main] {name} fetch error (continuing): {exc}")
-                results[name] = [] if name not in ("market_wide", "delivery", "fii_dii", "gift_nifty") else {}
+                if name == "fo_eligible":
+                    results[name] = set()
+                elif name in ("market_wide", "delivery", "fii_dii", "gift_nifty"):
+                    results[name] = {}
+                else:
+                    results[name] = []
 
     # Sector rotation depends on market_wide (sector heatmap); run sequentially after
     try:
@@ -122,6 +131,8 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, lis
         results["fii_dii"],
         results["gift_nifty"],
         hot_sector_tickers,
+        results["breakdowns"],
+        results["fo_eligible"],
     )
 
 
@@ -286,7 +297,7 @@ def main() -> int:
     print(f"[main] === Stock Selector run: {date.today().isoformat()}  mode={scan_mode} ===")
 
     # 1. Fetch (parallel)
-    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals, fo_ban_current, announcements, fii_dii, gift_nifty, hot_sector_tickers = fetch_all_data()
+    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals, fo_ban_current, announcements, fii_dii, gift_nifty, hot_sector_tickers, breakdowns, fo_eligible = fetch_all_data()
 
     # Count total unique tickers across all sources for the report
     all_tickers: set[str] = set()
@@ -295,6 +306,7 @@ def main() -> int:
     all_tickers.update(fo_ban_removed)
     all_tickers.update(r["ticker"] for r in results_calendar)
     all_tickers.update(b["ticker"] for b in breakouts)
+    all_tickers.update(b["ticker"] for b in breakdowns)
     all_tickers.update(a["ticker"] for a in announcements)
     total_scanned = len(all_tickers)
 
@@ -312,6 +324,7 @@ def main() -> int:
         hot_sector_tickers=hot_sector_tickers,
         breadth_label=breadth_label,
         nifty_trend=nifty_trend,
+        breakdowns=breakdowns,
     )
 
     # 3. Enrich top 20 candidates with options PCR + promoter buying
@@ -324,6 +337,7 @@ def main() -> int:
         # only in bulk deals / breakouts (not volume gainers) still get a price reference
         # for options long/short buildup detection.
         prev_closes = {b["ticker"]: b.get("today_close", 0) for b in breakouts}
+        prev_closes.update({b["ticker"]: b.get("today_close", 0) for b in breakdowns})
         prev_closes.update({d["ticker"]: d.get("today_close", 0) for d in volume_gainers})
         options_signals = fetch_options_signals(top_tickers, prev_closes=prev_closes)
 
@@ -349,6 +363,7 @@ def main() -> int:
             breadth_label=breadth_label,
             nifty_trend=nifty_trend,
             fundamental_signals=fundamental_signals,
+            breakdowns=breakdowns,
         )
     else:
         options_signals     = {}
@@ -380,6 +395,7 @@ def main() -> int:
     market_context["results_calendar"] = results_calendar
     market_context["fii_dii"] = fii_dii
     market_context["gift_nifty"] = gift_nifty
+    market_context["fo_eligible"] = fo_eligible
 
     # 5. Third re-score: incorporate RSI, RS vs Nifty, OBV, BB squeeze from technicals
     #    (only top 20 have technical data — rest get no delta, preserving their rank)
@@ -415,6 +431,7 @@ def main() -> int:
             breadth_label=breadth_label,
             nifty_trend=nifty_trend,
             fundamental_signals=fundamental_signals,
+            breakdowns=breakdowns,
         )
 
     # 6. LLM synthesis (Wyckoff + SMC + VSA)

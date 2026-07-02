@@ -13,6 +13,8 @@ NIFTY500_CSV = DATA_DIR / "nifty500.csv"
 SME_CSV = DATA_DIR / "sme_list.csv"
 
 VOLUME_SURGE_THRESHOLD = 2.5  # was 5.0 — too restrictive, genuine moves start at 2-3x
+HEAVY_SELLING_VOL_RATIO = 1.5   # lower bar than volume_surge — distribution doesn't need a 2.5x spike
+HEAVY_SELLING_PCT_CHANGE = -4.0
 SMALL_CAP_THRESHOLD_CR = 500
 BATCH_SIZE = 100  # yfinance handles ~100 tickers per batch comfortably
 
@@ -80,6 +82,7 @@ def _parse_batch(df: pd.DataFrame, tickers: list[str]) -> list[dict]:
             volume_ratio = today_vol / avg_30d
             today_close = float(closes.iloc[-1])
             prev_close = float(closes.iloc[-2])
+            pct_change = (today_close - prev_close) / prev_close * 100 if prev_close else 0.0
 
             results.append({
                 "ticker": ticker,
@@ -87,10 +90,12 @@ def _parse_batch(df: pd.DataFrame, tickers: list[str]) -> list[dict]:
                 "avg_30d_volume": avg_30d,
                 "volume_ratio": round(volume_ratio, 2),
                 "today_close": today_close,
-                "market_cap_cr": None,  # fetched separately only for surge candidates
+                "pct_change": round(pct_change, 2),
+                "market_cap_cr": None,  # fetched separately only for surge/heavy-selling candidates
                 "is_volume_surge": volume_ratio >= VOLUME_SURGE_THRESHOLD,
-                "is_small_cap": False,  # enriched below for surge candidates only
+                "is_small_cap": False,  # enriched below for surge/heavy-selling candidates only
                 "is_distribution": volume_ratio >= VOLUME_SURGE_THRESHOLD and today_close < prev_close,
+                "is_heavy_selling": volume_ratio >= HEAVY_SELLING_VOL_RATIO and pct_change <= HEAVY_SELLING_PCT_CHANGE,
             })
         except Exception:
             continue
@@ -113,7 +118,10 @@ def _enrich_market_cap(candidates: list[dict]) -> None:
 
 def fetch_volume_gainers() -> list[dict]:
     """
-    Return stocks with volume_ratio >= VOLUME_SURGE_THRESHOLD, sorted descending.
+    Return stocks with volume_ratio >= VOLUME_SURGE_THRESHOLD (bullish surge) UNION
+    is_heavy_selling (bearish — lower volume bar + a real down day, feeds the short
+    pipeline), sorted by volume_ratio descending. Function name kept for compatibility
+    with existing callers even though the result set is no longer purely bullish.
     Uses batch yfinance downloads for speed (~10× faster than per-ticker calls).
     Results are cached to disk for the calendar day — subsequent same-day calls are instant.
     """
@@ -142,10 +150,12 @@ def fetch_volume_gainers() -> list[dict]:
         except Exception as exc:
             print(f"[volume] batch {i + 1} failed: {exc}")
 
-    surge_candidates = [r for r in all_records if r["is_volume_surge"]]
+    surge_candidates = [r for r in all_records if r["is_volume_surge"] or r["is_heavy_selling"]]
     _enrich_market_cap(surge_candidates)
 
     surge_candidates.sort(key=lambda x: x["volume_ratio"], reverse=True)
-    print(f"[volume] {len(all_records)} tickers processed, {len(surge_candidates)} volume surge candidates")
+    n_selling = sum(1 for r in surge_candidates if r["is_heavy_selling"])
+    print(f"[volume] {len(all_records)} tickers processed, {len(surge_candidates)} candidates "
+          f"({len(surge_candidates) - n_selling} surge, {n_selling} heavy-selling)")
     save_today("volume_gainers", surge_candidates)
     return surge_candidates

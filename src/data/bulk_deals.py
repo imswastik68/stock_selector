@@ -48,12 +48,15 @@ def _fetch_csv(url: str, deal_type: str) -> list[dict]:
         df = pd.read_csv(io.StringIO(resp.text))
         df.columns = df.columns.str.strip()
 
+        side_col = next((c for c in df.columns if "buy" in c.lower() or "sell" in c.lower()), None)
+
         results = []
         for _, row in df.iterrows():
             ticker = str(row.get("Symbol") or "").strip().upper()
             actor = str(row.get("Client Name") or "").strip()
             qty = str(row.get("Quantity Traded") or "0").replace(",", "")
             price = str(row.get("Trade Price / Wght. Avg. Price") or "0").replace(",", "")
+            side = str(row.get(side_col) or "").strip().upper() if side_col else ""
 
             if not ticker:
                 continue
@@ -67,6 +70,7 @@ def _fetch_csv(url: str, deal_type: str) -> list[dict]:
                     "price": float(price or 0),
                     "is_fii_dii": _is_fii_dii(actor),
                     "is_promoter": _is_promoter(actor),
+                    "side": side if side in ("BUY", "SELL") else "",
                 })
             except ValueError:
                 continue
@@ -81,7 +85,9 @@ def _fetch_csv(url: str, deal_type: str) -> list[dict]:
 def fetch_bulk_deals() -> list[dict]:
     """
     Return today's NSE bulk + block deals from NSE archives CSV.
-    Each dict: {ticker, actor, deal_type, quantity, price, is_fii_dii}
+    Each dict: {ticker, actor, deal_type, quantity, price, is_fii_dii, is_promoter, side}
+    side is "BUY"/"SELL" from NSE's Buy/Sell column, or "" if the column is missing
+    (treated as BUY by callers — preserves pre-side-tracking behavior).
     """
     results = _fetch_csv(BULK_URL, "bulk") + _fetch_csv(BLOCK_URL, "block")
     print(f"[bulk_deals] {len(results)} deals fetched")

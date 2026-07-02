@@ -20,6 +20,8 @@ import os
 import re
 from datetime import date, datetime, timezone, timedelta
 
+from src.scorer import BEARISH_EVENT_WEIGHTS
+
 _GROQ_BASE  = "https://api.groq.com/openai/v1"
 _GROQ_MODEL = "llama-3.3-70b-versatile"
 
@@ -32,6 +34,26 @@ UNCONFIRMED_SIGNALS = {"results_due"}
 
 _BUY_PHASES  = {"ACCUMULATION_C", "ACCUMULATION_D", "MARKUP"}
 _SELL_PHASES = {"DISTRIBUTION_C", "DISTRIBUTION_D", "MARKDOWN"}
+
+# A bullish-only signal firing on a SELL candidate (or a bearish-only signal firing
+# on a BUY candidate) is a contradiction, not an edge — strip its weight back out
+# before the trend-headwind penalty. delivery_surge deliberately excluded from both:
+# institutional conviction is direction-ambiguous.
+BULLISH_ONLY_WEIGHTS = {
+    "actual_52w_breakout": 3, "bulk_deal_fii_dii": 3, "promoter_buying": 3,
+    "sast_insider_buying": 3, "consolidation_breakout": 3, "buyback_announced": 2,
+    "contract_win": 2, "options_long_buildup": 1, "options_short_covering": 1,
+    "options_pcr_fear": 1,
+}
+BEARISH_ONLY_WEIGHTS = dict(BEARISH_EVENT_WEIGHTS)  # src/scorer.py — short-pipeline event signals
+
+# Sell entry threshold — set by Phase 0 mining (outputs/big_mover_analysis.json:
+# downtrend_short_edge.verdict == "short_edge_negative": downtrend F&O shorts net
+# -3.52% vs downtrend longs +0.33%, n=582). Downtrend sells need a materially
+# higher bar than buys until Phase 5 re-measures with the short pipeline live.
+# Non-downtrend regimes are unmeasured so far — kept at the existing buy-side value.
+SELL_ENTRY_THRESHOLD_DOWNTREND = 6
+SELL_ENTRY_THRESHOLD_ELSE = 4
 
 
 # ── risk rating ───────────────────────────────────────────────────────────────
@@ -113,6 +135,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
     atr_data:   dict = market_context.get("atr_pct", {})
     fii_dii:    dict = market_context.get("fii_dii", {})
     gift_nifty: dict = market_context.get("gift_nifty", {})
+    fo_set:     set  = market_context.get("fo_eligible") or set()
 
     buy_list, sell_list, phase_b_list = [], [], []
 
@@ -134,6 +157,14 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         active_signals = c.get("active_signals", [])
         adjusted_score = score
         headwind_penalty = 0
+
+        # Direction-aware cleanup: a bullish-only signal contradicting a SELL
+        # candidate (or vice versa) isn't an edge for that trade — strip it back out.
+        if direction == "buy":
+            adjusted_score -= sum(w for s, w in BEARISH_ONLY_WEIGHTS.items() if s in active_signals)
+        elif direction == "sell":
+            adjusted_score -= sum(w for s, w in BULLISH_ONLY_WEIGHTS.items() if s in active_signals)
+
         # FII strong buying in downtrend = institutional dip-buying; ease penalty by 1
         fii_easing  = fii_dii.get("fii_buying_strong", False)
         # FII strong selling in uptrend = distribution; ease short penalty by 1
@@ -184,8 +215,21 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         signals = _label_signals(active_signals)
         risk = _risk(c, tech)
 
-        phase_b_threshold = 5 if nifty_trend == "downtrend" else 4
-        if direction == "watch" or adjusted_score < phase_b_threshold:
+        if direction == "sell":
+            phase_b_threshold = SELL_ENTRY_THRESHOLD_DOWNTREND if nifty_trend == "downtrend" else SELL_ENTRY_THRESHOLD_ELSE
+        else:
+            phase_b_threshold = 5 if nifty_trend == "downtrend" else 4
+
+        # F&O executability gate: Indian cash-market shorts are intraday-only, so a
+        # multi-day sell needs stock futures, which only exist for F&O-listed names.
+        # Fail-closed — an empty fo_set (fetch failure) routes every sell to watch.
+        fo_gated = direction == "sell" and phase in _SELL_PHASES and ticker not in fo_set
+
+        if direction == "watch" or adjusted_score < phase_b_threshold or fo_gated:
+            watch_reason = (
+                "Short signal — not F&O-tradeable" if fo_gated else
+                _watch_reason(direction, adjusted_score, score, nifty_trend, headwind_penalty)
+            )
             phase_b_list.append({
                 "ticker": ticker,
                 "phase": phase,
@@ -193,9 +237,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
                 "rsi": tech.get("rsi", "N/A"),
                 "today_close": c.get("today_close"),
                 "alert_trigger": signals[:3],
-                "watch_reason": _watch_reason(
-                    direction, adjusted_score, score, nifty_trend, headwind_penalty
-                ),
+                "watch_reason": watch_reason,
             })
             continue
 
@@ -231,6 +273,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             "momentum_6m": tech.get("momentum_6m"),
             "rs_quality":  tech.get("rs_quality"),
             "expiry_suppressed": expiry_suppressed,
+            "instrument": "stock_future" if direction == "sell" else "cash_equity",
             "narrative": "",  # filled in by LLM below
             **levels,
             **pivots,

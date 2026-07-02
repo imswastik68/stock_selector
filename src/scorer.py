@@ -41,8 +41,6 @@ DISQUALIFIER_WEIGHTS = {
     "rsi_bullish_div": -5,         # price LL + RSI HL: false bottoms — data shows −1.63 lift over 253 trades
     "thin_market_extreme": -4,     # avg daily turnover < ₹1cr: unreliable signals + exit risk
     "thin_market_light": -2,       # avg daily turnover ₹1cr–₹5cr: reduced liquidity, higher spread
-    "options_short_buildup": -2,   # price down + OI up = fresh shorts entering
-    "distribution_signal": -1,     # volume spike + price DOWN = institutional selling
     "volume_5x": -1,               # raw volume surge at entry: data shows −0.25 lift (noise, not edge)
     "bb_squeeze_breakout": -1,     # BB squeeze at entry: exhaustion signal, −0.18 lift
     "macd_bearish_cross": -1,      # histogram / zero-line crossed down in last 3-5 bars
@@ -50,6 +48,20 @@ DISQUALIFIER_WEIGHTS = {
     "bearish_candle": -1,          # shooting_star / bearish_engulfing / bearish_marubozu on last bar
     "options_pcr_greed": -1,       # PCR < 0.5: extreme complacency (min OI required)
     "options_long_unwinding": -1,  # price down + OI down = longs exiting (min OI required)
+}
+
+# Bearish event signals — feed the short pipeline (src/data/breakdowns.py, is_heavy_selling
+# in volume.py, bulk_deal side tracking). Previously distribution_signal/options_short_buildup
+# lived in DISQUALIFIER_WEIGHTS (penalizing buys only); moved here as their own positive-scoring
+# table for sells, with buy-side protection now applied directly in agent.py (a bearish event
+# firing on a BUY candidate should still hurt it, same net effect, explicit instead of implicit).
+BEARISH_EVENT_WEIGHTS = {
+    "actual_52w_breakdown": 3,     # price broke through prior 52w low
+    "distribution_signal": 2,      # volume spike + price DOWN = institutional selling
+    "heavy_selling": 2,            # lower-bar volume-ratio down day
+    "consolidation_breakdown": 2,  # broke down from a tight range
+    "bulk_deal_fii_sell": 2,       # FII/DII bulk/block SELL deal
+    "options_short_buildup": 1,    # price down + OI up = fresh shorts entering
 }
 
 # Regime-dependent overrides — MERGED into (not replacing) SHORT_TERM_WEIGHTS /
@@ -100,9 +112,13 @@ def _build_signal_map(
     hot_sector_tickers: set[str] | None = None,
     sast_data: bool = False,
     fundamental_data: dict | None = None,
+    breakdown_data: dict | None = None,
 ) -> dict[str, bool]:
     """Build a boolean signal map for a single ticker."""
-    signals: dict[str, bool] = {k: False for k in list(SHORT_TERM_WEIGHTS) + list(SWING_WEIGHTS) + list(DISQUALIFIER_WEIGHTS)}
+    signals: dict[str, bool] = {
+        k: False for k in list(SHORT_TERM_WEIGHTS) + list(SWING_WEIGHTS)
+        + list(DISQUALIFIER_WEIGHTS) + list(BEARISH_EVENT_WEIGHTS)
+    }
 
     # --- DISQUALIFIERS computed early (can short-circuit scoring logic) ---
 
@@ -116,14 +132,17 @@ def _build_signal_map(
 
     # --- SHORT-TERM signals ---
 
-    # Bulk/block deal by known FII/DII
-    ticker_deals = [d for d in bulk_deals if d["ticker"] == ticker and d["is_fii_dii"]]
-    signals["bulk_deal_fii_dii"] = bool(ticker_deals)
+    # Bulk/block deal by known FII/DII — side "" (column missing) counts as BUY,
+    # preserving pre-side-tracking behavior.
+    fii_dii_deals = [d for d in bulk_deals if d["ticker"] == ticker and d["is_fii_dii"]]
+    signals["bulk_deal_fii_dii"]  = any(d.get("side", "") != "SELL" for d in fii_dii_deals)
+    signals["bulk_deal_fii_sell"] = any(d.get("side", "") == "SELL" for d in fii_dii_deals)
 
-    # Volume ≥ 2.5× 30-day average
+    # Volume ≥ 2.5× 30-day average / heavy-selling down day
     if volume_data:
         signals["volume_5x"]          = volume_data.get("is_volume_surge", False)
         signals["distribution_signal"] = volume_data.get("is_distribution", False)
+        signals["heavy_selling"]      = volume_data.get("is_heavy_selling", False)
         # Thin market: avg daily turnover < ₹5 crore — signal quality is unreliable
         avg_30d = volume_data.get("avg_30d_volume", 0) or 0
         price   = volume_data.get("today_close", 0) or 0
@@ -135,6 +154,11 @@ def _build_signal_map(
     if breakout_data:
         signals["actual_52w_breakout"]    = breakout_data.get("actual_breakout", False)
         signals["consolidation_breakout"] = breakout_data.get("consolidation_breakout", False)
+
+    # 52-week low breakdown — mirror of the breakout block above (src/data/breakdowns.py)
+    if breakdown_data:
+        signals["actual_52w_breakdown"]   = breakdown_data.get("actual_breakdown", False)
+        signals["consolidation_breakdown"] = breakdown_data.get("consolidation_breakdown", False)
 
     # Options signals — PCR only at extremes; long_buildup gated by min OI in options.py
     if options_data:
@@ -208,6 +232,7 @@ def _compute_score(
     override   = REGIME_WEIGHTS.get(nifty_trend) or {}
     short_term = {**SHORT_TERM_WEIGHTS, **{k: v for k, v in override.items() if k in SHORT_TERM_WEIGHTS}}
     disq       = {**DISQUALIFIER_WEIGHTS, **{k: v for k, v in override.items() if k in DISQUALIFIER_WEIGHTS}}
+    bearish    = {**BEARISH_EVENT_WEIGHTS, **{k: v for k, v in override.items() if k in BEARISH_EVENT_WEIGHTS}}
 
     for sig, weight in short_term.items():
         if signals.get(sig):
@@ -221,6 +246,10 @@ def _compute_score(
             score += weight
             if sig in ("results_due", "promoter_buying"):
                 timeframe = "5-7d"
+
+    for sig, weight in bearish.items():
+        if signals.get(sig):
+            score += weight
 
     for sig, weight in disq.items():
         if signals.get(sig):
@@ -255,6 +284,7 @@ def score_candidates(
     breadth_label: str = "neutral",
     nifty_trend: str = "ranging",
     fundamental_signals: dict[str, dict] | None = None,
+    breakdowns: list[dict] | None = None,
 ) -> list[dict]:
     """
     Score every unique ticker across all data sources and return qualifying candidates.
@@ -263,7 +293,10 @@ def score_candidates(
     breadth_label:       "strong" | "neutral" | "weak" — weak applies -1 (stacks with high_vol).
     nifty_trend:         "uptrend" | "ranging" | "downtrend" — selects REGIME_WEIGHTS override.
     fundamental_signals: {ticker: {fundamental_strong, fundamental_weak, ...}} from fundamentals.py
+    breakdowns:          52-week-low candidates from src/data/breakdowns.py — short-pipeline source.
     """
+    breakdowns = breakdowns or []
+
     # Collect all unique tickers across all data sources
     all_tickers: set[str] = set()
     all_tickers.update(d["ticker"] for d in bulk_deals)
@@ -271,10 +304,12 @@ def score_candidates(
     all_tickers.update(fo_ban_removed)  # ban-lifted tickers enter scoring universe
     all_tickers.update(r["ticker"] for r in results_calendar)
     all_tickers.update(b["ticker"] for b in breakouts)
+    all_tickers.update(b["ticker"] for b in breakdowns)
 
     # Build lookup dicts for O(1) access
     volume_map: dict[str, dict] = {d["ticker"]: d for d in volume_gainers}
     breakout_map: dict[str, dict] = {b["ticker"]: b for b in breakouts}
+    breakdown_map: dict[str, dict] = {b["ticker"]: b for b in breakdowns}
 
     # Build announcements lookup: {ticker: {signal_key: True, ...}}
     # A ticker can have multiple announcements; last one per signal_key wins (all are True anyway).
@@ -289,6 +324,7 @@ def score_candidates(
     for ticker in all_tickers:
         vol  = volume_map.get(ticker)
         brk  = breakout_map.get(ticker)
+        bkd  = breakdown_map.get(ticker)
         prom = (promoter_signals or {}).get(ticker)
         opts = (options_signals or {}).get(ticker)
         tech = (technical_signals or {}).get(ticker)
@@ -305,6 +341,7 @@ def score_candidates(
             hot_sector_tickers=hot_sector_tickers,
             sast_data=sast,
             fundamental_data=fund,
+            breakdown_data=bkd,
         )
 
         score, timeframe = _compute_score(signals, market_regime, nifty_trend)
@@ -322,7 +359,7 @@ def score_candidates(
         if score < MIN_SCORE or len(active) < MIN_SIGNALS:
             continue
 
-        today_close = (vol or brk or {}).get("today_close")
+        today_close = (vol or brk or bkd or {}).get("today_close")
         is_penny = today_close is not None and today_close < PENNY_THRESHOLD
 
         candidates.append({
@@ -335,7 +372,9 @@ def score_candidates(
             "volume_ratio": (vol or {}).get("volume_ratio"),
             "market_cap_cr": (vol or {}).get("market_cap_cr"),
             "52w_high": (brk or {}).get("52w_high"),
+            "52w_low": (bkd or {}).get("52w_low"),
             "consolidation_breakout": signals.get("consolidation_breakout", False),
+            "consolidation_breakdown": signals.get("consolidation_breakdown", False),
             "promoter_pct": (prom or {}).get("promoter_pct"),
             "promoter_bought": (prom or {}).get("promoter_bought", False),
             "options_pcr": (opts or {}).get("pcr"),

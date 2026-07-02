@@ -73,6 +73,11 @@ SIGNAL_LABELS = {
     "rs_quality_strong":       "quality RS",
     # insider / SAST
     "sast_insider_buying":     "SAST insider buying",
+    # short pipeline (Phase 3)
+    "actual_52w_breakdown":    "52-week breakdown",
+    "consolidation_breakdown": "consolidation breakdown",
+    "heavy_selling":           "heavy selling",
+    "bulk_deal_fii_sell":      "FII/DII sell deal",
 }
 
 # Short readable label for MACD signal state
@@ -334,9 +339,10 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
     if extra:
         lines.append("  " + " | ".join(extra))
     exit_hint = EXIT_PLAN_HINT.get(WINNER_POLICY, WINNER_POLICY)
+    instrument_str = " (via stock futures — F&O)" if entry.get("instrument") == "stock_future" else ""
     lines += [
         "",
-        f"  Short entry: {_code(entry_zone)} | SL: {_code(stop)}",
+        f"  Short entry: {_code(entry_zone)} | SL: {_code(stop)}{_i(instrument_str)}",
         f"  Cover T1: {_code(t1)} | T2: {_code(t2)} | R:R {_code(rr)}",
         f"  Exit: {_i(_e(exit_hint))}",
         f"  {_i(_e(tf_label))}",
