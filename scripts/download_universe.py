@@ -237,9 +237,21 @@ def _try_screener_in() -> list[str]:
         return []
 
 
+def refresh_fo_eligible() -> None:
+    """Keep data/fo_eligible.csv fresh — short-side picks are gated against it."""
+    try:
+        from src.data.fo_list import refresh_static_csv
+        refresh_static_csv()
+    except Exception as exc:
+        print(f"[universe] fo_eligible refresh failed (non-fatal): {exc}")
+
+
 if __name__ == "__main__":
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+
     n500 = download_nifty500()
     sme = download_sme()
+    refresh_fo_eligible()
 
     if n500 == 0:
         print("\nERROR: all fetch strategies failed")
