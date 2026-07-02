@@ -45,7 +45,21 @@ BULLISH_ONLY_WEIGHTS = {
     "contract_win": 2, "options_long_buildup": 1, "options_short_covering": 1,
     "options_pcr_fear": 1,
 }
-BEARISH_ONLY_WEIGHTS = dict(BEARISH_EVENT_WEIGHTS)  # src/scorer.py — short-pipeline event signals
+# distribution_signal (-1) and options_short_buildup (-2) were DISQUALIFIER_WEIGHTS
+# (universal penalty) before Phase 3; they're now positive in BEARISH_EVENT_WEIGHTS
+# so sells get properly rewarded for them, applied universally by _compute_score
+# since direction isn't known yet at scoring time. Simply cancelling that addition
+# for buys (subtracting the same weight) nets to 0, not the old -1/-2 penalty —
+# add the original disqualifier magnitude back on top so buy-side behavior for
+# these two signals is unchanged from before Phase 3. The other 4 bearish-event
+# signals (actual_52w_breakdown, heavy_selling, consolidation_breakdown,
+# bulk_deal_fii_sell) are new in Phase 3 and had no prior buy-side penalty, so
+# they net to a neutral 0 on buys — cancel only, no extra penalty.
+_BEARISH_EVENT_PRE_PHASE3_DISQUALIFIER = {"distribution_signal": 1, "options_short_buildup": 2}
+BEARISH_ONLY_WEIGHTS = {
+    s: w + _BEARISH_EVENT_PRE_PHASE3_DISQUALIFIER.get(s, 0)
+    for s, w in BEARISH_EVENT_WEIGHTS.items()
+}
 
 # Sell entry threshold — set by Phase 0 mining (outputs/big_mover_analysis.json:
 # downtrend_short_edge.verdict == "short_edge_negative": downtrend F&O shorts net
