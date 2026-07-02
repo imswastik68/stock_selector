@@ -44,6 +44,7 @@ def simulate_raw(
     t2: float | None = None,
     atr: float | None = None,
     exit_policy: str = "static",
+    cost_pct: float = 0.0,
 ) -> dict:
     """
     Core simulator. df must be full OHLCV; as_of_date is the signal date.
@@ -53,6 +54,11 @@ def simulate_raw(
       SELL: bar_high >= entry_lo → triggered at entry_mid (or entry_lo if gap-down open)
 
     Exit policies: see module docstring. Default 'static' = original behavior.
+
+    cost_pct: round-trip transaction cost (% of notional, see src/costs.py), deducted
+    from return_pct when triggered. Default 0.0 = no behavior change vs pre-cost-model
+    callers. return_pct_gross is always reported alongside net return_pct. fwd_*, mae/mfe,
+    t1_return_pct, sl_risk_pct stay gross — they're geometry/diagnostics, not realized P&L.
     """
     future = df[df.index > as_of_date].copy()
     if future.empty:
@@ -206,6 +212,9 @@ def simulate_raw(
         else:
             return_pct = (entry_price - exit_price) / entry_price * 100
 
+    return_pct_gross = return_pct
+    return_pct = return_pct - cost_pct
+
     lows  = post_entry["Low"].astype(float).values
     highs = post_entry["High"].astype(float).values
     if direction == "buy":
@@ -239,7 +248,9 @@ def simulate_raw(
         "entry_price":   round(entry_price, 2),
         "exit_price":    round(exit_price, 2),
         "current_price": round(today_close, 2),
-        "return_pct":    round(return_pct, 2),
+        "return_pct":       round(return_pct, 2),
+        "return_pct_gross": round(return_pct_gross, 2),
+        "cost_pct":         round(cost_pct, 2),
         "t1_return_pct": round(t1_return_pct, 2),
         "sl_risk_pct":   round(sl_risk_pct, 2),
         "week_return":   week_return,

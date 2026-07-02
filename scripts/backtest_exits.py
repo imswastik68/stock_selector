@@ -33,6 +33,7 @@ except ImportError:
 
 from src.technicals import compute_entry_levels
 from src.trade_sim import simulate_raw
+from src.costs import round_trip_cost_pct
 
 TRADES_CSV  = ROOT / "outputs" / "backtest_trades.csv"
 OHLCV_CACHE = ROOT / "cache" / "backtest_ohlcv"
@@ -151,6 +152,7 @@ def run() -> None:
                 sim = simulate_raw(
                     entry_lo, entry_hi, entry_mid, sl, t1, direction, as_of, td,
                     t2=t2, atr=atr, exit_policy=policy,
+                    cost_pct=round_trip_cost_pct(direction),
                 )
             # Include timeout and open (for policies with time-stop / trailing)
             if sim.get("triggered"):

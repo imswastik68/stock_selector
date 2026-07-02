@@ -41,6 +41,7 @@ except ImportError:
 from src.technicals import enrich_with_technicals, compute_entry_levels
 from src.trade_sim import simulate_raw
 from src.scorer import _compute_score
+from src.costs import round_trip_cost_pct
 
 CACHE_DIR   = ROOT / "cache"
 OUTPUTS     = ROOT / "outputs"
@@ -321,7 +322,8 @@ def run_backtest(weeks: int, sample: int | None) -> None:
 
             # Simulate trade forward (next N bars after as_of)
             result = simulate_raw(entry_lo, entry_hi, entry_mid, sl, t1,
-                                  direction, as_of, full_df)
+                                  direction, as_of, full_df,
+                                  cost_pct=round_trip_cost_pct(direction))
             total_evals += 1
 
             score, _ = _compute_score(signals)
@@ -335,6 +337,8 @@ def run_backtest(weeks: int, sample: int | None) -> None:
                 "score":     score,
                 "outcome":   result.get("outcome", "no_data"),
                 "return_pct":result.get("return_pct"),
+                "return_pct_gross": result.get("return_pct_gross"),
+                "cost_pct":  result.get("cost_pct"),
                 "days_held": result.get("days_held"),
                 "mae_pct":   result.get("mae_pct"),
                 "mfe_pct":   result.get("mfe_pct"),
@@ -368,7 +372,8 @@ def run_backtest(weeks: int, sample: int | None) -> None:
         return
 
     baseline_wr  = (closed["outcome"] == "t1_hit").mean()
-    baseline_ret = closed["return_pct"].mean()
+    baseline_ret = closed["return_pct"].mean()          # net of round-trip cost (Phase 1)
+    baseline_ret_gross = closed["return_pct_gross"].mean() if "return_pct_gross" in closed.columns else None
     baseline_exp = (closed["return_pct"] * (2/3) - closed["return_pct"].abs() * (1/3)).mean()
 
     sig_stats: dict[str, dict] = {}
@@ -406,7 +411,9 @@ def run_backtest(weeks: int, sample: int | None) -> None:
             "triggered_trades": len(triggered),
             "closed_trades": len(closed),
             "baseline_win_rate_pct": round(baseline_wr*100,1),
-            "baseline_avg_return_pct": round(baseline_ret,2),
+            "baseline_avg_return_net_pct": round(baseline_ret,2),
+            "baseline_avg_return_gross_pct": round(baseline_ret_gross,2) if baseline_ret_gross is not None else None,
+            "note_costs": "return_pct/baseline_avg_return_net_pct are net of round-trip cost (src/costs.py); *_gross fields are pre-cost",
             "note_survivorship_bias": "universe=current constituents only",
             "note_untested_signals": "bulk_deals,sast,promoter,delivery,options,results,bse,fii_dii,gift_nifty,sector_rotation",
         },
@@ -419,7 +426,8 @@ def run_backtest(weeks: int, sample: int | None) -> None:
     print(f"  BACKTEST RESULTS — {weeks}w | {len(closed)} closed trades")
     print(f"{'='*60}")
     print(f"  Baseline win rate : {baseline_wr*100:.1f}%")
-    print(f"  Baseline avg ret  : {baseline_ret:+.2f}%")
+    print(f"  Baseline avg ret  : {baseline_ret:+.2f}%  (net of cost; gross {baseline_ret_gross:+.2f}%)"
+          if baseline_ret_gross is not None else f"  Baseline avg ret  : {baseline_ret:+.2f}%")
     print(f"\n  SIGNAL WIN-RATE LIFT (ranked):")
     print(f"  {'Signal':<28}  {'N':>5}  {'WR%':>5}  {'Lift pp':>7}  {'Ret%':>6}")
     for sig, st in sorted(sig_stats.items(), key=lambda x: -x[1]["wr_lift_pp"]):

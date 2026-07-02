@@ -46,6 +46,7 @@ from pathlib import Path
 import pandas as pd
 
 from src.trade_sim import WINNER_POLICY, simulate_trade
+from src.costs import round_trip_cost_pct
 
 _STATE_FILE = Path(__file__).parent.parent / "outputs" / "portfolio.json"
 _INITIAL_CAPITAL = 100_000.0  # default; overridden by RISK_CAPITAL env if set
@@ -119,6 +120,11 @@ def process_exits(today_bars: dict[str, pd.DataFrame]) -> list[dict]:
             pnl = (entry - exit_price) * qty
             ret_pct = (entry - exit_price) / entry * 100
 
+        cost_pct = round_trip_cost_pct(direction)   # % of notional, see src/costs.py
+        cost_amt = qty * entry * cost_pct / 100
+        pnl -= cost_amt
+        ret_pct -= cost_pct
+
         state["cash"]         += qty * entry + pnl
         state["realized_pnl"] = round(state["realized_pnl"] + pnl, 2)
 
@@ -132,6 +138,7 @@ def process_exits(today_bars: dict[str, pd.DataFrame]) -> list[dict]:
             "closed":     today,
             "pnl":        round(pnl, 2),
             "return_pct": round(ret_pct, 2),
+            "cost_pct":   round(cost_pct, 2),
             "outcome":    sim.get("outcome"),
         }
         state["closed"].append(closed_rec)
