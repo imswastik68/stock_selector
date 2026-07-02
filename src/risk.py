@@ -22,8 +22,11 @@ RISK_CONFIG = {
     "max_position_pct":   float(os.environ.get("RISK_MAX_POSITION_PCT",   "0.25")),
     "max_portfolio_pct":  float(os.environ.get("RISK_MAX_PORTFOLIO_PCT",  "0.06")),
     "max_positions":      int(os.environ.get("RISK_MAX_POSITIONS",        "8")),
-    # max per sector; "other" (unmapped SME/unknown) is uncapped
     "max_per_sector":     int(os.environ.get("RISK_MAX_PER_SECTOR",       "3")),
+    # "other" (unmapped SME/unknown) gets a looser cap than named sectors, not
+    # unlimited — nearly all SMID longs land here (sector_map.json only covers
+    # ~175 tickers), so a 3-per-sector cap would strangle the long book.
+    "max_other":          int(os.environ.get("RISK_MAX_OTHER",           "4")),
 }
 
 
@@ -112,13 +115,14 @@ def portfolio_summary(
     max_portfolio_risk_pct: float | None = None,
     max_positions: int | None = None,
     max_per_sector: int | None = None,
+    max_other: int | None = None,
 ) -> dict:
     """
     Rank picks by score, allocate until risk budget, max_positions, or sector cap hit.
     Mutates each pick: adds pick["allocate"] = True/False, pick["drop_reason"] if dropped.
 
     Sector cap: pick["sector"] must be set (by main.py from build_sector_map);
-    "other" (unmapped/SME) is always uncapped.
+    "other" (unmapped/SME) uses the looser max_other cap, not unlimited.
 
     Returns: capital, total_deployed, total_deployed_pct, total_risk,
              total_risk_pct, budget_left, n_allocated, n_dropped, n_sector_capped
@@ -127,6 +131,7 @@ def portfolio_summary(
     max_rp     = max_portfolio_risk_pct if max_portfolio_risk_pct is not None else RISK_CONFIG["max_portfolio_pct"]
     max_pos    = max_positions          if max_positions          is not None else RISK_CONFIG["max_positions"]
     max_sec    = max_per_sector         if max_per_sector         is not None else RISK_CONFIG["max_per_sector"]
+    max_oth    = max_other              if max_other              is not None else RISK_CONFIG["max_other"]
 
     risk_budget    = cap * max_rp
     total_deployed = 0.0
@@ -146,7 +151,7 @@ def portfolio_summary(
 
         budget_ok   = (total_risk + risk) <= risk_budget
         position_ok = n_allocated < max_pos
-        sector_ok   = sector == "other" or sector_counts.get(sector, 0) < max_sec
+        sector_ok   = sector_counts.get(sector, 0) < (max_oth if sector == "other" else max_sec)
 
         if budget_ok and position_ok and sector_ok and risk > 0:
             pick["allocate"] = True

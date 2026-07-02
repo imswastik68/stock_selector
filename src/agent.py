@@ -204,7 +204,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             "stop_loss":  tech.get("stop_loss", "N/A"),
             "target_1":   tech.get("target_1", "N/A"),
             "target_2":   tech.get("target_2", "N/A"),
-            "risk_reward": tech.get("risk_reward", "1:2"),
+            "risk_reward": tech.get("risk_reward", "—"),
         }
 
         # Pivot points (daily/weekly/monthly)

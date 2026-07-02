@@ -296,30 +296,31 @@ def classify_wyckoff_phase(df: pd.DataFrame) -> str:
 def compute_entry_levels(close: float, atr: float, direction: str) -> dict:
     """
     ATR-based entry zone, stop loss, and targets.
-    Risk = 2×ATR, Reward = 4/6×ATR → R:R = 1:2 / 1:3.
+    Risk = 2xATR, Target1 = 3xATR, Target2 = 5xATR -> R:R = 1:1.5 (T1) / 1:2.5 (T2).
     """
     if atr <= 0:
         return {}
     half_atr = atr * 0.5
+    risk_mult, t1_mult, t2_mult = 2, 3, 5
     if direction == "buy":
         entry_lo = round(close - half_atr, 2)
         entry_hi = round(close + half_atr, 2)
-        stop     = round(close - 2 * atr,  2)
-        target1  = round(close + 3 * atr,  2)  # 3×ATR → ~13% away, R:R 1.5:1
-        target2  = round(close + 5 * atr,  2)
+        stop     = round(close - risk_mult * atr, 2)
+        target1  = round(close + t1_mult  * atr, 2)
+        target2  = round(close + t2_mult  * atr, 2)
     else:
         entry_lo = round(close - half_atr, 2)
         entry_hi = round(close + half_atr, 2)
-        stop     = round(close + 2 * atr,  2)
-        target1  = round(close - 3 * atr,  2)
-        target2  = round(close - 5 * atr,  2)
+        stop     = round(close + risk_mult * atr, 2)
+        target1  = round(close - t1_mult  * atr, 2)
+        target2  = round(close - t2_mult  * atr, 2)
 
     return {
         "entry_zone": f"₹{entry_lo}-₹{entry_hi}",
         "stop_loss":  f"₹{stop}",
         "target_1":   f"₹{target1}",
         "target_2":   f"₹{target2}",
-        "risk_reward": "1:2",
+        "risk_reward": f"1:{round(t1_mult / risk_mult, 1)}",
     }
 
 

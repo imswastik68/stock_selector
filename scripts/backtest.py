@@ -59,6 +59,22 @@ TESTABLE_SIGNALS = [
     "volume_surge", "distribution",
 ]
 
+# Direction-congruent signal sets — a trade only gets generated if it has >=1 active
+# signal congruent with its Wyckoff-derived direction. Matches the live scorer's own
+# empirical weight signs (SHORT_TERM_WEIGHTS/DISQUALIFIER_WEIGHTS in src/scorer.py),
+# not a literal reading of each signal's name — e.g. rsi_bearish_div carries a
+# positive buy-side weight there (+3, "data shows +1.04 lift over 15k trades").
+# Previously every direction was gated on the SAME bullish-only signal set, which
+# biased sell-side stats (a sell only ever fired because a bullish signal happened
+# to also be present that day, not because of an actual bearish signal).
+BUY_CONGRUENT = {
+    "rsi_momentum", "rs_vs_nifty", "rsi_bearish_div", "bb_squeeze_breakout",
+    "bullish_candle", "weekly_trend_aligned", "rs_quality_strong", "volume_surge",
+}
+SELL_CONGRUENT = {
+    "macd_bearish_cross", "bearish_candle", "rsi_bullish_div", "distribution", "volume_surge",
+}
+
 BATCH = 50
 
 
@@ -232,6 +248,24 @@ def _extract_signals(df_slice: pd.DataFrame, nifty_20d: float | None,
     }
 
 
+def _classify_nifty_trend_series(nifty_close: pd.Series) -> pd.Series:
+    """
+    EMA20/50/200 stack classifier — copied from calibrate_weights.py:_classify_nifty_trend
+    (scripts aren't a package). Kept identical so the per-date regime used to score a
+    trade here matches what calibrate_weights.py / mine_big_movers.py compute for the
+    same date. Previously every date was scored with nifty_trend='ranging' regardless
+    of the actual regime, so REGIME_WEIGHTS never applied correctly in the backtest.
+    """
+    ema20  = nifty_close.ewm(span=20,  adjust=False).mean()
+    ema50  = nifty_close.ewm(span=50,  adjust=False).mean()
+    ema200 = nifty_close.ewm(span=200, adjust=False).mean()
+    labels = pd.Series("ranging", index=nifty_close.index)
+    labels[ema20 > ema50] = "ranging"
+    labels[(ema20 > ema50) & (ema50 > ema200)] = "uptrend"
+    labels[(ema20 < ema50) & (ema50 < ema200)] = "downtrend"
+    return labels
+
+
 def _compute_atr(df_slice: pd.DataFrame) -> float:
     if len(df_slice) < 15:
         return 0.0
@@ -261,6 +295,8 @@ def run_backtest(weeks: int, sample: int | None) -> None:
     print(f"[backtest] got OHLCV for {len(ohlcv)}/{len(universe)} tickers, "
           f"{len(nifty_close)} Nifty bars")
 
+    trend_series = _classify_nifty_trend_series(nifty_close) if not nifty_close.empty else pd.Series(dtype=object)
+
     # Walk-forward: every 5 trading days over the test window
     signal_dates: list[pd.Timestamp] = []
     nifty_ts = nifty_close[nifty_close.index >= pd.Timestamp(start)]
@@ -280,6 +316,8 @@ def run_backtest(weeks: int, sample: int | None) -> None:
         if len(nifty_hist) >= 20:
             nifty_20d = float(nifty_hist.iloc[-1] / nifty_hist.iloc[-20] - 1)
 
+        regime = trend_series.get(as_of, "ranging") if not trend_series.empty else "ranging"
+
         for ticker, full_df in ohlcv.items():
             df_slice = full_df[full_df.index <= as_of]
             if len(df_slice) < 60:
@@ -294,17 +332,19 @@ def run_backtest(weeks: int, sample: int | None) -> None:
 
             signals = _extract_signals(df_slice, nifty_20d, atr, close)
 
-            # Skip bars with zero active signals (no edge, no trade)
-            active = [s for s in TESTABLE_SIGNALS if signals.get(s) and "bearish" not in s and s != "distribution"]
-            if not active:
-                continue
-
-            # Compute entry levels using the same function as the live system
+            # Compute direction first — the active-signal filter below needs to know
+            # which congruent set to check (see BUY_CONGRUENT/SELL_CONGRUENT comment).
             from src.technicals import classify_wyckoff_phase
             phase = classify_wyckoff_phase(df_slice.tail(90))
             direction = "buy" if phase in {"MARKUP","ACCUMULATION_C","ACCUMULATION_D"} else \
                         "sell" if phase in {"MARKDOWN","DISTRIBUTION_C","DISTRIBUTION_D"} else None
             if direction is None:
+                continue
+
+            # Skip bars with no direction-congruent active signal (no edge, no trade)
+            congruent = BUY_CONGRUENT if direction == "buy" else SELL_CONGRUENT
+            active = [s for s in TESTABLE_SIGNALS if signals.get(s) and s in congruent]
+            if not active:
                 continue
 
             levels = compute_entry_levels(close, atr, direction)
@@ -326,7 +366,7 @@ def run_backtest(weeks: int, sample: int | None) -> None:
                                   cost_pct=round_trip_cost_pct(direction))
             total_evals += 1
 
-            score, _ = _compute_score(signals)
+            score, _ = _compute_score(signals, nifty_trend=regime)
             row = {
                 "as_of":     as_of.date().isoformat(),
                 "ticker":    ticker,
