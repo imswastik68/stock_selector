@@ -54,15 +54,19 @@ def _is_fresh(entry: dict) -> bool:
 def _derive_signals(info: dict) -> dict:
     """Derive fundamental_strong / fundamental_weak from yfinance .info dict."""
     roe        = info.get("returnOnEquity")         # decimal, e.g. 0.18
-    de_ratio   = info.get("debtToEquity")            # ratio, e.g. 0.5 (sometimes as %)
+    de_ratio   = info.get("debtToEquity")            # percentage, e.g. 36.2 = 0.362x
     eps_growth = info.get("earningsQuarterlyGrowth") # decimal, e.g. 0.12
     eps        = info.get("trailingEps")             # absolute earnings
     margins    = info.get("profitMargins")
 
-    # Normalize D/E: yfinance sometimes returns it as a ratio (0.5) or percent (50.0)
+    # Normalize D/E: yfinance's debtToEquity is always a percentage (Yahoo "Total
+    # Debt/Equity (mrq)", e.g. 36.2 meaning a true ratio of 0.362x), never a raw
+    # ratio. A conditional >10 check left true D/E 0.03-0.10 (reported as 3-10)
+    # unscaled, misclassifying low-debt companies as fundamental_weak (confirmed
+    # live: TATAELXSI.NS reported D/E=5.3, true D/E ~0.05).
     de_normalized = None
     if de_ratio is not None:
-        de_normalized = de_ratio / 100 if de_ratio > 10 else de_ratio
+        de_normalized = de_ratio / 100
 
     strong = False
     weak   = False

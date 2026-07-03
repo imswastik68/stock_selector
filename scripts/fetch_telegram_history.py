@@ -59,6 +59,34 @@ def _classify(text: str) -> str:
     return "other"
 
 
+# A single alert can bundle a BUY section, a SELL section, and a WATCH LIST section
+# together (src/telegram_alert.py:_build_message always appends whichever are
+# non-empty) -- _classify() above only tags the whole message with ONE direction
+# (BUY checked first), so the old flat parse mislabeled every SELL/WATCH pick in a
+# combined message as a buy. Split into sections first and parse each independently.
+_SECTION_HEADERS = [
+    (re.compile(r"📈\s*\*\*BUY WATCHLIST"), "buy"),
+    (re.compile(r"📉\s*\*\*SELL"), "sell"),
+    (re.compile(r"👀\s*\*\*WATCH LIST"), "watch"),
+]
+
+
+def _split_sections(text: str) -> list[tuple[str, str]]:
+    """Split a combined alert into (direction, section_text) pairs at the emoji
+    section headers. Returns [] if no recognized section header is present
+    (e.g. mid-day alerts, 'no candidates' messages) -- nothing to parse."""
+    matches: list[tuple[int, str]] = []
+    for pattern, direction in _SECTION_HEADERS:
+        for m in pattern.finditer(text):
+            matches.append((m.start(), direction))
+    matches.sort()
+    sections = []
+    for i, (start, direction) in enumerate(matches):
+        end = matches[i + 1][0] if i + 1 < len(matches) else len(text)
+        sections.append((direction, text[start:end]))
+    return sections
+
+
 # ── pick parser ───────────────────────────────────────────────────────────────
 
 def _p(s: str | None) -> float | None:
@@ -139,12 +167,24 @@ def _parse_picks(text: str, date: str, direction: str) -> list[dict]:
         entry_hi = _p(entry_m.group(2)) if entry_m else None
         entry_mid = round((entry_lo + entry_hi) / 2, 2) if entry_lo and entry_hi else None
 
+        # Cross-check: sl/t1 geometry should match the section's direction
+        # (buy: sl < close < t1; sell: sl > close > t1). Catches any remaining
+        # section-detection edge case instead of silently mislabeling.
+        close = _p(price_m.group(1)) if price_m else None
+        sl_val = _p(sl_m.group(1)) if sl_m else None
+        t1_val = _p(t1_m.group(1)) if t1_m else None
+        if close is not None and sl_val is not None and t1_val is not None:
+            implied = "buy" if (sl_val < close < t1_val) else ("sell" if (sl_val > close > t1_val) else None)
+            if implied is not None and implied != direction:
+                print(f"[fetch] WARNING: {ticker} on {date} labeled {direction!r} but "
+                      f"sl/close/t1 geometry implies {implied!r} — check section split")
+
         picks.append({
             "date":        date,
             "direction":   direction,
             "ticker":      ticker,
             "risk":        risk,
-            "close":       _p(price_m.group(1)) if price_m else None,
+            "close":       close,
             "score":       int(score_m.group(1)) if score_m else None,
             "rsi":         float(rsi_m.group(1)) if rsi_m else None,
             "confidence":  conf_m.group(1) if conf_m else None,
@@ -153,8 +193,8 @@ def _parse_picks(text: str, date: str, direction: str) -> list[dict]:
             "entry_lo":    entry_lo,
             "entry_hi":    entry_hi,
             "entry_mid":   entry_mid,
-            "sl":          _p(sl_m.group(1)) if sl_m else None,
-            "t1":          _p(t1_m.group(1)) if t1_m else None,
+            "sl":          sl_val,
+            "t1":          t1_val,
             "t2":          _p(t2_m.group(1)) if t2_m else None,
             "rr":          rr_m.group(1) if rr_m else None,
             "timeframe":   tf_m.group(1).strip() if tf_m else None,
@@ -231,21 +271,26 @@ async def fetch():
         history.sort(key=lambda m: m["date"])
         print(f"Fetched {len(new_msgs)} new messages ({len(history)} total)")
 
-    # Parse picks from all BUY/SELL messages (re-parse all to be safe)
+    # Parse picks from every message's BUY/SELL sections (re-parse all to be safe).
+    # Section-split first (see _split_sections) -- a single alert can bundle a BUY,
+    # a SELL, and a WATCH LIST section together; the WATCH section is skipped (no
+    # entry/SL, not a trade rec). This replaces relying on the whole-message
+    # _classify() type for pick direction.
     all_picks: list[dict] = []
     for m in history:
         if "type" not in m:
             m["type"] = _classify(m["text"])
-        if m["type"] not in ("buy", "sell"):
-            continue
         date = m["date"][:10]
         hdr  = _parse_header(m["text"])
-        for pick in _parse_picks(m["text"], date, m["type"]):
-            pick["msg_id"]    = m["id"]
-            pick["scan_time"] = hdr.get("scan_time")
-            pick["nifty_trend"] = hdr.get("nifty_trend")
-            pick["screened"]  = hdr.get("screened")
-            all_picks.append(pick)
+        for section_direction, section_text in _split_sections(m["text"]):
+            if section_direction == "watch":
+                continue
+            for pick in _parse_picks(section_text, date, section_direction):
+                pick["msg_id"]    = m["id"]
+                pick["scan_time"] = hdr.get("scan_time")
+                pick["nifty_trend"] = hdr.get("nifty_trend")
+                pick["screened"]  = hdr.get("screened")
+                all_picks.append(pick)
 
     # Deduplicate: keep latest message's parse for each (date, ticker, direction)
     seen: dict[tuple, dict] = {}

@@ -20,7 +20,7 @@ import os
 import re
 from datetime import date, datetime, timezone, timedelta
 
-from src.scorer import BEARISH_EVENT_WEIGHTS
+from src.scorer import BEARISH_EVENT_WEIGHTS, REGIME_WEIGHTS
 
 _GROQ_BASE  = "https://api.groq.com/openai/v1"
 _GROQ_MODEL = "llama-3.3-70b-versatile"
@@ -56,10 +56,30 @@ BULLISH_ONLY_WEIGHTS = {
 # bulk_deal_fii_sell) are new in Phase 3 and had no prior buy-side penalty, so
 # they net to a neutral 0 on buys — cancel only, no extra penalty.
 _BEARISH_EVENT_PRE_PHASE3_DISQUALIFIER = {"distribution_signal": 1, "options_short_buildup": 2}
-BEARISH_ONLY_WEIGHTS = {
-    s: w + _BEARISH_EVENT_PRE_PHASE3_DISQUALIFIER.get(s, 0)
-    for s, w in BEARISH_EVENT_WEIGHTS.items()
-}
+
+
+def _cleanup_weight(sig: str, base_weights: dict, regime_override: dict, pre3: dict | None = None) -> int:
+    """
+    Amount to subtract from a candidate's score for a signal that contradicts its
+    direction (a bearish-event signal on a buy, or a bullish-only signal on a sell).
+
+    Uses the regime-effective weight (override REPLACES the base weight, same
+    semantics as src/scorer.py:_compute_score's merge — not additive) so this stays
+    correct as REGIME_WEIGHTS gets recalibrated: a signal that's already a heavy
+    regime penalty (effective weight < 0) isn't double-penalized here, and a signal
+    boosted into a large regime reward gets fully cancelled, not just its static
+    base amount.
+
+    pre3 (buy-side only): the pre-Phase-3 disqualifier magnitude for the 2 signals
+    that were DISQUALIFIER_WEIGHTS before Phase 3 moved them into BEARISH_EVENT_WEIGHTS.
+    Only added when the effective weight is still >=0 (not already a penalty) —
+    restores the original buy-side penalty instead of just cancelling scorer's add.
+    """
+    eff = regime_override.get(sig, base_weights.get(sig, 0))
+    cleanup = max(0, eff)
+    if pre3 and eff >= 0:
+        cleanup += pre3.get(sig, 0)
+    return cleanup
 
 # Sell entry threshold — set by Phase 0 mining, RE-CONFIRMED by Phase 5 on the full
 # 156-week/185,673-trade backtest (outputs/big_mover_analysis.json:
@@ -202,10 +222,21 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
 
         # Direction-aware cleanup: a bullish-only signal contradicting a SELL
         # candidate (or vice versa) isn't an edge for that trade — strip it back out.
+        # Uses the SAME regime-merge _compute_score applies (override replaces the
+        # base weight, doesn't stack with it) — a static-weight cleanup would either
+        # double-count a signal that's already a heavy regime penalty, or under-cancel
+        # one boosted into a large regime reward. See _cleanup_weight docstring.
+        regime_override = REGIME_WEIGHTS.get(nifty_trend) or {}
         if direction == "buy":
-            adjusted_score -= sum(w for s, w in BEARISH_ONLY_WEIGHTS.items() if s in active_signals)
+            adjusted_score -= sum(
+                _cleanup_weight(s, BEARISH_EVENT_WEIGHTS, regime_override, _BEARISH_EVENT_PRE_PHASE3_DISQUALIFIER)
+                for s in active_signals if s in BEARISH_EVENT_WEIGHTS
+            )
         elif direction == "sell":
-            adjusted_score -= sum(w for s, w in BULLISH_ONLY_WEIGHTS.items() if s in active_signals)
+            adjusted_score -= sum(
+                _cleanup_weight(s, BULLISH_ONLY_WEIGHTS, regime_override)
+                for s in active_signals if s in BULLISH_ONLY_WEIGHTS
+            )
 
         # FII strong buying in downtrend = institutional dip-buying; ease penalty by 1
         fii_easing  = fii_dii.get("fii_buying_strong", False)

@@ -60,7 +60,6 @@ from src.agent import synthesize_watchlist
 from src.performance import performance_summary, record_picks
 from src.risk import size_position, portfolio_summary
 from src.telegram_alert import send_telegram_alert
-from src.trade_sim import WINNER_POLICY
 from src.portfolio import mark_to_market, open_positions, process_exits, summary as portfolio_summary_live
 
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
@@ -146,6 +145,37 @@ def save_output(watchlist_data: dict) -> Path:
     return out_path
 
 
+def _load_pick_ages(tickers: list[str], lookback_days: int = 30) -> dict[str, tuple[str, str]]:
+    """
+    For each ticker, find its earliest still-open pick date in outputs/performance.json
+    within the lookback window, plus that pick's exit_policy. Used for the mid-day
+    time-stop advisory — the prior watchlist file's scan_date (~1-3 days old with daily
+    scans) is NOT a proxy for how long a position has actually been held.
+    Returns {ticker: (pick_date_iso, exit_policy)}.
+    """
+    perf_file = OUTPUTS_DIR / "performance.json"
+    if not perf_file.exists():
+        return {}
+    try:
+        perf = json.loads(perf_file.read_text())
+    except Exception:
+        return {}
+
+    cutoff = (date.today() - timedelta(days=lookback_days)).isoformat()
+    wanted = set(tickers)
+    ages: dict[str, tuple[str, str]] = {}
+    for scan_date, picks in sorted(perf.items()):  # sorted ascending -> first hit is earliest
+        if scan_date < cutoff:
+            continue
+        for ticker, pick in picks.items():
+            if ticker not in wanted or ticker in ages:
+                continue
+            if pick.get("outcome", "open") != "open":
+                continue  # already closed in the tracker — not an open time-stop candidate
+            ages[ticker] = (scan_date, pick.get("exit_policy", "static"))
+    return ages
+
+
 def run_mid_day_scan() -> int:
     """
     Mid-day scan (12:30 PM IST): check intraday momentum for yesterday's candidates.
@@ -157,8 +187,14 @@ def run_mid_day_scan() -> int:
     scan_time = datetime.now(IST).strftime("%H:%M")
     print(f"[main] === Mid-day scan: {date.today().isoformat()}  {scan_time} IST ===")
 
-    # Load most recent watchlist output for candidate tickers
-    outputs = sorted(OUTPUTS_DIR.glob("*.json"), reverse=True)
+    # Load most recent watchlist output for candidate tickers. Match only dated
+    # watchlist files (YYYY-MM-DD.json) -- a bare "*.json" glob also picks up
+    # diagnostic files written by scripts/ (backtest_signal_stats.json,
+    # walk_forward_results.json, telegram_picks.json, ...), some of which are
+    # top-level JSON lists, not the watchlist dict schema this function expects.
+    # walk_forward_results.json in particular sorts lexicographically ahead of any
+    # dated file ("w" > digits) and previously crashed this function outright.
+    outputs = sorted(OUTPUTS_DIR.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].json"), reverse=True)
     if not outputs:
         print("[main] no prior output found — run EOD scan first")
         return 0
@@ -185,12 +221,8 @@ def run_mid_day_scan() -> int:
         except (ValueError, TypeError):
             return None
 
-    prior_date = prior.get("scan_date", "")
-    today_str  = date.today().isoformat()
-    try:
-        days_since_pick = (date.fromisoformat(today_str) - date.fromisoformat(prior_date)).days if prior_date else 0
-    except Exception:
-        days_since_pick = 0
+    today_str = date.today().isoformat()
+    pick_ages = _load_pick_ages(tickers)  # {ticker: (pick_date_iso, exit_policy)}
 
     sl_map: dict[str, dict] = {}
     for direction, key in [("buy", "buy_watchlist"), ("sell", "sell_watchlist")]:
@@ -208,7 +240,7 @@ def run_mid_day_scan() -> int:
     sl_hits: dict[str, dict] = {}
     # Detect T2-reached (consider booking — for all policies that use T2)
     t2_hits: dict[str, dict] = {}
-    # Detect time-stop-due (when WINNER_POLICY includes a time stop)
+    # Detect time-stop-due (per-pick exit_policy == "time_10d", see _load_pick_ages)
     time_stop_due: dict[str, dict] = {}
 
     for ticker, v in intraday.items():
@@ -245,12 +277,23 @@ def run_mid_day_scan() -> int:
                     "direction":     direction,
                 }
 
-        # Time-stop: flag if WINNER_POLICY is time_10d and ≥10 days since pick
-        if WINNER_POLICY == "time_10d" and days_since_pick >= 10:
-            time_stop_due[ticker] = {
-                "price_current": price,
-                "days_held":     days_since_pick,
-            }
+        # Time-stop: per-pick exit_policy (Fix 3) and per-pick age from performance.json,
+        # not the prior watchlist file's scan_date (~1-3 days old with daily scans — the
+        # old check against a global 10-trading-day threshold could never fire).
+        # Calendar days as an approximation for trading days (~2 weeks covers weekends).
+        age = pick_ages.get(ticker)
+        if age is not None:
+            pick_date_iso, pick_policy = age
+            if pick_policy == "time_10d":
+                try:
+                    days_held = (date.fromisoformat(today_str) - date.fromisoformat(pick_date_iso)).days
+                except Exception:
+                    days_held = 0
+                if days_held >= 14:
+                    time_stop_due[ticker] = {
+                        "price_current": price,
+                        "days_held":     days_held,
+                    }
 
     print(f"\n[main] === MID-DAY CONFIRMED ({len(confirmed)} / {len(intraday)} checked) ===")
     for ticker, v in confirmed.items():

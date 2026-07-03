@@ -90,6 +90,12 @@ def record_picks(watchlist_data: dict) -> None:
                     "target_2":   t2,
                     "outcome":    "open",
                     "outcome_date": None,
+                    # Stamped so evaluate_prior_picks re-simulates each pick under the
+                    # policy that was live when it was recorded, not whatever WINNER_POLICY
+                    # is today — otherwise a policy change silently rewrites history.
+                    "exit_policy": WINNER_POLICY,
+                    "big_mover":  entry.get("big_mover", False),
+                    "instrument": entry.get("instrument"),
                 }
 
     if picks:
@@ -120,7 +126,7 @@ def evaluate_prior_picks(lookback_days: int = 7) -> dict:
         return perf
 
     tickers = list(open_by_ticker.keys())
-    print(f"[performance] evaluating {len(tickers)} open picks via {WINNER_POLICY} policy...")
+    print(f"[performance] evaluating {len(tickers)} open picks (per-pick exit_policy)...")
 
     # 30d window: long enough for time_10d policy + buffer
     try:
@@ -163,12 +169,17 @@ def evaluate_prior_picks(lookback_days: int = 7) -> dict:
                 if entry_price <= 0:
                     continue
 
+                # Picks recorded before this stamp existed were all recorded under
+                # "static" (the only policy that ever ran before Phase 5) — fall back
+                # to that, not the current global WINNER_POLICY.
+                pick_policy = pick.get("exit_policy", "static")
+
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     sim = simulate_raw(
                         entry_price, entry_price, entry_price,
                         sl, t1, direction, as_of, df,
-                        t2=t2, exit_policy=WINNER_POLICY,
+                        t2=t2, exit_policy=pick_policy,
                     )
 
                 if not sim.get("triggered"):
@@ -199,21 +210,36 @@ def performance_summary(lookback_days: int = 30) -> dict:
     cutoff = (today - timedelta(days=lookback_days)).isoformat()
 
     total = t1 = sl = open_count = 0
+    # Evidence stream for the two pending near-miss decisions (BIG_MOVER gate n=199/200;
+    # short pipeline re-enable) — split win rate by big_mover flag, report-only.
+    bm_t1 = bm_sl = other_t1 = other_sl = 0
     for scan_date, picks in perf.items():
         if scan_date < cutoff:
             continue
         for pick in picks.values():
             total += 1
             outcome = pick.get("outcome", "open")
-            if outcome in ("t1_hit", "t2_hit"):
+            is_win  = outcome in ("t1_hit", "t2_hit")
+            is_loss = outcome == "sl_hit"
+            if is_win:
                 t1 += 1
-            elif outcome == "sl_hit":
+            elif is_loss:
                 sl += 1
             else:
                 open_count += 1
 
+            if pick.get("big_mover"):
+                bm_t1 += is_win
+                bm_sl += is_loss
+            else:
+                other_t1 += is_win
+                other_sl += is_loss
+
     decided = t1 + sl
     win_rate = round(t1 / decided * 100, 1) if decided > 0 else None
+
+    bm_decided = bm_t1 + bm_sl
+    other_decided = other_t1 + other_sl
 
     return {
         "total_picks":    total,
@@ -223,4 +249,8 @@ def performance_summary(lookback_days: int = 30) -> dict:
         "win_rate_pct":   win_rate,
         "lookback_days":  lookback_days,
         "exit_policy":    WINNER_POLICY,
+        "big_mover_win_rate_pct":   round(bm_t1 / bm_decided * 100, 1) if bm_decided > 0 else None,
+        "big_mover_n_decided":      bm_decided,
+        "other_win_rate_pct":       round(other_t1 / other_decided * 100, 1) if other_decided > 0 else None,
+        "other_n_decided":          other_decided,
     }
