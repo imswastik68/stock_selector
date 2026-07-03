@@ -8,9 +8,9 @@ Key design decisions:
   - Emits outputs/backtest_trades.csv and outputs/backtest_signal_stats.json.
 
 Limitations (documented):
-  - Only OHLCV-derivable signals are tested (13/30). Event signals (bulk deals,
-    SAST, promoter, delivery, options PCR, BSE filings) have no free archive
-    and keep hand weights in the live scorer.
+  - Only OHLCV-derivable signals are tested (17/34, see TESTABLE_SIGNALS). Event
+    signals (bulk deals, SAST, promoter, delivery, options PCR, BSE filings) have
+    no free archive and keep hand weights in the live scorer.
   - Survivorship bias: universe = current NIFTY500 + SME constituents.
   - Nifty 20d return computed from the same download (no point-in-time issue there).
 
@@ -56,7 +56,13 @@ TESTABLE_SIGNALS = [
     "bb_squeeze_breakout", "bullish_candle", "bearish_candle",
     "weekly_trend_aligned", "rs_quality_strong",
     # volume-derived (computed from OHLCV):
-    "volume_surge", "distribution",
+    "volume_surge", "distribution", "heavy_selling",
+    # 52-week high/low (Phase 5) — actual_52w_breakout/breakdown are live-scorer
+    # hand weights that were previously untested ("only OHLCV-derivable signals
+    # are tested" never actually included them despite being OHLCV-derivable);
+    # near_52w_high/low are proximity-only exploratory signals with no live hand
+    # weight (scorer.py dropped pure proximity as "redundant + noisy").
+    "near_52w_high", "near_52w_low", "actual_52w_breakout", "actual_52w_breakdown",
 ]
 
 # Direction-congruent signal sets — a trade only gets generated if it has >=1 active
@@ -70,9 +76,11 @@ TESTABLE_SIGNALS = [
 BUY_CONGRUENT = {
     "rsi_momentum", "rs_vs_nifty", "rsi_bearish_div", "bb_squeeze_breakout",
     "bullish_candle", "weekly_trend_aligned", "rs_quality_strong", "volume_surge",
+    "near_52w_high", "actual_52w_breakout",
 }
 SELL_CONGRUENT = {
     "macd_bearish_cross", "bearish_candle", "rsi_bullish_div", "distribution", "volume_surge",
+    "near_52w_low", "actual_52w_breakdown", "heavy_selling",
 }
 
 BATCH = 50
@@ -207,24 +215,60 @@ def _download_nifty(start: date, end: date) -> pd.DataFrame:
 # ── signal extraction ─────────────────────────────────────────────────────────
 
 def _volume_signals(df_slice: pd.DataFrame) -> dict[str, bool]:
-    """Volume surge and distribution from daily OHLCV slice."""
+    """Volume surge, distribution, and heavy-selling from daily OHLCV slice."""
+    empty = {"volume_surge": False, "distribution": False, "heavy_selling": False}
     if len(df_slice) < 5:
-        return {"volume_surge": False, "distribution": False}
+        return empty
     vol   = df_slice["Volume"].squeeze()
     close = df_slice["Close"].squeeze()
     today_vol = float(vol.iloc[-1])
     avg_30d   = float(vol.iloc[:-1].tail(30).mean()) if len(vol) > 1 else today_vol
     if avg_30d == 0:
-        return {"volume_surge": False, "distribution": False}
+        return empty
     ratio = today_vol / avg_30d
+    today_close = float(close.iloc[-1])
+    prev_close  = float(close.iloc[-2])
     surge = ratio >= 2.5
-    dist  = surge and float(close.iloc[-1]) < float(close.iloc[-2])
-    return {"volume_surge": surge, "distribution": dist}
+    dist  = surge and today_close < prev_close
+    pct_change = (today_close - prev_close) / prev_close * 100 if prev_close else 0.0
+    heavy_selling = ratio >= 1.5 and pct_change <= -4.0   # matches src/data/volume.py
+    return {"volume_surge": surge, "distribution": dist, "heavy_selling": heavy_selling}
+
+
+def _52w_signals(df_slice: pd.DataFrame) -> dict[str, bool]:
+    """52-week high/low proximity + actual breakout/breakdown — mirrors
+    src/data/breakouts.py / src/data/breakdowns.py thresholds (5% proximity,
+    volume_ratio >= 1.2)."""
+    empty = {"near_52w_high": False, "near_52w_low": False,
+             "actual_52w_breakout": False, "actual_52w_breakdown": False}
+    if len(df_slice) < 50:
+        return empty
+    closes = df_slice["Close"].squeeze()
+    vol    = df_slice["Volume"].squeeze()
+    today_close = float(closes.iloc[-1])
+    today_vol   = float(vol.iloc[-1])
+    avg_30d     = float(vol.iloc[:-1].tail(30).mean()) if len(vol) > 1 else today_vol
+    volume_ratio = today_vol / avg_30d if avg_30d > 0 else 0.0
+
+    prior_52w_high = float(closes.iloc[:-1].tail(252).max())
+    prior_52w_low  = float(closes.iloc[:-1].tail(252).min())
+    high_proximity = (prior_52w_high - today_close) / prior_52w_high * 100 if prior_52w_high else 999.0
+    low_proximity  = (today_close - prior_52w_low) / prior_52w_low * 100 if prior_52w_low else 999.0
+
+    near_high = high_proximity <= 5.0 and volume_ratio >= 1.2
+    near_low  = low_proximity  <= 5.0 and volume_ratio >= 1.2
+
+    return {
+        "near_52w_high": near_high,
+        "near_52w_low":  near_low,
+        "actual_52w_breakout":  near_high and today_close >= prior_52w_high,
+        "actual_52w_breakdown": near_low  and today_close <  prior_52w_low,
+    }
 
 
 def _extract_signals(df_slice: pd.DataFrame, nifty_20d: float | None,
                      atr: float, close: float) -> dict[str, bool]:
-    """Call real enrich_with_technicals + volume signals."""
+    """Call real enrich_with_technicals + volume signals + 52w high/low signals."""
     if len(df_slice) < 50:
         return {s: False for s in TESTABLE_SIGNALS}
     try:
@@ -232,6 +276,7 @@ def _extract_signals(df_slice: pd.DataFrame, nifty_20d: float | None,
     except Exception:
         return {s: False for s in TESTABLE_SIGNALS}
     vol_sigs = _volume_signals(df_slice)
+    hl_sigs  = _52w_signals(df_slice)
     return {
         "rsi_momentum":        tech.get("rsi_momentum", False),
         "rs_vs_nifty":         tech.get("rs_vs_nifty", False),
@@ -245,6 +290,11 @@ def _extract_signals(df_slice: pd.DataFrame, nifty_20d: float | None,
         "rs_quality_strong":   tech.get("rs_quality_strong", False),
         "volume_surge":        vol_sigs["volume_surge"],
         "distribution":        vol_sigs["distribution"],
+        "heavy_selling":       vol_sigs["heavy_selling"],
+        "near_52w_high":       hl_sigs["near_52w_high"],
+        "near_52w_low":        hl_sigs["near_52w_low"],
+        "actual_52w_breakout": hl_sigs["actual_52w_breakout"],
+        "actual_52w_breakdown": hl_sigs["actual_52w_breakdown"],
     }
 
 

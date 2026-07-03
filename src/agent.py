@@ -61,20 +61,35 @@ BEARISH_ONLY_WEIGHTS = {
     for s, w in BEARISH_EVENT_WEIGHTS.items()
 }
 
-# Sell entry threshold — set by Phase 0 mining (outputs/big_mover_analysis.json:
-# downtrend_short_edge.verdict == "short_edge_negative": downtrend F&O shorts net
-# -3.52% vs downtrend longs +0.33%, n=582). Downtrend sells need a materially
-# higher bar than buys until Phase 5 re-measures with the short pipeline live.
-# Non-downtrend regimes are unmeasured so far — kept at the existing buy-side value.
+# Sell entry threshold — set by Phase 0 mining, RE-CONFIRMED by Phase 5 on the full
+# 156-week/185,673-trade backtest (outputs/big_mover_analysis.json:
+# downtrend_short_edge.verdict == "short_edge_negative" both passes — Phase 0 (52w):
+# n=582, -3.52% vs longs +0.33%; Phase 5 (156w): n=892, -5.41% vs longs +0.45%, i.e.
+# WORSE on the larger sample, not better). Downtrend sells need a materially higher
+# bar than buys. Non-downtrend regimes are unmeasured so far — kept at the existing
+# buy-side value. See SHORT_PIPELINE_LIVE below — this threshold is currently
+# secondary to that harder gate.
 SELL_ENTRY_THRESHOLD_DOWNTREND = 6
 SELL_ENTRY_THRESHOLD_ELSE = 4
 
-# BIG MOVER tier — Phase 0 mining (outputs/big_mover_analysis.json chosen_gate) found
-# no atr/score/signal combination that clears the 1.5x-holdout-lift ship bar (best
-# candidate: atr>=5 + score>=4 -> 35.0% holdout P(big move) vs the 37.5% required).
-# Ships as an ATR-only INFORMATIONAL flag with no target/exit override, per the
-# plan's documented no-gate-found fallback: "more volatile," not a validated
-# "more likely to hit +-10%." Re-evaluate once Phase 5's 156-week mining runs.
+# Short pipeline (Phase 3) is built but NOT LIVE — Phase 5's 156-week backtest found
+# the short thesis has no measured edge yet, even in its textbook case. Isolated by
+# direction, sign-stable NEGATIVE in both train and holdout 70/30 split for every
+# OHLCV-derivable bearish-event signal: actual_52w_breakdown -2.50%/-2.48%,
+# heavy_selling -2.44%/-2.67%, distribution_signal -1.76%/-0.43% (return_pct lift on
+# SELL trades only). Matches the direct downtrend_short_edge comparison above. All
+# sells route to phase_b (informational only) until this changes. Flip to True and
+# re-run scripts/mine_big_movers.py's downtrend_short_edge check once more data
+# accumulates or the market regime shifts out of the current correction.
+SHORT_PIPELINE_LIVE = False
+
+# BIG MOVER tier — Phase 0 mining found no atr/score/signal combination that clears
+# the 1.5x-holdout-lift ship bar; RE-CONFIRMED by Phase 5 on the 156-week backtest
+# (best candidate atr>=5+score>=6: holdout P(big)=40.2%, decisively above the 30.4%
+# needed, but holdout n=199 — one short of the n>=200 floor, and picks/day=3.75
+# exceeds the <=3.0 cap). Ships as an ATR-only INFORMATIONAL flag with no
+# target/exit override: "more volatile," not a validated "more likely to hit
+# +-10%." Worth re-running once more data closes that n=199-vs-200 near-miss.
 BIG_MOVER_GATE = {"min_atr_pct": 5.0, "status": "no_gate_found"}
 BIG_MOVER_MAX_PER_DAY = 3
 
@@ -251,9 +266,13 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
         # multi-day sell needs stock futures, which only exist for F&O-listed names.
         # Fail-closed — an empty fo_set (fetch failure) routes every sell to watch.
         fo_gated = direction == "sell" and phase in _SELL_PHASES and ticker not in fo_set
+        # Short pipeline built but not live — see SHORT_PIPELINE_LIVE comment above.
+        short_disabled = direction == "sell" and phase in _SELL_PHASES and not SHORT_PIPELINE_LIVE
 
-        if direction == "watch" or adjusted_score < phase_b_threshold or fo_gated:
+        if direction == "watch" or adjusted_score < phase_b_threshold or fo_gated or short_disabled:
             watch_reason = (
+                "Short pipeline not yet validated — informational only (no measured edge, see Phase 5)"
+                if short_disabled else
                 "Short signal — not F&O-tradeable" if fo_gated else
                 _watch_reason(direction, adjusted_score, score, nifty_trend, headwind_penalty)
             )

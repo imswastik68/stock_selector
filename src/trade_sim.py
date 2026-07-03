@@ -17,8 +17,12 @@ from __future__ import annotations
 import pandas as pd
 
 # Applied in performance.py tracker and Telegram exit-plan line.
-# Run scripts/backtest_exits.py then update this constant.
-WINNER_POLICY: str = "static"
+# Updated 2026-07 (Phase 5): scripts/backtest_exits.py on the 156-week/185,673-trade
+# backtest — time_10d beats static on OOS expectancy (-0.765% vs -0.943%) AND OOS win
+# rate (43.3% vs 38.8%, n=56,521). Static's uncapped hold time let stagnant/declining
+# positions bleed indefinitely; forcing an exit at day 10 avoids that. Re-run
+# scripts/backtest_exits.py periodically and update this constant if a better policy emerges.
+WINNER_POLICY: str = "time_10d"
 
 # Human-readable exit plan shown in Telegram alerts. Update alongside WINNER_POLICY.
 EXIT_PLAN_HINT: dict[str, str] = {

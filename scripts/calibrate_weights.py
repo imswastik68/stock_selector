@@ -38,29 +38,39 @@ TRADES_CSV  = ROOT / "outputs" / "backtest_trades.csv"
 OUT_WEIGHTS = ROOT / "outputs" / "calibrated_weights.json"
 OUT_WF      = ROOT / "outputs" / "walk_forward_results.json"
 
-# Current hand weights (from src/scorer.py SHORT_TERM_WEIGHTS + DISQUALIFIER_WEIGHTS, OHLCV-derivable only)
-# Updated to reflect calibrated weights applied 2026-06-13
+# Current hand weights (from src/scorer.py SHORT_TERM_WEIGHTS + DISQUALIFIER_WEIGHTS
+# + BEARISH_EVENT_WEIGHTS, OHLCV-derivable only). Refreshed 2026-07 (Phase 5) after
+# the regime-weight merge fix (Phase 2) and short pipeline (Phase 3) — this mirror
+# had drifted stale relative to the live scorer since the 2026-06-13 calibration.
 CURRENT_WEIGHTS: dict[str, int] = {
-    "rsi_bearish_div":     3,   # mapped from SHORT_TERM_WEIGHTS (was -2 disqualifier)
-    "rsi_momentum":        2,
-    "rs_quality_strong":   2,
-    "rs_vs_nifty":         1,
-    "weekly_trend_aligned":1,
-    # disqualifiers (negative)
-    "rsi_bullish_div":    -5,   # moved to DISQUALIFIER (was +1)
-    "distribution":       -1,   # mapped from distribution_signal (was -5)
-    "volume_surge":       -1,   # mapped from volume_5x (was +3)
-    "bb_squeeze_breakout":-1,   # moved to DISQUALIFIER (was +2)
-    "macd_bearish_cross": -1,
-    "bullish_candle":     -1,   # moved to DISQUALIFIER (was +1)
-    "bearish_candle":     -1,
-    # zero-weight (removed): momentum_6m_strong, macd_bullish_cross, obv_accumulation
+    # SHORT_TERM_WEIGHTS
+    "rsi_bearish_div":      3,
+    "rsi_momentum":         2,
+    "rs_quality_strong":    2,
+    "rs_vs_nifty":          1,
+    "weekly_trend_aligned": 1,
+    "actual_52w_breakout":  3,  # newly testable (Phase 5) — was event-gated out of backtest.py before
+    # DISQUALIFIER_WEIGHTS (negative)
+    "rsi_bullish_div":     -5,
+    "volume_surge":        -1,  # live key: volume_5x
+    "bb_squeeze_breakout": -1,
+    "macd_bearish_cross":  -1,
+    "bullish_candle":      -1,
+    "bearish_candle":      -1,
+    # BEARISH_EVENT_WEIGHTS (Phase 3 — positive, sell-side)
+    "distribution":         2,  # live key: distribution_signal (was a -1 disqualifier pre-Phase-3)
+    "heavy_selling":        2,
+    "actual_52w_breakdown": 3,
+    # near_52w_high/near_52w_low: no hand weight — proximity-only, scorer.py dropped
+    # pure proximity as "redundant + noisy" (only the actual breakout/breakdown scores)
 }
 
 SIGNAL_COLS = [f"sig_{s}" for s in [
     "rsi_momentum","rs_vs_nifty","rsi_bearish_div","rsi_bullish_div",
     "macd_bearish_cross","bb_squeeze_breakout","bullish_candle","bearish_candle",
     "weekly_trend_aligned","rs_quality_strong","volume_surge","distribution",
+    "heavy_selling","near_52w_high","near_52w_low",
+    "actual_52w_breakout","actual_52w_breakdown",
 ]]
 
 
