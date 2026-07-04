@@ -557,6 +557,56 @@ def _build_factor_message(data: dict) -> str:
     return "\n\n".join(sections)
 
 
+# ── monthly A/B/C scoreboard message builder (Phase 5) ────────────────────────
+
+def _build_scoreboard_message(data: dict) -> str:
+    month = data.get("month", "?")
+    sb    = data.get("scoreboard", {})
+    mom   = sb.get("momentum", {})
+    daily = sb.get("daily", {})
+
+    header = (
+        f"<b>🏆 MONTHLY SCOREBOARD — {_e(month)}</b>\n"
+        f"<i>Momentum book vs daily scanner vs buy-and-hold Nifty</i>\n"
+        f"{'─' * 32}"
+    )
+    sections = [header]
+
+    if mom.get("n_months", 0) > 0:
+        cum_str   = _code(f"{mom['cum_return_pct']:+.2f}%")
+        nifty_str = _code(f"{mom['nifty_cum_return_pct']:+.2f}%")
+        sections.append(
+            f"\n📆 <b>Momentum book</b> ({mom['n_months']}mo since inception)\n"
+            f"  Cumulative: {cum_str} vs Nifty {nifty_str}\n"
+            f"  Beat Nifty in {mom['months_beat_nifty']}/{mom['n_months']} months"
+        )
+    else:
+        sections.append("\n📆 <b>Momentum book</b>\n  <i>No completed months yet.</i>")
+
+    circuit_str = f" | circuit: {_e(daily.get('circuit_state', '?'))}"
+    dd = daily.get("drawdown_pct")
+    dd_str = f" ({dd:+.1f}% from peak)" if dd is not None else ""
+    cagr = daily.get("cagr_to_date_pct")
+    nifty_ret = daily.get("nifty_period_return_pct")
+    if cagr is not None and nifty_ret is not None:
+        cagr_str = f"CAGR-to-date {_code(f'{cagr:+.2f}%')} vs Nifty {_code(f'{nifty_ret:+.2f}%')} (same period)"
+    else:
+        cagr_str = "<i>Not enough history yet.</i>"
+    win_rate = daily.get("win_rate_30d_pct")
+    win_rate_str = _code(f"{win_rate}%") if win_rate is not None else _code("N/A")
+    equity_str = _code(f"₹{daily.get('equity', 0):,.0f}")
+    pnl_str    = _code(f"₹{daily.get('realized_pnl', 0):+,.0f}")
+    sections.append(
+        f"\n📈 <b>Daily scanner (live book)</b>\n"
+        f"  Equity {equity_str} · realized {pnl_str}\n"
+        f"  {cagr_str}\n"
+        f"  30d win rate: {win_rate_str}{circuit_str}{dd_str}"
+    )
+
+    sections.append("\n\n⚠️ <i>Not investment advice. Informational track record only.</i>")
+    return "\n\n".join(sections)
+
+
 # ── message builder ───────────────────────────────────────────────────────────
 
 def _build_message(watchlist_data: dict) -> str:
@@ -756,6 +806,8 @@ def send_telegram_alert(watchlist_data: dict, mode: str = "eod") -> None:
         message = _build_midday_message(watchlist_data)
     elif mode == "factor":
         message = _build_factor_message(watchlist_data)
+    elif mode == "scoreboard":
+        message = _build_scoreboard_message(watchlist_data)
     else:
         message = _build_message(watchlist_data)
 

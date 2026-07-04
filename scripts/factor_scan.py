@@ -60,8 +60,10 @@ except ImportError:
     sys.exit("Run: pip install pandas numpy")
 
 import factor_backtest as fb  # noqa: E402 (needs sys.path set up first)
-from src.risk import RISK_CONFIG  # noqa: E402
+from src.risk import RISK_CONFIG, drawdown_state  # noqa: E402
 from src.telegram_alert import send_telegram_alert  # noqa: E402
+from src.portfolio import summary as portfolio_summary_live, equity_history as portfolio_equity_history  # noqa: E402
+from src.performance import performance_summary  # noqa: E402
 
 OUTPUTS = ROOT / "outputs"
 FACTOR_PERF_FILE = OUTPUTS / "factor_performance.json"
@@ -219,6 +221,63 @@ def promotion_signal(perf: dict) -> str:
     return "no promotion/demotion trigger yet"
 
 
+# ── monthly A/B/C scoreboard (Phase 5) ───────────────────────────────────────
+
+def build_scoreboard(nifty_close) -> dict:
+    """
+    Momentum book vs daily-scanner live book vs buy-and-hold Nifty --
+    piggybacks the monthly factor_scan.py run since that's the only
+    naturally-monthly cadence point in the pipeline. Nothing here is
+    auto-applied; it's a truth report the user reads each month.
+    """
+    factor_perf = _load_factor_perf()
+    months = sorted(factor_perf.keys())
+    if months:
+        book_cum, nifty_cum = 1.0, 1.0
+        for m in months:
+            r = factor_perf[m]
+            if r.get("book_return_pct") is not None:
+                book_cum *= (1 + r["book_return_pct"] / 100)
+            if r.get("nifty_return_pct") is not None:
+                nifty_cum *= (1 + r["nifty_return_pct"] / 100)
+        momentum = {
+            "n_months": len(months),
+            "cum_return_pct": round((book_cum - 1) * 100, 2),
+            "nifty_cum_return_pct": round((nifty_cum - 1) * 100, 2),
+            "months_beat_nifty": sum(1 for m in months if factor_perf[m]["beat_nifty"]),
+        }
+    else:
+        momentum = {"n_months": 0, "cum_return_pct": None, "nifty_cum_return_pct": None, "months_beat_nifty": 0}
+
+    live = portfolio_summary_live()
+    hist = portfolio_equity_history()
+    circuit = drawdown_state(hist)
+
+    daily_cagr_to_date = None
+    nifty_period_return_pct = None
+    if hist:
+        first_date, first_equity = hist[0]["date"], hist[0]["equity"]
+        days = (date.today() - date.fromisoformat(first_date)).days
+        if days > 0 and first_equity > 0:
+            years = days / 365.25
+            daily_cagr_to_date = round(((live["equity"] / first_equity) ** (1 / years) - 1) * 100, 2)
+        p0 = fb._price_asof(nifty_close, pd.Timestamp(first_date))
+        p1 = float(nifty_close.iloc[-1])
+        if p0 and p0 > 0:
+            nifty_period_return_pct = round((p1 / p0 - 1) * 100, 2)
+
+    perf_30d = performance_summary(lookback_days=30)
+    daily = {
+        "equity": live["equity"], "cash": live["cash"], "realized_pnl": live["realized_pnl"],
+        "cagr_to_date_pct": daily_cagr_to_date,
+        "nifty_period_return_pct": nifty_period_return_pct,
+        "win_rate_30d_pct": perf_30d.get("win_rate_pct"),
+        "circuit_state": circuit["state"], "drawdown_pct": circuit["drawdown_pct"],
+    }
+
+    return {"momentum": momentum, "daily": daily}
+
+
 def _is_first_weekday_of_month(today: date) -> bool:
     """Approximation, not the NSE trading calendar (see module docstring)."""
     if today.weekday() >= 5:
@@ -310,6 +369,13 @@ def main(sample: int | None = None, force: bool = False) -> int:
         print(f"[factor_scan] EXIT:  {', '.join(diff['exit'])}")
 
     send_telegram_alert(out_data, mode="factor")
+
+    scoreboard = build_scoreboard(nifty_close)
+    print(f"[factor_scan] scoreboard: momentum {scoreboard['momentum']['cum_return_pct']}% "
+          f"vs Nifty {scoreboard['momentum']['nifty_cum_return_pct']}% ({scoreboard['momentum']['n_months']}mo) | "
+          f"daily book equity=₹{scoreboard['daily']['equity']:,.0f} "
+          f"circuit={scoreboard['daily']['circuit_state']}")
+    send_telegram_alert({"month": month_key, "scoreboard": scoreboard}, mode="scoreboard")
     return 0
 
 
