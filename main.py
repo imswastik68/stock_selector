@@ -61,6 +61,7 @@ from src.performance import performance_summary, record_picks
 from src.risk import size_position, portfolio_summary
 from src.telegram_alert import send_telegram_alert
 from src.portfolio import mark_to_market, open_positions, process_exits, summary as portfolio_summary_live
+from src.archive import archive_events
 
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
 
@@ -342,6 +343,17 @@ def main() -> int:
     # 1. Fetch (parallel)
     bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals, fo_ban_current, announcements, fii_dii, gift_nifty, hot_sector_tickers, breakdowns, fo_eligible = fetch_all_data()
 
+    # Proprietary event archive (Phase 3) -- these sources are fetched fresh every
+    # day and previously discarded (src/cache.py is a same-day reuse cache, not a
+    # history). Fail-soft, never blocks the scan.
+    if scan_mode == "eod":
+        archive_events(
+            date.today().isoformat(),
+            bulk_deals=bulk_deals, breakouts=breakouts, breakdowns=breakdowns,
+            volume_gainers=volume_gainers, announcements=announcements,
+            results_calendar=results_calendar, delivery_signals=delivery_signals,
+        )
+
     # Count total unique tickers across all sources for the report
     all_tickers: set[str] = set()
     all_tickers.update(d["ticker"] for d in bulk_deals)
@@ -389,6 +401,12 @@ def main() -> int:
 
         print(f"[main] fetching SAST signals for {len(top_tickers)} candidates...")
         sast_signals = fetch_sast_signals(top_tickers)
+
+        if scan_mode == "eod":
+            archive_events(
+                date.today().isoformat(),
+                promoter_signals=promoter_signals, sast_signals=sast_signals,
+            )
 
         print(f"[main] fetching fundamental signals for {len(top_tickers)} candidates...")
         fundamental_signals = fetch_fundamental_signals(top_tickers)
