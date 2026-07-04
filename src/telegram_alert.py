@@ -488,6 +488,71 @@ def _build_midday_message(data: dict) -> str:
     return "\n\n".join(lines)
 
 
+# ── factor (monthly momentum book) message builder ────────────────────────────
+
+def _build_factor_message(data: dict) -> str:
+    month   = data.get("month", "?")
+    as_of   = data.get("as_of", "?")
+    gate    = data.get("gate_status", {})
+    book    = data.get("book", {})
+    diff    = data.get("diff", {})
+    prior   = data.get("prior_month_realized", {})
+    signal  = data.get("promotion_signal", "")
+    positions = book.get("positions", [])
+    status    = book.get("status", "?")
+    is_live   = gate.get("is_live", False)
+
+    mode_str = "🟢 LIVE" if is_live else "📝 PAPER"
+    header = (
+        f"<b>📆 MONTHLY MOMENTUM BOOK — {_e(month)}</b>\n"
+        f"<i>As of {_e(as_of)} | {mode_str} — {_e(gate.get('reason', ''))}</i>\n"
+        f"{'─' * 32}"
+    )
+    sections = [header]
+
+    if status.startswith("CASH"):
+        sections.append(f"\n💰 <b>{_e(status)}</b>")
+    else:
+        sections.append(f"\n📊 <b>Book ({len(positions)} names, {mode_str})</b>\n")
+        for i, p in enumerate(positions, 1):
+            ticker = p.get("ticker", "?")
+            qty    = p.get("qty", 0)
+            price  = p.get("price", 0)
+            notional = p.get("notional", 0)
+            score  = p.get("mom_12_1_score", 0)
+            sections.append(
+                f"{_b(f'{i}. {ticker}')}\n"
+                f"  Qty {_code(qty)} @ {_code(_fmt_price(price))} = {_code(f'₹{notional:,.0f}')}"
+                f" | mom_12_1={_code(f'{score:+.3f}')}"
+            )
+
+    enter, exit_, hold = diff.get("enter", []), diff.get("exit", []), diff.get("hold", [])
+    if enter or exit_:
+        order_lines = []
+        if enter: order_lines.append(f"  Enter: {_e(', '.join(enter))}")
+        if exit_: order_lines.append(f"  Exit: {_e(', '.join(exit_))}")
+        if hold:  order_lines.append(f"  Hold: {_e(', '.join(hold))}")
+        sections.append("\n🔄 <b>Orders vs last month</b>\n" + "\n".join(order_lines))
+
+    if prior.get("month"):
+        book_ret  = prior.get("book_return_pct")
+        nifty_ret = prior.get("nifty_return_pct")
+        if book_ret is not None and nifty_ret is not None:
+            beat = "beat" if book_ret > nifty_ret else "lagged"
+            sections.append(
+                f"\n📈 <i>{_e(prior['month'])} realized: book {book_ret:+.2f}% "
+                f"vs Nifty {nifty_ret:+.2f}% ({beat})</i>"
+            )
+    if signal:
+        sections.append(f"\n🔔 <i>{_e(signal)}</i>")
+
+    disclaimer = ("\n\n⚠️ <i>Not investment advice. Paper-only until the statistical ship "
+                  "gate passes.</i>" if not is_live else
+                  "\n\n⚠️ <i>Not investment advice.</i>")
+    sections.append(disclaimer)
+    return "\n\n".join(sections)
+
+
 # ── message builder ───────────────────────────────────────────────────────────
 
 def _build_message(watchlist_data: dict) -> str:
@@ -668,7 +733,12 @@ def send_telegram_alert(watchlist_data: dict, mode: str = "eod") -> None:
         print("[telegram] TELEGRAM_TOKEN or TELEGRAM_CHAT_ID not set — skipping alert")
         return
 
-    message = _build_midday_message(watchlist_data) if mode == "mid_day" else _build_message(watchlist_data)
+    if mode == "mid_day":
+        message = _build_midday_message(watchlist_data)
+    elif mode == "factor":
+        message = _build_factor_message(watchlist_data)
+    else:
+        message = _build_message(watchlist_data)
 
     try:
         asyncio.run(_send(token, chat_id, message))

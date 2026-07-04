@@ -200,3 +200,121 @@ def test_simulate_strategy_charges_cost_on_exit():
         sim_no_cost = fb.simulate_strategy(ohlcv, panel, rebalance_dates, top_n=1, factor="mom_12_1")
 
     assert sim["final_equity"] < sim_no_cost["final_equity"]
+
+
+# ── mom_gated (200DMA long-or-cash) ──────────────────────────────────────────
+
+def test_rank_scores_mom_gated_aliases_to_mom_12_1():
+    """mom_gated has no factor of its own -- it ranks identically to
+    mom_12_1; only simulate_strategy applies the extra cash gate."""
+    panel = {pd.Timestamp("2020-01-01"): {"A.NS": {"mom_12_1": 0.5}, "B.NS": {"mom_12_1": 0.2}}}
+    t = pd.Timestamp("2020-01-01")
+    assert fb._rank_scores(panel, t, "mom_gated") == fb._rank_scores(panel, t, "mom_12_1")
+
+
+def test_simulate_strategy_mom_gated_goes_to_cash_below_200dma():
+    dates = pd.bdate_range("2020-01-01", periods=63)
+    rebalance_dates = [dates[0], dates[21], dates[42], dates[62]]
+    ohlcv = {
+        "A.NS": pd.DataFrame({"Close": np.linspace(100, 110, len(dates))}, index=dates),
+    }
+    panel = {t: {"A.NS": {"mom_12_1": 1.0}} for t in rebalance_dates}
+    # Below 200DMA at every rebalance date -> should hold 100% cash throughout
+    below_200dma = pd.Series(True, index=dates)
+
+    sim = fb.simulate_strategy(ohlcv, panel, rebalance_dates, top_n=1, factor="mom_gated",
+                                below_200dma=below_200dma)
+    assert sim["pct_periods_in_cash"] == 100.0
+    assert sim["final_equity"] == pytest.approx(1.0)  # never invested -> flat equity
+
+
+def test_simulate_strategy_mom_gated_invests_when_above_200dma():
+    dates = pd.bdate_range("2020-01-01", periods=63)
+    rebalance_dates = [dates[0], dates[21], dates[42], dates[62]]
+    ohlcv = {
+        "A.NS": pd.DataFrame({"Close": np.linspace(100, 110, len(dates))}, index=dates),
+    }
+    panel = {t: {"A.NS": {"mom_12_1": 1.0}} for t in rebalance_dates}
+    below_200dma = pd.Series(False, index=dates)  # always above -> never gated to cash
+
+    sim = fb.simulate_strategy(ohlcv, panel, rebalance_dates, top_n=1, factor="mom_gated",
+                                below_200dma=below_200dma)
+    assert sim["pct_periods_in_cash"] == 0.0
+    assert sim["final_equity"] > 1.0  # A.NS rises the whole period, book should gain
+
+
+# ── multi-split ship gate (Phase 1) ──────────────────────────────────────────
+
+def test_parse_splits():
+    assert fb.parse_splits("2018,2020,2022") == ["2018-01-01", "2020-01-01", "2022-01-01"]
+    assert fb.parse_splits(" 2024 , 2026 ") == ["2024-01-01", "2026-01-01"]
+
+
+def test_split_train_holdout_respects_custom_split_date():
+    dates = pd.bdate_range("2018-01-01", periods=500)
+    train, holdout = fb.split_train_holdout(list(dates), split_date_str="2019-06-01")
+    assert all(t < pd.Timestamp("2019-06-01") for t in train)
+    assert all(t >= pd.Timestamp("2019-06-01") for t in holdout)
+    assert len(train) + len(holdout) == len(dates)
+
+
+def _split_result(split: str, n: int, ic_mean: float, ic_t: float | None,
+                   spread: float, sharpe: float) -> dict:
+    return {
+        "split": split, "holdout_n_dates": n,
+        "ic": {"mean_ic": ic_mean, "t_stat": ic_t, "n": n},
+        "decile": {"mean_spread_pct": spread, "n": n},
+        "holdout_metrics": {"sharpe": sharpe},
+    }
+
+
+def test_evaluate_multi_split_gate_ships_on_majority_ic_pass_and_all_other_checks():
+    # 3 eligible splits (n>=24), 2/3 pass IC -> majority; decile+Sharpe pass everywhere
+    splits = [
+        _split_result("2018-01-01", 100, 0.05, 2.5, 1.0, 1.2),
+        _split_result("2020-01-01", 60,  0.04, 2.1, 0.5, 0.9),
+        _split_result("2022-01-01", 50,  0.02, 1.0, 0.3, 0.8),  # IC fails, but outvoted
+    ]
+    bench = [{"sharpe": 0.5}, {"sharpe": 0.5}, {"sharpe": 0.5}]
+    gate = fb.evaluate_multi_split_gate(splits, bench)
+    assert gate["ships"] is True
+    assert gate["n_ic_eligible_splits"] == 3
+    assert gate["n_ic_pass"] == 2
+
+
+def test_evaluate_multi_split_gate_thin_holdout_is_informational_only():
+    """A split with holdout_n < MIN_IC_HOLDOUT_N must not count toward the
+    IC majority-vote denominator, even if its (meaningless) t-stat is huge --
+    otherwise a single noisy thin split could flip the verdict either way."""
+    splits = [
+        _split_result("2018-01-01", 100, 0.05, 2.5, 1.0, 1.2),  # only eligible split, passes
+        _split_result("2026-01-01", 5, 0.20, 9.9, 1.0, 2.0),     # n<24 -> informational only
+    ]
+    bench = [{"sharpe": 0.5}, {"sharpe": 0.5}]
+    gate = fb.evaluate_multi_split_gate(splits, bench)
+    assert gate["n_ic_eligible_splits"] == 1  # thin split excluded from the denominator
+    assert gate["n_ic_pass"] == 1
+    assert gate["ships"] is True
+    thin = next(s for s in gate["per_split"] if s["split"] == "2026-01-01")
+    assert thin["ic_informational_only"] is True
+
+
+def test_evaluate_multi_split_gate_fails_when_sharpe_does_not_beat_nifty():
+    splits = [
+        _split_result("2018-01-01", 100, 0.05, 2.5, 1.0, 1.2),
+        _split_result("2024-01-01", 40,  0.04, 2.1, 0.5, 0.4),  # Sharpe below Nifty's 0.5
+    ]
+    bench = [{"sharpe": 0.5}, {"sharpe": 0.5}]
+    gate = fb.evaluate_multi_split_gate(splits, bench)
+    assert gate["ships"] is False
+    assert any("Sharpe does not beat Nifty" in r for r in gate["reasons"])
+
+
+def test_evaluate_multi_split_gate_fails_when_decile_spread_not_positive():
+    splits = [
+        _split_result("2018-01-01", 100, 0.05, 2.5, -0.2, 1.2),  # negative decile spread
+    ]
+    bench = [{"sharpe": 0.5}]
+    gate = fb.evaluate_multi_split_gate(splits, bench)
+    assert gate["ships"] is False
+    assert any("decile spread" in r for r in gate["reasons"])
