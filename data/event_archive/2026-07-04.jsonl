@@ -2907,3 +2907,11 @@
 {"date": "2026-07-04", "source": "sast_signals", "ticker": "APOLLO.NS", "payload": {"value": false}, "hash": "5e41c437b9f1287f"}
 {"date": "2026-07-04", "source": "sast_signals", "ticker": "IKS.NS", "payload": {"value": false}, "hash": "045b7e79782ecc35"}
 {"date": "2026-07-04", "source": "sast_signals", "ticker": "FUSION.NS", "payload": {"value": false}, "hash": "b398c14ef07363f0"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "APOLLO.NS", "payload": {"promoter_pct": 50.81, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "272c4fd82ad2dda0"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "AURUM.NS", "payload": {"promoter_pct": 60.14, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "d01f3a502b14e392"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "ABCAPITAL.NS", "payload": {"promoter_pct": 65.64, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "a274525132d69e6b"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "SCHNEIDER.NS", "payload": {"promoter_pct": 77.57, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "c5e6825ac360f5c7"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "CREDITACC.NS", "payload": {"promoter_pct": 66.21, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "0d0fee0981ca9367"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "FUSION.NS", "payload": {"promoter_pct": 54.42, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "cbf9ae00e0949f88"}
+{"date": "2026-07-04", "source": "sast_signals", "ticker": "AURUM.NS", "payload": {"value": false}, "hash": "849edd7c88d3fc68"}
+{"date": "2026-07-04", "source": "sast_signals", "ticker": "SCHNEIDER.NS", "payload": {"value": false}, "hash": "e88ff59f473ce16c"}
