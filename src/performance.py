@@ -48,6 +48,16 @@ def _parse_price(s) -> float | None:
         return None
 
 
+def _parse_zone(s) -> tuple[float, float] | None:
+    """Parse compute_entry_levels' '₹95.5-₹104.5' format -> (95.5, 104.5).
+    Returns None for missing/"N/A" zones (legacy picks, LLM fallback path)."""
+    try:
+        lo, hi = (float(x) for x in str(s).replace("₹", "").replace(",", "").split("-"))
+        return (lo, hi) if 0 < lo <= hi else None
+    except (ValueError, TypeError):
+        return None
+
+
 def _load_perf() -> dict:
     if _PERF_FILE.exists():
         try:
@@ -81,10 +91,13 @@ def record_picks(watchlist_data: dict) -> None:
             t1 = _parse_price(entry.get("target_1"))
             t2 = _parse_price(entry.get("target_2"))
             price = entry.get("today_close")
+            zone  = _parse_zone(entry.get("entry_zone") or entry.get("short_entry_zone"))
             if t and sl and t1:
                 picks[t] = {
                     "direction":  direction,
                     "entry":      price,
+                    "entry_lo":   zone[0] if zone else price,
+                    "entry_hi":   zone[1] if zone else price,
                     "stop_loss":  sl,
                     "target_1":   t1,
                     "target_2":   t2,
@@ -94,6 +107,13 @@ def record_picks(watchlist_data: dict) -> None:
                     # policy that was live when it was recorded, not whatever WINNER_POLICY
                     # is today — otherwise a policy change silently rewrites history.
                     "exit_policy": WINNER_POLICY,
+                    # Methodology stamp: picks recorded from this point on carry a real
+                    # entry_lo/entry_hi zone and are evaluated starting the NEXT trading
+                    # day (as_of = scan_date). Picks recorded before this existed have no
+                    # zone (entry_lo==entry_hi==close) and were evaluated starting on the
+                    # scan-day bar itself -- see evaluate_prior_picks' as_of comment for
+                    # why that was a bug, not a design choice.
+                    "eval_method": "next_day_zone_v2",
                     "big_mover":  entry.get("big_mover", False),
                     "instrument": entry.get("instrument"),
                 }
@@ -156,11 +176,26 @@ def evaluate_prior_picks(lookback_days: int = 7) -> dict:
                 continue
 
             for scan_date, t, pick in entries:
-                pick_dt = pd.Timestamp(scan_date)
-                # Subtract 1 business day so simulate_raw checks entry on the scan date bar
-                as_of = pick_dt - pd.tseries.offsets.BusinessDay(1)
+                # as_of = scan_date itself, NOT scan_date - 1 business day. simulate_raw
+                # checks entry in the first 2 bars strictly AFTER as_of (future = df[df.index
+                # > as_of_date], trade_sim.py:67) -- so as_of=scan_date means the first bar
+                # checked is the NEXT trading day, matching reality: the EOD scan runs after
+                # close, so the earliest a real trader can fill is the next session. The old
+                # "as_of = scan_date - 1 business day" checked the scan-day bar itself, and
+                # combined with entry_lo==entry_hi==close (no zone) below, that collapsed the
+                # entry to a single point on a bar that had ALREADY happened by scan time --
+                # its own intraday low could trip the 2xATR stop same-day before any real
+                # fill was possible. Verified false positives: JAGRAN 2026-06-04, MBAPL
+                # 2026-07-02 and 07-03, all sl_hit on their own scan date.
+                as_of = pd.Timestamp(scan_date)
 
                 entry_price = float(pick["entry"] or 0)
+                # entry_lo/entry_hi: real entry zone (compute_entry_levels, close +/- 0.5*ATR)
+                # for picks recorded after the eval_method stamp; point-at-close for legacy
+                # picks (the as_of fix alone already removes their same-day self-trip).
+                entry_lo  = float(pick.get("entry_lo") or entry_price)
+                entry_hi  = float(pick.get("entry_hi") or entry_price)
+                entry_mid = (entry_lo + entry_hi) / 2 if pick.get("entry_lo") else entry_price
                 sl  = float(pick["stop_loss"])
                 t1  = float(pick["target_1"])
                 t2  = float(pick["target_2"]) if pick.get("target_2") else None
@@ -177,7 +212,7 @@ def evaluate_prior_picks(lookback_days: int = 7) -> dict:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     sim = simulate_raw(
-                        entry_price, entry_price, entry_price,
+                        entry_lo, entry_hi, entry_mid,
                         sl, t1, direction, as_of, df,
                         t2=t2, exit_policy=pick_policy,
                     )
@@ -213,6 +248,11 @@ def performance_summary(lookback_days: int = 30) -> dict:
     # Evidence stream for the two pending near-miss decisions (BIG_MOVER gate n=199/200;
     # short pipeline re-enable) — split win rate by big_mover flag, report-only.
     bm_t1 = bm_sl = other_t1 = other_sl = 0
+    # v2-only tally: picks recorded with the fixed next-day-zone entry methodology
+    # (eval_method == "next_day_zone_v2"). Mixed-methodology windows understate the
+    # true win rate with legacy scan-day-point-entry picks in them -- this lets a
+    # caller (e.g. src/gates.py) restrict to clean-method data once enough accumulates.
+    v2_t1 = v2_sl = 0
     for scan_date, picks in perf.items():
         if scan_date < cutoff:
             continue
@@ -235,11 +275,16 @@ def performance_summary(lookback_days: int = 30) -> dict:
                 other_t1 += is_win
                 other_sl += is_loss
 
+            if pick.get("eval_method") == "next_day_zone_v2":
+                v2_t1 += is_win
+                v2_sl += is_loss
+
     decided = t1 + sl
     win_rate = round(t1 / decided * 100, 1) if decided > 0 else None
 
     bm_decided = bm_t1 + bm_sl
     other_decided = other_t1 + other_sl
+    v2_decided = v2_t1 + v2_sl
 
     return {
         "total_picks":    total,
@@ -253,6 +298,13 @@ def performance_summary(lookback_days: int = 30) -> dict:
         "big_mover_n_decided":      bm_decided,
         "other_win_rate_pct":       round(other_t1 / other_decided * 100, 1) if other_decided > 0 else None,
         "other_n_decided":          other_decided,
+        "n_decided_v2":             v2_decided,
+        "win_rate_v2_pct":          round(v2_t1 / v2_decided * 100, 1) if v2_decided > 0 else None,
+        "methodology_note": (
+            "picks recorded before the next_day_zone_v2 stamp were evaluated with a "
+            "scan-day point-entry (bug: same-day SL trips inflated losses); this window "
+            "may mix both methods -- see n_decided_v2/win_rate_v2_pct for clean-method-only figures"
+        ),
     }
 
 
