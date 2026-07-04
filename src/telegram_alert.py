@@ -677,6 +677,13 @@ def _build_message(watchlist_data: dict) -> str:
                 f"watch-only until {_e(loss_streak.get('cooldown_until', '?'))}"
             )
 
+        gates = watchlist_data.get("gates") or {}
+        if gates:
+            gs = gates.get("scanner", {}); gm = gates.get("momentum", {})
+            sections.append(
+                f"\n🚦 <i>{_e(gs.get('status_line', ''))}\n{_e(gm.get('status_line', ''))}</i>"
+            )
+
         if buy_list:
             sections.append(f"\n📈 <b>BUY WATCHLIST ({len(buy_list)} picks)</b>\n")
             sections.extend(_format_buy_entry(e, i + 1) for i, e in enumerate(buy_list))

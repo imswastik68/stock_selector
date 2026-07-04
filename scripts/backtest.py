@@ -84,6 +84,7 @@ SELL_CONGRUENT = {
 }
 
 BATCH = 50
+STALE_DAYS = 7  # a cached ticker whose last bar is older than end-STALE_DAYS gets re-downloaded
 
 
 # ── universe ──────────────────────────────────────────────────────────────────
@@ -117,11 +118,22 @@ def _ticker_csv(ticker: str) -> Path:
 
 def _download_and_cache(tickers: list[str], start: date, end: date,
                         force: bool = False) -> dict[str, pd.DataFrame]:
+    """
+    Cache-then-download, per ticker. A ticker whose cached CSV's last bar is
+    older than `end - STALE_DAYS` is treated as MISSING (re-downloaded fully,
+    CSV overwritten) rather than reused as-is -- previously a ticker cached
+    once stayed frozen at that date forever, since this function only ever
+    checked "does the file exist", never "is the file's tail current". If the
+    re-download fails (network error, delisted ticker), the stale data is kept
+    as a fallback in `stale_map` rather than the ticker vanishing entirely.
+    """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     _CACHE_DIR2.mkdir(parents=True, exist_ok=True)
 
     cached_map: dict[str, pd.DataFrame] = {}
+    stale_map: dict[str, pd.DataFrame] = {}
     if not force:
+        stale_cutoff = end - timedelta(days=STALE_DAYS)
         for t in tickers:
             csv = _ticker_csv(t)
             if csv.exists():
@@ -130,11 +142,17 @@ def _download_and_cache(tickers: list[str], start: date, end: date,
                     df = df.dropna(how="all")
                     df = df[df["Close"].notna()]
                     if not df.empty:
-                        cached_map[t] = df
+                        if df.index[-1].date() < stale_cutoff:
+                            stale_map[t] = df
+                        else:
+                            cached_map[t] = df
                 except Exception:
                     pass
         if cached_map:
             print(f"[backtest] loaded {len(cached_map)}/{len(tickers)} tickers from CSV cache")
+        if stale_map:
+            print(f"[backtest] {len(stale_map)} cached tickers stale "
+                  f"(last bar older than end-{STALE_DAYS}d) — re-downloading")
 
     missing = [t for t in tickers if t not in cached_map]
     if not missing:
@@ -177,7 +195,9 @@ def _download_and_cache(tickers: list[str], start: date, end: date,
         except Exception as exc:
             print(f"[backtest] batch {i} error: {exc}")
 
-    all_map = {**cached_map, **fresh}
+    # fresh wins over stale (re-download succeeded); stale is the fallback for
+    # any ticker whose re-download failed, so it doesn't vanish from the dataset.
+    all_map = {**stale_map, **cached_map, **fresh}
     print(f"[backtest] {len(fresh)} new tickers downloaded, {len(all_map)} total")
     return {t: all_map[t] for t in tickers if t in all_map}
 

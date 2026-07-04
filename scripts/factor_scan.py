@@ -64,6 +64,7 @@ from src.risk import RISK_CONFIG, drawdown_state  # noqa: E402
 from src.telegram_alert import send_telegram_alert  # noqa: E402
 from src.portfolio import summary as portfolio_summary_live, equity_history as portfolio_equity_history  # noqa: E402
 from src.performance import performance_summary  # noqa: E402
+from src.gates import momentum_gate  # noqa: E402
 
 OUTPUTS = ROOT / "outputs"
 FACTOR_PERF_FILE = OUTPUTS / "factor_performance.json"
@@ -76,23 +77,15 @@ MOMENTUM_CAPITAL_PCT = min(0.20, max(0.10, float(os.environ.get("MOMENTUM_CAPITA
 
 def _gate_status() -> tuple[bool, str]:
     """
-    True (LIVE) only if mom_12_1 or mom_gated actually cleared the
-    multi-split ship gate in the most recent scripts/factor_backtest.py
-    --validate run. Everything else, including no backtest output existing
-    yet, defaults to PAPER-ONLY -- the safe default, not the exception.
+    Delegates to src.gates.momentum_gate() (the single source of truth,
+    shared with main.py's daily gate report). True (LIVE) only if mom_12_1
+    or mom_gated actually cleared the multi-split ship gate in the most
+    recent scripts/factor_backtest.py --validate run. Everything else,
+    including no backtest output existing yet, defaults to PAPER-ONLY --
+    the safe default, not the exception.
     """
-    bt_file = OUTPUTS / "factor_backtest.json"
-    if not bt_file.exists():
-        return False, "no factor_backtest.json found — defaulting to PAPER-ONLY"
-    try:
-        bt = json.loads(bt_file.read_text())
-    except Exception:
-        return False, "factor_backtest.json unreadable — defaulting to PAPER-ONLY"
-    for name in ("mom_12_1", "mom_gated"):
-        gate = bt.get("strategies", {}).get(name, {}).get("ship_gate_multi_split", {})
-        if gate.get("ships"):
-            return True, f"{name} passed the multi-split ship gate (outputs/factor_backtest.json)"
-    return False, "no momentum strategy has passed the multi-split ship gate — PAPER-ONLY (outputs/factor_backtest.json)"
+    g = momentum_gate()
+    return g["live"], g["reason"]
 
 
 # ── book construction ────────────────────────────────────────────────────────

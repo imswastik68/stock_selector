@@ -597,6 +597,15 @@ def main() -> int:
     except Exception as exc:
         print(f"[main] performance tracking error (non-fatal): {exc}")
 
+    # 7c. Automated gate status (Phase 4): the honest "has anything here earned
+    # real money yet" line, instead of eyeballing performance.json daily.
+    try:
+        from src.gates import scanner_gate, momentum_gate, gates_report
+        watchlist_data["gates"] = {"scanner": scanner_gate(), "momentum": momentum_gate()}
+        print(gates_report())
+    except Exception as exc:
+        print(f"[main] gate status error (non-fatal): {exc}")
+
     # 8. Telegram alert
     send_telegram_alert(watchlist_data)
 
