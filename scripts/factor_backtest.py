@@ -34,10 +34,15 @@ valid, complete result of running this script, not a bug.
 Usage:
   python scripts/factor_backtest.py                       # monthly rebalance, all factors, all N
   python scripts/factor_backtest.py --rebalance 5          # weekly rebalance
-  python scripts/factor_backtest.py --validate             # + IC / decile-spread / walk-forward / ship-gate
+  python scripts/factor_backtest.py --validate             # + IC / decile-spread / multi-split ship-gate
+  python scripts/factor_backtest.py --validate --splits 2018,2020,2022,2024,2026  # explicit split years (this is the default)
   python scripts/factor_backtest.py --hedge                # + Nifty-futures hedge overlay (Phase C)
   python scripts/factor_backtest.py --sample 100           # fast sanity check, first 100 tickers
   python scripts/factor_backtest.py --weeks 260            # limit to last 5 years (deeper history is slower)
+
+Strategies evaluated: mom_12_1, hi_52w, low_vol, rs_quality, composite (equal-
+weight z-score of the four), mom_gated (mom_12_1, long-or-cash gated by
+Nifty's 200DMA -- the documented momentum-crash fix, no futures required).
 """
 
 from __future__ import annotations
@@ -73,7 +78,10 @@ MIN_TURNOVER_CR = 10.0
 TOP_N_OPTIONS      = [15, 20, 30]
 REBALANCE_DEFAULT  = 21     # trading days ~= 1 month
 WARMUP_DAYS        = 400    # calendar days of history required before the first rebalance (>=252 trading days for mom_12_1/hi_52w)
-WALK_FORWARD_SPLIT = "2022-01-01"   # train < split, holdout >= split (covers the 2025-26 correction)
+WALK_FORWARD_SPLIT = "2022-01-01"   # single-split detailed report (train < split, holdout >= split)
+DEFAULT_SPLITS     = "2018,2020,2022,2024,2026"   # multi-split ship-gate years, fixed in advance (plan risk: split-shopping)
+MIN_IC_HOLDOUT_N   = 24   # below this many holdout periods, an IC t-stat is statistically meaningless
+                          # (informational only -- excluded from the majority-vote denominator, can't veto or rescue)
 
 FACTOR_NAMES = ["mom_12_1", "hi_52w", "low_vol", "rs_quality"]
 
@@ -329,6 +337,8 @@ def _rank_scores(panel: dict, as_of: pd.Timestamp, factor: str) -> dict[str, flo
     date_scores = panel.get(as_of, {})
     if factor == "composite":
         return compute_composite(date_scores)
+    if factor == "mom_gated":
+        factor = "mom_12_1"  # same ranking as mom_12_1; the 200DMA gate is applied in simulate_strategy
     return {t_: raw[factor] for t_, raw in date_scores.items() if factor in raw}
 
 
@@ -359,17 +369,31 @@ def simulate_strategy(
     is a conservative bias (it can only make the hedge look worse) and is moot
     here since the underlying long book does not clear the ship gate; flagged
     for anyone who revisits the hedge on a book that does ship.
+
+    factor == "mom_gated": ranks by mom_12_1 (via _rank_scores) but holds 100%
+    cash instead of the top-N book whenever the index is below its 200DMA --
+    the documented long-or-cash momentum-crash fix (Daniel & Moskowitz 2016),
+    retail-executable with no futures/derivatives. Requires below_200dma.
+    Different from hedge_fraction: this GATES the long book itself rather
+    than adding a short overlay on top of it.
     """
     equity = 1.0
     curve: list[dict] = []
     prev_holdings: set[str] = set()
     turnovers: list[float] = []
     period_returns: list[dict] = []  # for regime-split analysis
+    gated_periods = 0
 
     for i, t in enumerate(rebalance_dates):
         scores = _rank_scores(panel, t, factor)
         ranked = sorted(scores.items(), key=lambda kv: -kv[1])
         new_holdings = set(t_ for t_, _ in ranked[:top_n])
+
+        if factor == "mom_gated" and below_200dma is not None:
+            below = below_200dma.asof(t)
+            if below is not None and pd.notna(below) and bool(below):
+                new_holdings = set()  # 100% cash this period
+                gated_periods += 1
 
         exiting = prev_holdings - new_holdings
         cost_drag = (len(exiting) / top_n) * (round_trip_cost_pct("buy") / 100) if prev_holdings else 0.0
@@ -404,6 +428,7 @@ def simulate_strategy(
         "final_equity": equity,
         "avg_turnover": float(np.mean(turnovers)) if turnovers else 0.0,
         "period_returns": period_returns,
+        "pct_periods_in_cash": round(gated_periods / len(rebalance_dates) * 100, 1) if rebalance_dates else 0.0,
     }
 
 
@@ -516,8 +541,9 @@ def compute_decile_spread(ohlcv: dict, panel: dict, rebalance_dates: list[pd.Tim
     return {"mean_spread_pct": round(float(np.mean(spreads)) * 100, 3), "n": len(spreads)}
 
 
-def split_train_holdout(rebalance_dates: list[pd.Timestamp]) -> tuple[list, list]:
-    split = pd.Timestamp(WALK_FORWARD_SPLIT)
+def split_train_holdout(rebalance_dates: list[pd.Timestamp],
+                         split_date_str: str = WALK_FORWARD_SPLIT) -> tuple[list, list]:
+    split = pd.Timestamp(split_date_str)
     train = [t for t in rebalance_dates if t < split]
     holdout = [t for t in rebalance_dates if t >= split]
     return train, holdout
@@ -576,10 +602,112 @@ def evaluate_ship_gate(factor: str, holdout_metrics: dict, bench_holdout_metrics
     return {"ships": ships, "alpha_pct": round(alpha, 3) if alpha is not None else None, "reasons": reasons}
 
 
+# ── multi-split validation (Phase 1) ──────────────────────────────────────────
+
+def parse_splits(splits_arg: str) -> list[str]:
+    """'2018,2020,2022,2024,2026' -> ['2018-01-01', '2020-01-01', ...]"""
+    years = [y.strip() for y in splits_arg.split(",") if y.strip()]
+    return [f"{y}-01-01" for y in years]
+
+
+def validate_one_split(ohlcv: dict, panel: dict, rebalance_dates: list[pd.Timestamp],
+                        top_n: int, factor: str, split_date_str: str,
+                        periods_per_year: float, below_200dma: pd.Series | None) -> dict | None:
+    """Full holdout validation (metrics, IC, decile spread) for ONE split
+    boundary. Returns None if there isn't enough data on either side of the
+    split to simulate anything meaningful."""
+    train_dates, holdout_dates = split_train_holdout(rebalance_dates, split_date_str)
+    if len(train_dates) < 5 or len(holdout_dates) < 5:
+        return None
+    sim_holdout = simulate_strategy(ohlcv, panel, holdout_dates, top_n, factor, below_200dma=below_200dma)
+    holdout_metrics = compute_metrics(sim_holdout["curve"], periods_per_year)
+    ic = compute_ic(ohlcv, panel, holdout_dates, factor)
+    decile = compute_decile_spread(ohlcv, panel, holdout_dates, factor)
+    return {
+        "split": split_date_str, "holdout_n_dates": len(holdout_dates),
+        "holdout_metrics": holdout_metrics, "ic": ic, "decile": decile,
+    }
+
+
+def bench_one_split(nifty_close: pd.Series, rebalance_dates: list[pd.Timestamp],
+                     split_date_str: str, periods_per_year: float) -> dict | None:
+    train_dates, holdout_dates = split_train_holdout(rebalance_dates, split_date_str)
+    if len(holdout_dates) < 5:
+        return None
+    bench_holdout = simulate_benchmark(nifty_close, holdout_dates)
+    return compute_metrics(bench_holdout["curve"], periods_per_year)
+
+
+def evaluate_multi_split_gate(split_results: list[dict], bench_split_results: list[dict | None]) -> dict:
+    """
+    Ship rule (plan Phase 1, fixed in advance -- not tuned after seeing results):
+      - IC >= SHIP_MIN_IC with t >= SHIP_MIN_IC_TSTAT in a MAJORITY of splits
+        that have holdout n >= MIN_IC_HOLDOUT_N (a t-stat on fewer periods is
+        statistically meaningless and would let noise veto or rescue the
+        verdict -- those splits' IC is still reported, just excluded from the
+        majority-vote denominator).
+      - AND positive decile spread in EVERY split (regardless of n).
+      - AND holdout Sharpe > Nifty holdout Sharpe in EVERY split (regardless of n).
+    """
+    reasons = []
+    per_split_detail = []
+    ic_eligible: list[tuple[str, bool]] = []
+    all_decile_positive = True
+    all_sharpe_beats = True
+
+    for sr, br in zip(split_results, bench_split_results):
+        split = sr["split"]
+        ic, decile, hm, n = sr["ic"], sr["decile"], sr["holdout_metrics"], sr["holdout_n_dates"]
+
+        ic_informational = n < MIN_IC_HOLDOUT_N
+        ic_pass = bool(
+            ic.get("mean_ic") is not None and ic["mean_ic"] >= SHIP_MIN_IC
+            and ic.get("t_stat") is not None and ic["t_stat"] >= SHIP_MIN_IC_TSTAT
+        )
+        if not ic_informational:
+            ic_eligible.append((split, ic_pass))
+
+        spread_ok = decile.get("mean_spread_pct") is not None and decile["mean_spread_pct"] > 0
+        all_decile_positive = all_decile_positive and spread_ok
+
+        strat_sharpe = hm.get("sharpe")
+        bench_sharpe = (br or {}).get("sharpe")
+        sharpe_ok = strat_sharpe is not None and bench_sharpe is not None and strat_sharpe > bench_sharpe
+        all_sharpe_beats = all_sharpe_beats and sharpe_ok
+
+        per_split_detail.append({
+            "split": split, "holdout_n": n,
+            "ic_mean": ic.get("mean_ic"), "ic_t": ic.get("t_stat"),
+            "ic_informational_only": ic_informational, "ic_pass": ic_pass,
+            "decile_spread_pct": decile.get("mean_spread_pct"), "decile_ok": spread_ok,
+            "strategy_sharpe": strat_sharpe, "bench_sharpe": bench_sharpe, "sharpe_ok": sharpe_ok,
+        })
+
+    n_eligible = len(ic_eligible)
+    n_ic_pass = sum(1 for _, p in ic_eligible if p)
+    ic_majority_pass = n_eligible > 0 and n_ic_pass > n_eligible / 2
+    ships = bool(split_results) and ic_majority_pass and all_decile_positive and all_sharpe_beats
+
+    if not split_results:
+        reasons.append("no split had enough train+holdout data to evaluate")
+    if not ic_majority_pass:
+        reasons.append(f"IC bar (>= {SHIP_MIN_IC}, t >= {SHIP_MIN_IC_TSTAT}) passes in only "
+                        f"{n_ic_pass}/{n_eligible} eligible splits (need a majority)")
+    if not all_decile_positive:
+        reasons.append("decile spread is not positive in every split")
+    if not all_sharpe_beats:
+        reasons.append("holdout Sharpe does not beat Nifty in every split")
+
+    return {
+        "ships": ships, "per_split": per_split_detail, "reasons": reasons,
+        "n_ic_eligible_splits": n_eligible, "n_ic_pass": n_ic_pass,
+    }
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def run(rebalance_days: int, top_n_list: list[int], weeks: int | None, sample: int | None,
-        validate: bool, hedge: bool) -> None:
+        validate: bool, hedge: bool, splits_arg: str = DEFAULT_SPLITS) -> None:
     universe = _load_universe(sample)
     print(f"[factor_bt] universe: {len(universe)} tickers (liquid+midcap, NIFTY500, "
           f">={MIN_TURNOVER_CR}cr/day point-in-time gate)")
@@ -617,7 +745,7 @@ def run(rebalance_days: int, top_n_list: list[int], weeks: int | None, sample: i
     panel = build_panel(ohlcv, rebalance_dates, nifty_close)
 
     periods_per_year = 252 / rebalance_days
-    strategies = FACTOR_NAMES + ["composite"]
+    strategies = FACTOR_NAMES + ["composite", "mom_gated"]
     top_n = top_n_list[len(top_n_list) // 2]  # primary N for the detailed report + validation
 
     bench = simulate_benchmark(nifty_close, rebalance_dates)
@@ -637,7 +765,7 @@ def run(rebalance_days: int, top_n_list: list[int], weeks: int | None, sample: i
             row = {}
             cells = []
             for n in top_n_list:
-                s = simulate_strategy(ohlcv, panel, rebalance_dates, n, factor)
+                s = simulate_strategy(ohlcv, panel, rebalance_dates, n, factor, below_200dma=below_200dma)
                 m = compute_metrics(s["curve"], periods_per_year)
                 row[str(n)] = m
                 cells.append(f"{m['cagr_pct']}/{m['sharpe']}".rjust(18))
@@ -672,19 +800,22 @@ def run(rebalance_days: int, top_n_list: list[int], weeks: int | None, sample: i
     results["benchmark"]["holdout_metrics"] = compute_metrics(bench_holdout["curve"], periods_per_year) if bench_holdout else None
 
     for factor in strategies:
-        sim = simulate_strategy(ohlcv, panel, rebalance_dates, top_n, factor)
+        sim = simulate_strategy(ohlcv, panel, rebalance_dates, top_n, factor, below_200dma=below_200dma)
         metrics = compute_metrics(sim["curve"], periods_per_year)
+        cash_note = f"  cash={sim['pct_periods_in_cash']}%" if factor == "mom_gated" else ""
         print(f"  {factor:<14} {str(metrics['cagr_pct']):>8} {str(metrics['sharpe']):>8} "
-              f"{str(metrics['max_drawdown_pct']):>8} {sim['avg_turnover']*100:>8.1f}%")
+              f"{str(metrics['max_drawdown_pct']):>8} {sim['avg_turnover']*100:>8.1f}%{cash_note}")
 
         entry: dict = {"metrics": metrics, "avg_turnover_pct": round(sim["avg_turnover"] * 100, 1)}
+        if factor == "mom_gated":
+            entry["pct_periods_in_cash"] = sim["pct_periods_in_cash"]
 
         if validate:
             # Re-simulate on the train/holdout date subsets independently (fresh equity
             # curves starting at 1.0 for each window) rather than slicing sim's combined
             # curve -- keeps CAGR/Sharpe/drawdown correctly scoped to each window.
-            sim_train = simulate_strategy(ohlcv, panel, train_dates, top_n, factor) if len(train_dates) >= 5 else None
-            sim_holdout = simulate_strategy(ohlcv, panel, holdout_dates, top_n, factor) if len(holdout_dates) >= 5 else None
+            sim_train = simulate_strategy(ohlcv, panel, train_dates, top_n, factor, below_200dma=below_200dma) if len(train_dates) >= 5 else None
+            sim_holdout = simulate_strategy(ohlcv, panel, holdout_dates, top_n, factor, below_200dma=below_200dma) if len(holdout_dates) >= 5 else None
             train_metrics = compute_metrics(sim_train["curve"], periods_per_year) if sim_train else {}
             holdout_metrics = compute_metrics(sim_holdout["curve"], periods_per_year) if sim_holdout else {}
 
@@ -701,19 +832,44 @@ def run(rebalance_days: int, top_n_list: list[int], weeks: int | None, sample: i
                 "ic_holdout": ic, "decile_spread_holdout": decile, "regime_split": regime,
                 "ship_gate": gate,
             })
-            print(f"      IC(holdout)={ic['mean_ic']} t={ic['t_stat']} n={ic['n']}  "
+            print(f"      [{WALK_FORWARD_SPLIT} split] IC(holdout)={ic['mean_ic']} t={ic['t_stat']} n={ic['n']}  "
                   f"decile_spread={decile['mean_spread_pct']}%  "
                   f"holdout CAGR={holdout_metrics.get('cagr_pct')}% Sharpe={holdout_metrics.get('sharpe')}  "
-                  f"-> {'SHIP' if gate['ships'] else 'NO-SHIP'}")
-            if not gate["ships"]:
-                for r in gate["reasons"]:
+                  f"-> {'SHIP' if gate['ships'] else 'NO-SHIP'} (single-split, detailed report only)")
+
+            # Multi-split ship gate (Phase 1) -- THE authoritative decision. Splits
+            # fixed in advance (DEFAULT_SPLITS / --splits), not tuned after seeing
+            # results, to avoid split-shopping (plan risk #3).
+            split_results = []
+            bench_split_results = []
+            for split_date_str in parse_splits(splits_arg):
+                sr = validate_one_split(ohlcv, panel, rebalance_dates, top_n, factor,
+                                         split_date_str, periods_per_year, below_200dma)
+                if sr is not None:
+                    split_results.append(sr)
+                    bench_split_results.append(
+                        bench_one_split(nifty_close, rebalance_dates, split_date_str, periods_per_year)
+                    )
+            multi_gate = evaluate_multi_split_gate(split_results, bench_split_results)
+            entry["ship_gate_multi_split"] = multi_gate
+
+            print(f"      [multi-split, {len(split_results)} splits: {', '.join(s['split'][:4] for s in split_results)}] "
+                  f"IC eligible-pass={multi_gate['n_ic_pass']}/{multi_gate['n_ic_eligible_splits']}  "
+                  f"-> {'SHIP' if multi_gate['ships'] else 'NO-SHIP'}")
+            for sd in multi_gate["per_split"]:
+                info_tag = " (informational, n<24)" if sd["ic_informational_only"] else ""
+                print(f"        {sd['split'][:4]}: n={sd['holdout_n']} IC={sd['ic_mean']} t={sd['ic_t']}{info_tag} "
+                      f"decile={sd['decile_spread_pct']}%({'ok' if sd['decile_ok'] else 'FAIL'}) "
+                      f"Sharpe={sd['strategy_sharpe']} vs Nifty {sd['bench_sharpe']}({'ok' if sd['sharpe_ok'] else 'FAIL'})")
+            if not multi_gate["ships"]:
+                for r in multi_gate["reasons"]:
                     print(f"        - {r}")
 
         results["strategies"][factor] = entry
 
     if hedge:
         print(f"\n{'='*78}\n  HEDGE OVERLAY (holdout window) — best long strategy x hedge_fraction\n{'='*78}")
-        shipping = [f for f, e in results["strategies"].items() if e.get("ship_gate", {}).get("ships")]
+        shipping = [f for f, e in results["strategies"].items() if e.get("ship_gate_multi_split", {}).get("ships")]
         hedge_target = shipping[0] if shipping else "composite"
         print(f"  Applying hedge overlay to: {hedge_target} (holdout {holdout_dates[0].date() if holdout_dates else '?'}+)")
         results["hedge"] = {"target_factor": hedge_target, "variants": {}}
@@ -739,9 +895,10 @@ def run(rebalance_days: int, top_n_list: list[int], weeks: int | None, sample: i
     print(f"\n{'='*78}\n  Results -> {OUT_FILE.name}\n{'='*78}")
 
     if validate:
-        any_ship = any(e.get("ship_gate", {}).get("ships") for e in results["strategies"].values())
-        print(f"\n  OVERALL VERDICT: {'AT LEAST ONE FACTOR SHIPS' if any_ship else 'NO-SHIP — nothing clears the gate on this window.'}")
-        if not any_ship:
+        shipping_factors = [f for f, e in results["strategies"].items() if e.get("ship_gate_multi_split", {}).get("ships")]
+        print(f"\n  OVERALL VERDICT (multi-split gate, splits={splits_arg}): "
+              f"{'SHIPS: ' + ', '.join(shipping_factors) if shipping_factors else 'NO-SHIP — nothing clears the gate across these splits.'}")
+        if not shipping_factors:
             print("  Buy-and-hold Nifty remains the benchmark to beat. This is a complete,")
             print("  honest result of running this backtest, not a failure to route around.")
 
@@ -755,9 +912,11 @@ if __name__ == "__main__":
     ap.add_argument("--sample", type=int, default=None, help="Limit universe to first N tickers (fast sanity check)")
     ap.add_argument("--validate", action="store_true", help="Run IC / decile-spread / walk-forward / ship-gate report")
     ap.add_argument("--hedge", action="store_true", help="Run the Nifty-futures hedge overlay (Phase C, requires --validate)")
+    ap.add_argument("--splits", type=str, default=DEFAULT_SPLITS,
+                     help=f"Comma-separated split years for the multi-split ship gate (default: {DEFAULT_SPLITS})")
     args = ap.parse_args()
 
     top_n_list = [args.top_n] if args.top_n else TOP_N_OPTIONS
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        run(args.rebalance, top_n_list, args.weeks, args.sample, args.validate, args.hedge)
+        run(args.rebalance, top_n_list, args.weeks, args.sample, args.validate, args.hedge, args.splits)
