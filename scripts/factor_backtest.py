@@ -353,6 +353,12 @@ def simulate_strategy(
     hedge_fraction > 0 (Phase C): when the index is below its 200DMA at a
     rebalance, that fraction of the period's return is replaced by a short
     Nifty-futures leg (costed at the futures rate), reducing net exposure.
+    Note: the hedge round-trip cost is booked every period the index is below
+    the 200DMA, not only when the hedge is put on/taken off across the
+    threshold -- so hedge cost is OVERSTATED during sustained downtrends. This
+    is a conservative bias (it can only make the hedge look worse) and is moot
+    here since the underlying long book does not clear the ship gate; flagged
+    for anyone who revisits the hedge on a book that does ship.
     """
     equity = 1.0
     curve: list[dict] = []
@@ -612,10 +618,31 @@ def run(rebalance_days: int, top_n_list: list[int], weeks: int | None, sample: i
 
     periods_per_year = 252 / rebalance_days
     strategies = FACTOR_NAMES + ["composite"]
-    top_n = top_n_list[len(top_n_list) // 2]  # primary N for the main report; all N run below
+    top_n = top_n_list[len(top_n_list) // 2]  # primary N for the detailed report + validation
 
     bench = simulate_benchmark(nifty_close, rebalance_dates)
     bench_metrics = compute_metrics(bench["curve"], periods_per_year)
+
+    # N-sensitivity sweep (plan: "test N=15/20/30"). The ship gate's binding
+    # constraint -- IC t-stat -- is computed on the FULL cross-section
+    # (compute_ic ignores top_n), so it's identical across N; only the portfolio
+    # construction metrics (CAGR/Sharpe/MaxDD/turnover) move with N. This table
+    # is the sensitivity view; the detailed per-factor validation below runs at
+    # the primary top_n only, which is sufficient because the gate is N-invariant.
+    n_sweep: dict = {}
+    if len(top_n_list) > 1:
+        print(f"\n{'='*78}\n  TOP-N SENSITIVITY (portfolio metrics; IC/ship-gate are N-invariant)\n{'='*78}")
+        print(f"  {'Strategy':<14} " + " ".join(f"N={n}:CAGR/Sharpe".rjust(18) for n in top_n_list))
+        for factor in strategies:
+            row = {}
+            cells = []
+            for n in top_n_list:
+                s = simulate_strategy(ohlcv, panel, rebalance_dates, n, factor)
+                m = compute_metrics(s["curve"], periods_per_year)
+                row[str(n)] = m
+                cells.append(f"{m['cagr_pct']}/{m['sharpe']}".rjust(18))
+            n_sweep[factor] = row
+            print(f"  {factor:<14} " + " ".join(cells))
 
     print(f"\n{'='*78}\n  FACTOR BACKTEST — {len(rebalance_dates)} rebalances, top_n={top_n}, "
           f"{rebalance_days}d step\n{'='*78}")
@@ -623,8 +650,20 @@ def run(rebalance_days: int, top_n_list: list[int], weeks: int | None, sample: i
 
     results: dict = {"meta": {
         "universe_n": len(ohlcv), "rebalance_days": rebalance_days, "top_n": top_n,
+        "top_n_swept": top_n_list,
         "min_turnover_cr": MIN_TURNOVER_CR, "date_range": [rebalance_dates[0].date().isoformat(), rebalance_dates[-1].date().isoformat()],
-    }, "benchmark": {"metrics": bench_metrics}, "strategies": {}}
+        # Plan risk #2, disclosed prominently: the universe is CURRENT NIFTY500
+        # constituents (data/nifty500.csv), so delisted losers and past
+        # constituents that fell out of the index are absent -- backtest returns
+        # (strategy AND benchmark) are biased upward. Because the survivorship
+        # bias inflates strategy and benchmark similarly, the benchmark-RELATIVE
+        # ship test (alpha vs Nifty, IC) is more robust than any absolute CAGR
+        # here; treat absolute CAGR/Sharpe figures as optimistic.
+        "survivorship_bias_warning": "universe = current NIFTY500 constituents only; delisted/dropped names absent; absolute returns biased high (strategy and benchmark alike)",
+    }, "n_sweep": n_sweep, "benchmark": {"metrics": bench_metrics}, "strategies": {}}
+    print(f"\n  [!] Survivorship-bias caveat: universe is CURRENT NIFTY500 constituents; "
+          f"delisted/dropped names are absent, so absolute returns are biased high.\n"
+          f"      Rely on the benchmark-RELATIVE ship test (alpha/IC vs Nifty), not absolute CAGR.")
 
     train_dates, holdout_dates = split_train_holdout(rebalance_dates)
     bench_train = simulate_benchmark(nifty_close, train_dates) if len(train_dates) >= 5 else None
