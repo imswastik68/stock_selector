@@ -202,20 +202,31 @@ DRAWDOWN_HALTED_PCT  = 15.0   # >15% from peak -> no new positions
 DRAWDOWN_RESET_PCT   = 8.0    # once halted, stays halted until DD recovers to <=8% (or Nifty > 200DMA)
 
 
-def drawdown_state(equity_history: list[dict], nifty_above_200dma: bool | None = None) -> dict:
+def drawdown_state(
+    equity_history: list[dict],
+    nifty_above_200dma: bool | None = None,
+    *,
+    reduced_pct: float = DRAWDOWN_REDUCED_PCT,
+    halted_pct: float = DRAWDOWN_HALTED_PCT,
+    reset_pct: float = DRAWDOWN_RESET_PCT,
+) -> dict:
     """
     Book-level circuit breaker off a chronological equity curve (src.portfolio's
     daily snapshots: [{"date", "equity"}, ...]).
 
-      normal:  drawdown from peak <= 10%  -> full size
-      reduced: 10% < drawdown <= 15%      -> halve risk_per_trade_pct for new entries
-      halted:  drawdown > 15%             -> no new positions
+      normal:  drawdown from peak <= reduced_pct   -> full size
+      reduced: reduced_pct < drawdown <= halted_pct -> halve risk_per_trade_pct for new entries
+      halted:  drawdown > halted_pct                -> no new positions
 
-    Hysteresis: once drawdown has breached -15%, the state stays "halted" even
-    as it recovers back through the 10-15% band, until EITHER drawdown
-    recovers to <=8% OR nifty_above_200dma is True -- otherwise the state
-    would flap in and out of "halted" right around the 15% line every time
-    the book ticks a fraction either side of it.
+    Hysteresis: once drawdown has breached -halted_pct, the state stays
+    "halted" even as it recovers back through the reduced/halted band, until
+    EITHER drawdown recovers to <=reset_pct OR nifty_above_200dma is True --
+    otherwise the state would flap in and out of "halted" right around the
+    halted_pct line every time the book ticks a fraction either side of it.
+
+    reduced_pct/halted_pct/reset_pct default to the live thresholds (module
+    constants above) -- kwargs exist so scripts/backtest_circuit.py (Phase 5)
+    can replay alternative threshold grids without duplicating this function.
     """
     equities = [float(e["equity"]) for e in equity_history if e.get("equity") is not None]
     if not equities:
@@ -229,16 +240,16 @@ def drawdown_state(equity_history: list[dict], nifty_above_200dma: bool | None =
 
     current_dd, current_peak = dd_series[-1], peak
 
-    breached_15_since_reset = False
+    breached_halted_since_reset = False
     for dd in reversed(dd_series):
-        if dd <= -DRAWDOWN_HALTED_PCT:
-            breached_15_since_reset = True
-        if dd >= -DRAWDOWN_RESET_PCT:
+        if dd <= -halted_pct:
+            breached_halted_since_reset = True
+        if dd >= -reset_pct:
             break
 
-    if breached_15_since_reset and not nifty_above_200dma:
+    if breached_halted_since_reset and not nifty_above_200dma:
         state = "halted"
-    elif current_dd <= -DRAWDOWN_REDUCED_PCT:
+    elif current_dd <= -reduced_pct:
         state = "reduced"
     else:
         state = "normal"
