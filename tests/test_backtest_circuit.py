@@ -70,6 +70,42 @@ def test_cash_conservation_single_position_sequence():
     assert bc.CAPITAL * 0.5 < result["terminal_equity"] < bc.CAPITAL * 1.5
 
 
+def test_nifty_recovery_escape_valve_lifts_a_stuck_halt():
+    """Regression: the first version of replay() never passed
+    nifty_below_200dma to drawdown_state(), silently disabling one of its
+    two hysteresis escape routes (src/risk.py:drawdown_state -- halted stays
+    halted until EITHER the book's own drawdown recovers to reset_pct OR
+    nifty_above_200dma is True). Combined with "stop taking new trades while
+    halted" (which removes the book's own ability to generate fresh gains to
+    climb back to its peak), that produced a single multi-year halt episode
+    that never reset on the real dataset. A sharp loss sequence that
+    breaches -15% must recover once Nifty is confirmed above its 200DMA,
+    even if the book's own drawdown never recovers past reset_pct."""
+    rows = []
+    for i in range(6):
+        rows.append({
+            "as_of": f"2026-01-{i*2+1:02d}", "ticker": f"L{i}.NS", "direction": "buy",
+            "close": 100.0, "atr_pct": 2.0, "score": 5,
+            "return_pct": -16.0, "days_held": 1,
+        })
+    trades = _trades(rows)
+
+    without_escape = bc.replay(trades, reduced_pct=10.0, halted_pct=15.0, reset_pct=8.0,
+                                loss_streak_on=False)
+    assert without_escape["n_days_halted"] > 0  # confirms the halt actually triggers
+
+    # Nifty above its 200DMA (below=False) for every date in the sequence
+    dates = pd.to_datetime([f"2026-01-{i+1:02d}" for i in range(12)])
+    always_above = pd.Series(False, index=dates)
+    with_escape = bc.replay(trades, reduced_pct=10.0, halted_pct=15.0, reset_pct=8.0,
+                             loss_streak_on=False, nifty_below_200dma=always_above)
+
+    # With the market-recovery escape valve available, the halt must lift
+    # immediately (on the day after it triggers) instead of persisting --
+    # strictly fewer halted days than without the escape valve.
+    assert with_escape["n_days_halted"] < without_escape["n_days_halted"]
+
+
 def test_looser_grid_does_not_halt_where_live_grid_does():
     """5 sequential, non-overlapping single-position trades, each losing 16%
     on a ~25%-of-capital position (score=5 -> notional caps at

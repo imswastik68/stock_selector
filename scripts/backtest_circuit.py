@@ -23,6 +23,21 @@ Approximations (documented, not hidden):
      src/technicals.py:compute_entry_levels) since backtest_trades.csv
      doesn't store sl directly.
 
+IMPORTANT (found by actually running this against the full dataset, not
+assumed up front): drawdown_state's hysteresis has TWO ways out of "halted"
+-- the book's own drawdown recovering to <=reset_pct, OR nifty_above_200dma
+confirming a market recovery (src/risk.py:drawdown_state). main.py passes a
+real value for the second escape valve every day; the first version of this
+replay never did (always passed the default None), disabling that escape
+route entirely. Combined with the "stop taking new trades while halted"
+rule -- which removes the book's own ability to generate fresh gains to
+climb back to its peak -- that produced a single ~4-year halt episode that
+never reset for ANY threshold grid tested, an obviously non-representative
+result. Fixed: nifty_close_series() below reconstructs the same
+rolling-200-day-mean gate scripts/factor_backtest.py already uses for its
+own below_200dma calculation, so the replay has the same two escape routes
+the live system does.
+
 Usage:
   python scripts/backtest_circuit.py
 """
@@ -31,6 +46,7 @@ from __future__ import annotations
 
 import json
 import sys
+import warnings
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -42,6 +58,8 @@ except ImportError:
     sys.exit("Run: pip install pandas")
 
 from src.risk import RISK_CONFIG, drawdown_state, size_position
+
+NIFTY_CSV = ROOT / "cache" / "backtest_nifty.csv"
 
 TRADES_CSV = ROOT / "outputs" / "backtest_trades.csv"
 OUT_FILE   = ROOT / "outputs" / "circuit_backtest.json"
@@ -82,13 +100,39 @@ def load_trades() -> pd.DataFrame:
     return df
 
 
+def nifty_below_200dma_series() -> pd.Series | None:
+    """Rolling-200-day-mean gate, same convention as
+    scripts/factor_backtest.py's below_200dma. Returns a bool Series indexed
+    by date (True = Nifty below its 200DMA that day), or None if the cache
+    is missing (replay then falls back to no market-recovery escape route,
+    same as before this fix -- disclosed, not silently degraded)."""
+    if not NIFTY_CSV.exists():
+        return None
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        df = pd.read_csv(NIFTY_CSV, index_col=0)
+    # strip the yfinance multi-index CSV header artifact (mirrors
+    # scripts/mine_big_movers.py:_load_nifty / scripts/backtest_events.py:trading_days)
+    df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
+    df = df[df["Close"].notna()]
+    df.index = pd.to_datetime(df.index, errors="coerce")
+    df = df[df.index.notna()]
+    close = df["Close"]
+    dma200 = close.rolling(200).mean()
+    return close < dma200
+
+
 def replay(trades: pd.DataFrame, *, reduced_pct: float | None, halted_pct: float | None,
-           reset_pct: float | None, loss_streak_on: bool) -> dict:
+           reset_pct: float | None, loss_streak_on: bool,
+           nifty_below_200dma: pd.Series | None = None) -> dict:
     """
     Day-by-day replay:
       1. realize exits due today (cash += notional * (1 + return_pct/100))
       2. snapshot equity (open positions marked at cost -- see module docstring)
-      3. compute circuit state from the snapshot history so far
+      3. compute circuit state from the snapshot history so far, WITH the
+         same nifty_above_200dma escape valve the live system gets (see
+         module docstring -- omitting this produced a single multi-year halt
+         episode that never reset, on every threshold grid tested)
       4. if not halted/cooldown, take up to MAX_NEW_PER_DAY new trades (sorted
          by -score, ticker for determinism), sized via size_position with
          risk_multiplier=0.5 when reduced, respecting MAX_POSITIONS and cash
@@ -125,8 +169,13 @@ def replay(trades: pd.DataFrame, *, reduced_pct: float | None, halted_pct: float
         if no_circuit:
             state = "normal"
         else:
-            ds = drawdown_state(equity_history, reduced_pct=reduced_pct,
-                                 halted_pct=halted_pct, reset_pct=reset_pct)
+            nifty_above_200dma = None
+            if nifty_below_200dma is not None:
+                below = nifty_below_200dma.asof(today)
+                if below is not None and pd.notna(below):
+                    nifty_above_200dma = not bool(below)
+            ds = drawdown_state(equity_history, nifty_above_200dma=nifty_above_200dma,
+                                 reduced_pct=reduced_pct, halted_pct=halted_pct, reset_pct=reset_pct)
             state = ds["state"]
         if state == "halted":
             n_days_halted += 1
@@ -181,6 +230,12 @@ def main() -> None:
     print(f"[backtest_circuit] {len(trades)} closed trades, "
           f"{trades['as_of'].min().date()} -> {trades['as_of'].max().date()}")
 
+    nifty_below_200dma = nifty_below_200dma_series()
+    if nifty_below_200dma is None:
+        print("[backtest_circuit] WARNING: cache/backtest_nifty.csv not found -- "
+              "replaying WITHOUT the nifty-recovery escape valve from a halt "
+              "(results will be pessimistic about halt duration)")
+
     results: dict[str, dict] = {}
     print(f"\n{'Config':<16}{'LossStreak':<12}{'Return%':>10}{'MaxDD%':>10}{'Trades':>9}{'Halted':>8}{'Reduced':>9}")
     for name, reduced_pct, halted_pct, reset_pct in GRID:
@@ -192,7 +247,8 @@ def main() -> None:
             else:
                 key = f"{name}{'_ls' if loss_streak_on else ''}"
             r = replay(trades, reduced_pct=reduced_pct, halted_pct=halted_pct,
-                       reset_pct=reset_pct, loss_streak_on=loss_streak_on)
+                       reset_pct=reset_pct, loss_streak_on=loss_streak_on,
+                       nifty_below_200dma=nifty_below_200dma)
             results[key] = r
             print(f"{name:<16}{str(loss_streak_on):<12}{r['total_return_pct']:>9.2f}%"
                   f"{r['max_dd_pct']:>9.2f}%{r['n_trades_taken']:>9}{r['n_days_halted']:>8}{r['n_days_reduced']:>9}")
