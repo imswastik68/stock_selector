@@ -7,32 +7,57 @@ Claude is NOT involved here — all scoring is rule-based and auditable.
 
 from __future__ import annotations
 
+# PENDING_VALIDATION (2026-07, Phase 2): every signal below carries a hand weight
+# with ZERO rows in any backtest (outputs/backtest_signal_stats.json's
+# note_untested_signals) -- bulk deals/SAST/promoter/delivery/announcements/options
+# have no free historical archive today, per scripts/backtest.py's own docstring.
+# Weight forced to 0 until each signal is either (a) SHIP-verdicted by
+# scripts/backtest_events.py (historical delivery/SAST/bulk-deal backtest, next
+# phase) with weight = round(3 x ret_lift), or (b) accumulates enough of
+# data/event_archive/ for the same analysis. Value = the pre-zeroing hand weight,
+# kept for the record / to restore quickly if a signal ships.
+PENDING_VALIDATION: dict[str, int] = {
+    "bulk_deal_fii_dii": 3, "delivery_surge": 2, "fundamental_strong": 2,
+    "options_pcr_fear": 1, "options_long_buildup": 1, "options_short_covering": 1,
+    "fo_ban_lifted": 1, "sector_in_momentum": 1,
+    "promoter_buying": 3, "sast_insider_buying": 3, "consolidation_breakout": 3,
+    "results_beat_announced": 3, "buyback_announced": 2, "contract_win": 2,
+    "dividend_announced": 1, "results_due": 1,
+}
+
 SHORT_TERM_WEIGHTS = {
-    "fundamental_strong": 2,        # ROE>15% & D/E<1 & EPS-growth>0 (yfinance .info)
-    "bulk_deal_fii_dii": 3,
-    "actual_52w_breakout": 3,      # price broke through prior 52w high
-    "delivery_surge": 2,           # DELIV_PER >= 50% on EQ series — institutional accumulation
+    "fundamental_strong": 0,        # PENDING_VALIDATION (was 2) — ROE>15% & D/E<1 & EPS-growth>0, untested
+    "bulk_deal_fii_dii": 0,         # PENDING_VALIDATION (was 3) — untested
+    "actual_52w_breakout": 3,      # price broke through prior 52w high — validated +3.59pp/n=7,138
+    "near_52w_high": 3,            # BEST validated signal: +5.09pp WR / +1.01 ret lift, n=15,005
+                                    # (156w backtest). Stacks with actual_52w_breakout (strict
+                                    # subset, proximity<=0) -- a real breakout day scores 6, faithful
+                                    # to how each was independently measured. See _build_signal_map.
+    "delivery_surge": 0,            # PENDING_VALIDATION (was 2) — untested
     "rsi_bearish_div": 3,          # price HH + RSI LH: data shows +1.04 lift over 15k trades
     "rsi_momentum": 2,             # RSI 50-75: momentum building
-    "rs_quality_strong": 2,        # ATR-adjusted RS: (stock_20d − nifty_20d) / ATR% > 5.0
+    "rs_quality_strong": 0,        # FAILED backtest (not pending) -- -1.47pp WR lift, avg_return
+                                    # -1.0%, n=16,907 (156w backtest). Do not restore without a NEW
+                                    # positive result; also removed from all 3 REGIME_WEIGHTS buckets
+                                    # below (the regime merge would otherwise resurrect it).
     "rs_vs_nifty": 1,              # stock outperforming Nifty by 2%+ over 20d
-    "options_pcr_fear": 1,         # PCR > 1.5: extreme fear = contrarian bullish (min OI required)
-    "options_long_buildup": 1,     # price up + OI up = fresh longs (min OI required)
-    "options_short_covering": 1,   # price up + OI down = shorts exiting = bullish (min OI required)
-    "fo_ban_lifted": 1,            # just removed from NSE F&O ban: liquidity restored, fresh positions allowed
+    "options_pcr_fear": 0,          # PENDING_VALIDATION (was 1) — untested
+    "options_long_buildup": 0,      # PENDING_VALIDATION (was 1) — untested
+    "options_short_covering": 0,    # PENDING_VALIDATION (was 1) — untested
+    "fo_ban_lifted": 0,             # PENDING_VALIDATION (was 1) — untested
     "weekly_trend_aligned": 1,     # weekly EMA10 > EMA20: daily signal aligns with larger timeframe
-    "sector_in_momentum": 1,       # stock is in a top-2 performing NSE sector index (5d return)
+    "sector_in_momentum": 0,       # PENDING_VALIDATION (was 1) — untested
 }
 
 SWING_WEIGHTS = {
-    "results_due": 1,               # upcoming results — informational flag only (PEAD needs actual beat)
-    "promoter_buying": 3,           # sets timeframe → 5-7d
-    "sast_insider_buying": 3,       # SEBI SAST filing: entity acquiring ≥5% stake — creeping accumulation
-    "consolidation_breakout": 3,
-    "results_beat_announced": 3,    # post-3:30 PM filing: quarterly result filed (potential beat)
-    "buyback_announced": 2,         # board-approved buyback = promoter confidence, floor under price
-    "contract_win": 2,              # order/contract receipt — high-impact for mid/small caps
-    "dividend_announced": 1,        # dividend declared = shareholder reward signal
+    "results_due": 0,               # PENDING_VALIDATION (was 1) — informational only, untested
+    "promoter_buying": 0,           # PENDING_VALIDATION (was 3) — sets timeframe -> 5-7d still (see _compute_score)
+    "sast_insider_buying": 0,       # PENDING_VALIDATION (was 3) — untested
+    "consolidation_breakout": 0,    # PENDING_VALIDATION (was 3) — untested
+    "results_beat_announced": 0,    # PENDING_VALIDATION (was 3) — untested
+    "buyback_announced": 0,         # PENDING_VALIDATION (was 2) — untested
+    "contract_win": 0,              # PENDING_VALIDATION (was 2) — untested
+    "dividend_announced": 0,        # PENDING_VALIDATION (was 1) — untested
 }
 
 DISQUALIFIER_WEIGHTS = {
@@ -91,11 +116,16 @@ BEARISH_EVENT_WEIGHTS = {
 #      actual_52w_breakout/breakdown (proximity alone was deliberately dropped as
 #      "redundant + noisy" pre-Phase-5). A REGIME_WEIGHTS entry for either would be
 #      permanently inert in production, same failure mode Phase 2 fixed.
+#
+# rs_quality_strong REMOVED from all 3 buckets (2026-07, Phase 2): the flat weight
+# failed its own backtest (-1.47pp, n=16,907) and was zeroed above -- leaving these
+# regime overrides (-2/-5/+5) would resurrect a proven-negative signal via the
+# merge in _compute_score (short_term = {**SHORT_TERM_WEIGHTS, **override}).
 # None = fall back to flat hand weights for that bucket.
 REGIME_WEIGHTS: dict[str, dict[str, int] | None] = {
-    "uptrend":   {"rsi_momentum": 2, "rs_vs_nifty": 1, "rsi_bearish_div": 2, "rsi_bullish_div": -1, "macd_bearish_cross": -2, "bb_squeeze_breakout": -2, "bullish_candle": -2, "bearish_candle": -2, "rs_quality_strong": -2, "volume_5x": -2, "distribution_signal": -4, "heavy_selling": -5, "actual_52w_breakout": 1, "actual_52w_breakdown": -5},
-    "ranging":   {"rsi_momentum": -2, "rs_vs_nifty": -2, "rsi_bearish_div": -3, "rsi_bullish_div": 1, "macd_bearish_cross": 1, "bb_squeeze_breakout": 1, "bullish_candle": -2, "bearish_candle": 3, "rs_quality_strong": -5, "volume_5x": -2, "distribution_signal": -1, "heavy_selling": -3, "actual_52w_breakdown": -2},
-    "downtrend": {"rsi_momentum": 5, "rs_vs_nifty": 5, "rsi_bearish_div": 5, "rsi_bullish_div": -5, "macd_bearish_cross": -5, "bullish_candle": 5, "bearish_candle": -5, "rs_quality_strong": 5, "volume_5x": -3, "distribution_signal": -5, "heavy_selling": -5, "actual_52w_breakout": 5, "actual_52w_breakdown": -5},
+    "uptrend":   {"rsi_momentum": 2, "rs_vs_nifty": 1, "rsi_bearish_div": 2, "rsi_bullish_div": -1, "macd_bearish_cross": -2, "bb_squeeze_breakout": -2, "bullish_candle": -2, "bearish_candle": -2, "volume_5x": -2, "distribution_signal": -4, "heavy_selling": -5, "actual_52w_breakout": 1, "actual_52w_breakdown": -5},
+    "ranging":   {"rsi_momentum": -2, "rs_vs_nifty": -2, "rsi_bearish_div": -3, "rsi_bullish_div": 1, "macd_bearish_cross": 1, "bb_squeeze_breakout": 1, "bullish_candle": -2, "bearish_candle": 3, "volume_5x": -2, "distribution_signal": -1, "heavy_selling": -3, "actual_52w_breakdown": -2},
+    "downtrend": {"rsi_momentum": 5, "rs_vs_nifty": 5, "rsi_bearish_div": 5, "rsi_bullish_div": -5, "macd_bearish_cross": -5, "bullish_candle": 5, "bearish_candle": -5, "volume_5x": -3, "distribution_signal": -5, "heavy_selling": -5, "actual_52w_breakout": 5, "actual_52w_breakdown": -5},
 }
 
 # Lowered to 2 to prevent dropping single-signal stocks before Pass 2 options/SAST fetch
@@ -158,8 +188,14 @@ def _build_signal_map(
         signals["thin_market_extreme"] = bool(0 < daily_turnover < 1e7)    # < ₹1cr
         signals["thin_market_light"]   = bool(1e7 <= daily_turnover < 5e7) # ₹1cr–₹5cr
 
-    # 52-week high: only actual breakout scores; proximity alone removed (redundant + noisy)
+    # 52-week high. src/data/breakouts.py only emits a candidate when a ticker is
+    # within ATH_PROXIMITY_PCT (5%) of its 52w high with a volume gate -- i.e. every
+    # ticker with breakout_data IS a near_52w_high hit by construction (same
+    # definition backtest.py measured: near_52w_high n=15,005 includes actual
+    # breakouts n=7,138 as a strict subset). actual_52w_breakout separately scores
+    # the subset that has actually broken through (proximity<=0).
     if breakout_data:
+        signals["near_52w_high"]          = True
         signals["actual_52w_breakout"]    = breakout_data.get("actual_breakout", False)
         signals["consolidation_breakout"] = breakout_data.get("consolidation_breakout", False)
 
