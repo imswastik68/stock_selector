@@ -408,7 +408,7 @@ def collect_sast_events(weeks: int, universe: list[str]) -> tuple[list[tuple[dat
                     # so a few days of date imprecision within a 90-day chunk
                     # is immaterial to the lift measurement).
                     mid = chunk_start + (chunk_end - chunk_start) / 2
-                    new_records.append(mid.date().isoformat())
+                    new_records.append(mid.isoformat())
                 cached["ranges_done"].append(range_key)
                 time.sleep(0.5)
             chunk_start = chunk_end

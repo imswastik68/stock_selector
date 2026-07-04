@@ -105,6 +105,34 @@ def test_download_bhavcopy_skips_dates_already_cached_or_missed(tmp_path, monkey
         be._download_bhavcopy([d1, d2])  # must not raise
 
 
+# ── SAST event collection ─────────────────────────────────────────────────────
+
+def test_collect_sast_events_records_a_hit_without_crashing(tmp_path, monkeypatch):
+    """Regression: a real SAST hit crashed collect_sast_events with
+    AttributeError ('datetime.date' object has no attribute 'date') --
+    chunk_start/chunk_end are already `date` objects (from date.today()
+    arithmetic), so their midpoint is also a `date`, not a `datetime`; calling
+    .date() on it fails. Found by actually running this against the real
+    pnsea API, not caught by any test beforehand."""
+    sast_cache = tmp_path / "sast_events"
+    monkeypatch.setattr(be, "SAST_CACHE", sast_cache)
+    monkeypatch.setattr(be, "_pnsea_available", lambda: True)
+    monkeypatch.setattr(be, "_sast_one", lambda symbol, from_dt, to_dt: (symbol, True))
+
+    events, reason = be.collect_sast_events(weeks=4, universe=["FOO.NS"])
+
+    assert reason is None
+    assert len(events) >= 1
+    d, ticker = events[0]
+    assert ticker == "FOO.NS"
+    assert isinstance(d, date)
+
+    cache_file = sast_cache / "FOO.json"
+    assert cache_file.exists()
+    cached = json.loads(cache_file.read_text())
+    assert len(cached["records"]) >= 1
+
+
 # ── baseline sampler ─────────────────────────────────────────────────────────
 
 def test_sample_baseline_excludes_signal_tickers_and_is_deterministic():
