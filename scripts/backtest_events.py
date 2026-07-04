@@ -95,11 +95,16 @@ def trading_days(weeks: int) -> list[date]:
         sys.exit(f"Not found: {NIFTY_CSV}. Run scripts/backtest.py first to build the cache.")
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        df = pd.read_csv(NIFTY_CSV, index_col=0, parse_dates=True)
-    df = df[pd.to_numeric(df.get("Close"), errors="coerce").notna()] if "Close" in df.columns else df
-    idx = df.index[df.index.notna()]
+        df = pd.read_csv(NIFTY_CSV, index_col=0)
+        # older yfinance multi-index CSV dumps leave a 2-row "Ticker/Date" header
+        # artifact as data rows (non-numeric Close, unparseable index) -- strip
+        # them (mirrors scripts/mine_big_movers.py:_load_nifty exactly).
+        df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
+        df = df[df["Close"].notna()]
+        df.index = pd.to_datetime(df.index, errors="coerce")
+        df = df[df.index.notna()]
     cutoff = pd.Timestamp(date.today() - timedelta(weeks=weeks))
-    idx = idx[idx >= cutoff]
+    idx = df.index[df.index >= cutoff]
     return sorted({ts.date() for ts in idx})
 
 
