@@ -5,6 +5,9 @@ on:
     - cron: "15 3 * * 1-5"   # 8:45 AM IST = 03:15 UTC, Mon–Fri (pre-market watchlist)
     - cron: "0 7 * * 1-5"    # 12:30 PM IST = 07:00 UTC, Mon–Fri (mid-day momentum check)
     - cron: "30 11 * * 1-5"  # 5:00 PM IST = 11:30 UTC, Mon–Fri (EOD scan)
+    - cron: "0 4 1-3 * *"    # ~9:30 AM IST, days 1-3 of month (monthly momentum book,
+                              # Phase 2 -- factor_scan.py itself no-ops except on the
+                              # actual first weekday, so firing on all 3 days is safe)
   workflow_dispatch:            # manual trigger for testing
 
 permissions:
@@ -62,12 +65,29 @@ jobs:
           esac
 
       - name: Run stock scan
+        if: github.event.schedule != '0 4 1-3 * *'
         run: python main.py
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           INFERENCE_BACKEND: groq
+
+      # Monthly momentum book (Phase 2). scripts/factor_scan.py reuses
+      # scripts/factor_backtest.py's cache/backtest_ohlcv/ CSVs, which main.py
+      # never populates -- refresh them here before scanning. This cron is
+      # its own dedicated trigger, so "Run stock scan" above is skipped to
+      # avoid a redundant, unscheduled EOD run + duplicate Telegram alert.
+      - name: Refresh price history for momentum book
+        if: github.event.schedule == '0 4 1-3 * *'
+        run: python scripts/backtest.py --weeks 260
+
+      - name: Run monthly momentum scan
+        if: github.event.schedule == '0 4 1-3 * *'
+        run: python scripts/factor_scan.py
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
 
       # Save updated F&O ban cache for tomorrow
       - name: Save F&O ban cache
