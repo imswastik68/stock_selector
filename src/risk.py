@@ -64,20 +64,25 @@ def size_position(
     risk_pct: float | None = None,
     max_position_pct: float | None = None,
     score: int | float | None = None,
+    risk_multiplier: float = 1.0,
 ) -> dict:
     """
     Fixed-fractional position sizing.
 
-    shares = floor(capital × risk_pct / risk_per_share)
+    shares = floor(capital × risk_pct × risk_multiplier / risk_per_share)
     Capped when notional > capital × max_position_pct.
 
     If CONVICTION_SIZING is True and score is provided, risk_pct is scaled
     by score tier (run --score-magnitude to verify monotone signal first).
 
+    risk_multiplier (Phase 4): scales the resolved risk_pct, e.g. 0.5 when
+    drawdown_state() reports "reduced". Default 1.0 -- no effect unless the
+    caller passes something else (main.py, wired to the circuit breaker).
+
     Returns dict: shares, notional, risk_amount, risk_pct_actual, position_pct, capped
     """
     cap  = capital          if capital          is not None else RISK_CONFIG["capital"]
-    rp   = risk_pct         if risk_pct         is not None else _score_to_risk_pct(score)
+    rp   = (risk_pct if risk_pct is not None else _score_to_risk_pct(score)) * risk_multiplier
     maxp = max_position_pct if max_position_pct is not None else RISK_CONFIG["max_position_pct"]
 
     risk_per_share = abs(entry - sl)
@@ -187,4 +192,59 @@ def portfolio_summary(
         "n_allocated":        n_allocated,
         "n_dropped":          n_dropped,
         "n_sector_capped":    n_sector_capped,
+    }
+
+
+# ── circuit breaker (Phase 4) ─────────────────────────────────────────────────
+
+DRAWDOWN_REDUCED_PCT = 10.0   # >10% from peak -> halve risk_per_trade_pct for new positions
+DRAWDOWN_HALTED_PCT  = 15.0   # >15% from peak -> no new positions
+DRAWDOWN_RESET_PCT   = 8.0    # once halted, stays halted until DD recovers to <=8% (or Nifty > 200DMA)
+
+
+def drawdown_state(equity_history: list[dict], nifty_above_200dma: bool | None = None) -> dict:
+    """
+    Book-level circuit breaker off a chronological equity curve (src.portfolio's
+    daily snapshots: [{"date", "equity"}, ...]).
+
+      normal:  drawdown from peak <= 10%  -> full size
+      reduced: 10% < drawdown <= 15%      -> halve risk_per_trade_pct for new entries
+      halted:  drawdown > 15%             -> no new positions
+
+    Hysteresis: once drawdown has breached -15%, the state stays "halted" even
+    as it recovers back through the 10-15% band, until EITHER drawdown
+    recovers to <=8% OR nifty_above_200dma is True -- otherwise the state
+    would flap in and out of "halted" right around the 15% line every time
+    the book ticks a fraction either side of it.
+    """
+    equities = [float(e["equity"]) for e in equity_history if e.get("equity") is not None]
+    if not equities:
+        return {"state": "normal", "drawdown_pct": 0.0, "peak_equity": None}
+
+    peak = equities[0]
+    dd_series = []
+    for eq in equities:
+        peak = max(peak, eq)
+        dd_series.append((eq / peak - 1) * 100 if peak > 0 else 0.0)
+
+    current_dd, current_peak = dd_series[-1], peak
+
+    breached_15_since_reset = False
+    for dd in reversed(dd_series):
+        if dd <= -DRAWDOWN_HALTED_PCT:
+            breached_15_since_reset = True
+        if dd >= -DRAWDOWN_RESET_PCT:
+            break
+
+    if breached_15_since_reset and not nifty_above_200dma:
+        state = "halted"
+    elif current_dd <= -DRAWDOWN_REDUCED_PCT:
+        state = "reduced"
+    else:
+        state = "normal"
+
+    return {
+        "state": state,
+        "drawdown_pct": round(current_dd, 2),
+        "peak_equity": round(current_peak, 2),
     }

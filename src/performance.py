@@ -254,3 +254,50 @@ def performance_summary(lookback_days: int = 30) -> dict:
         "other_win_rate_pct":       round(other_t1 / other_decided * 100, 1) if other_decided > 0 else None,
         "other_n_decided":          other_decided,
     }
+
+
+LOSS_STREAK_THRESHOLD = 5
+LOSS_STREAK_COOLDOWN_DAYS = 7
+
+
+def loss_streak_state(lookback_days: int = 60) -> dict:
+    """
+    5 consecutive sl_hit outcomes (across all tickers, most recent decided
+    picks first) -> 7-day watch-only cooldown on new daily-track entries.
+    Momentum book (scripts/factor_scan.py) is exempt -- its own discipline is
+    the monthly rebalance + 200DMA gate, not this daily-pick loss streak.
+
+    Returns {"in_cooldown": bool, "streak": int, "cooldown_until": "YYYY-MM-DD" | None}.
+    """
+    perf = _load_perf()
+    cutoff = (date.today() - timedelta(days=lookback_days)).isoformat()
+
+    decided: list[tuple[str, str]] = []  # (outcome_date, outcome)
+    for scan_date, picks in perf.items():
+        if scan_date < cutoff:
+            continue
+        for pick in picks.values():
+            outcome = pick.get("outcome", "open")
+            outcome_date = pick.get("outcome_date")
+            if outcome != "open" and outcome_date:
+                decided.append((outcome_date, outcome))
+
+    if not decided:
+        return {"in_cooldown": False, "streak": 0, "cooldown_until": None}
+
+    decided.sort(key=lambda x: x[0])  # chronological
+
+    streak = 0
+    for _, outcome in reversed(decided):
+        if outcome == "sl_hit":
+            streak += 1
+        else:
+            break
+
+    if streak < LOSS_STREAK_THRESHOLD:
+        return {"in_cooldown": False, "streak": streak, "cooldown_until": None}
+
+    last_loss_date = decided[-1][0]
+    cooldown_until = (date.fromisoformat(last_loss_date) + timedelta(days=LOSS_STREAK_COOLDOWN_DAYS)).isoformat()
+    in_cooldown = date.today().isoformat() <= cooldown_until
+    return {"in_cooldown": in_cooldown, "streak": streak, "cooldown_until": cooldown_until}

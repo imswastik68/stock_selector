@@ -57,10 +57,13 @@ from src.data.results import fetch_results_calendar
 from src.data.volume import fetch_volume_gainers
 from src.scorer import score_candidates
 from src.agent import synthesize_watchlist
-from src.performance import performance_summary, record_picks
-from src.risk import size_position, portfolio_summary
+from src.performance import performance_summary, record_picks, loss_streak_state
+from src.risk import size_position, portfolio_summary, drawdown_state
 from src.telegram_alert import send_telegram_alert
-from src.portfolio import mark_to_market, open_positions, process_exits, summary as portfolio_summary_live
+from src.portfolio import (
+    mark_to_market, open_positions, process_exits, summary as portfolio_summary_live,
+    equity_history as portfolio_equity_history,
+)
 from src.archive import archive_events
 
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
@@ -507,7 +510,23 @@ def main() -> int:
         if t in fundamental_signals:
             entry["fundamental"] = fundamental_signals[t]
 
-    # 6c. Advisory position sizing + sector tag + portfolio risk
+    # 6c. Circuit breaker (Phase 4): drawdown state as-of the LAST recorded
+    #     equity snapshot (yesterday's, or earlier) -- gates today's new
+    #     entries. Today's own mark_to_market snapshot (below) is for
+    #     tomorrow's decision, not today's.
+    nifty_struct = market_wide_ctx.get("nifty_structure", {})
+    nifty_above_200dma = (
+        nifty_struct.get("current_price", 0) > nifty_struct["ema200"]
+        if nifty_struct.get("ema200") else None
+    )
+    circuit = drawdown_state(portfolio_equity_history(), nifty_above_200dma=nifty_above_200dma)
+    loss_streak = loss_streak_state()
+    watchlist_data["circuit"] = circuit
+    watchlist_data["loss_streak"] = loss_streak
+    print(f"[main] circuit={circuit['state']} (DD={circuit['drawdown_pct']}%)  "
+          f"loss_streak={loss_streak['streak']} cooldown={loss_streak['in_cooldown']}")
+
+    # 6d. Advisory position sizing + sector tag + portfolio risk
     def _parse_sl(s) -> float | None:
         try:
             return float(str(s).replace("₹", "").replace(",", "").strip())
@@ -520,20 +539,28 @@ def main() -> int:
     except Exception:
         sector_map = {}
 
+    halted = circuit["state"] == "halted" or loss_streak["in_cooldown"]
+    risk_multiplier = 0.5 if circuit["state"] == "reduced" else 1.0
+
     actionable = watchlist_data.get("buy_watchlist", []) + watchlist_data.get("sell_watchlist", [])
     for entry in actionable:
         price = entry.get("today_close")
         sl    = _parse_sl(entry.get("stop_loss"))
-        if price and sl:
+        if price and sl and not halted:
             entry["position"] = size_position(float(price), float(sl),
-                                              score=entry.get("score"))
+                                              score=entry.get("score"),
+                                              risk_multiplier=risk_multiplier)
+        elif halted:
+            entry["watch_only"] = True
+            entry["watch_only_reason"] = ("circuit halted" if circuit["state"] == "halted"
+                                           else "loss-streak cooldown")
         # Attach sector for concentration cap (unmapped → "other")
         t = entry.get("ticker", "")
         entry["sector"] = sector_map.get(t, "other")
     if actionable:
         watchlist_data["portfolio_risk"] = portfolio_summary(actionable)
 
-    # 6d. Live portfolio: exits → open → mark-to-market (order matters: free capital first)
+    # 6e. Live portfolio: exits → open → mark-to-market (order matters: free capital first)
     try:
         # Exits: check existing holdings against today's OHLCV (already in market_context)
         today_bars = market_context.get("ohlcv_90d", {})

@@ -23,7 +23,8 @@ Maintains persistent state in outputs/portfolio.json:
     "closed": [
       {"ticker", "qty", "entry", "exit_price", "direction",
        "opened", "closed", "pnl", "return_pct", "outcome"}
-    ]
+    ],
+    "equity_history": [{"date": "YYYY-MM-DD", "equity": float}, ...]  # capped, see _MAX_EQUITY_HISTORY
   }
 
 NOTE: This tracks the capital-constrained live book (actual P&L + cash lifecycle).
@@ -50,6 +51,7 @@ from src.costs import round_trip_cost_pct
 
 _STATE_FILE = Path(__file__).parent.parent / "outputs" / "portfolio.json"
 _INITIAL_CAPITAL = 100_000.0  # default; overridden by RISK_CAPITAL env if set
+_MAX_EQUITY_HISTORY = 400  # ~1.5y of daily snapshots -- plenty for drawdown_state's peak-tracking
 
 
 def _load() -> dict:
@@ -67,6 +69,7 @@ def _load() -> dict:
         "realized_pnl": 0.0,
         "holdings":     {},
         "closed":       [],
+        "equity_history": [],
     }
 
 
@@ -245,6 +248,19 @@ def mark_to_market(today_closes: dict[str, float]) -> dict:
         total_unreal += unreal
 
     state["equity"] = round(state["cash"] + total_mkt, 2)
+
+    # Daily equity snapshot for src/risk.py's drawdown_state circuit breaker.
+    # One entry per calendar date -- re-running the same day (e.g. a retry)
+    # updates today's entry rather than appending a duplicate.
+    today_iso = date.today().isoformat()
+    history = state.setdefault("equity_history", [])
+    if history and history[-1]["date"] == today_iso:
+        history[-1]["equity"] = state["equity"]
+    else:
+        history.append({"date": today_iso, "equity": state["equity"]})
+    if len(history) > _MAX_EQUITY_HISTORY:
+        del history[:-_MAX_EQUITY_HISTORY]
+
     _save(state)
 
     return {
@@ -255,6 +271,11 @@ def mark_to_market(today_closes: dict[str, float]) -> dict:
         "n_holdings":      len(state["holdings"]),
         "holdings":        list(state["holdings"].keys()),
     }
+
+
+def equity_history() -> list[dict]:
+    """Chronological [{"date", "equity"}, ...] snapshots for drawdown_state()."""
+    return _load().get("equity_history", [])
 
 
 def summary() -> dict:

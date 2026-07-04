@@ -2894,3 +2894,16 @@
 {"date": "2026-07-04", "source": "sast_signals", "ticker": "NINSYS.NS", "payload": {"value": true}, "hash": "7e6a9ceda62aa145"}
 {"date": "2026-07-04", "source": "sast_signals", "ticker": "LTF.NS", "payload": {"value": false}, "hash": "dc35538f122a31f0"}
 {"date": "2026-07-04", "source": "sast_signals", "ticker": "ABCAPITAL.NS", "payload": {"value": false}, "hash": "a420c726dc4670d4"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "CREDITACC.NS", "payload": {"promoter_pct": 66.21, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": null}, "hash": "063df37307cf336f"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "APOLLO.NS", "payload": {"promoter_pct": 50.81, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": null}, "hash": "2f47efde098705f1"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "CUPID.NS", "payload": {"promoter_pct": 64.04, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "97a116a019083575"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "ADANIENT.NS", "payload": {"promoter_pct": 77.32, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "22a376b1ef7c4e2d"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "AADHARHFC.NS", "payload": {"promoter_pct": 74.78, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "d8fcfd7eb4c75e1a"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "FUSION.NS", "payload": {"promoter_pct": 54.42, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": null}, "hash": "bc22f7c4f9aa1f82"}
+{"date": "2026-07-04", "source": "promoter_signals", "ticker": "IKS.NS", "payload": {"promoter_pct": 73.4, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "fc6f08633e3143b5"}
+{"date": "2026-07-04", "source": "sast_signals", "ticker": "CREDITACC.NS", "payload": {"value": false}, "hash": "41b44553b5e0488a"}
+{"date": "2026-07-04", "source": "sast_signals", "ticker": "ADANIENT.NS", "payload": {"value": false}, "hash": "3d2398fee2f7cdd4"}
+{"date": "2026-07-04", "source": "sast_signals", "ticker": "AADHARHFC.NS", "payload": {"value": false}, "hash": "2509b5aca4df8ecc"}
+{"date": "2026-07-04", "source": "sast_signals", "ticker": "APOLLO.NS", "payload": {"value": false}, "hash": "5e41c437b9f1287f"}
+{"date": "2026-07-04", "source": "sast_signals", "ticker": "IKS.NS", "payload": {"value": false}, "hash": "045b7e79782ecc35"}
+{"date": "2026-07-04", "source": "sast_signals", "ticker": "FUSION.NS", "payload": {"value": false}, "hash": "b398c14ef07363f0"}

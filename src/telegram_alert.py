@@ -215,7 +215,9 @@ def _format_buy_entry(entry: dict, rank: int) -> str:
     if delivery_pct is not None:
         extra.append(f"Delivery={_code(f'{delivery_pct}%')}")
     pos = entry.get("position") or {}
-    if pos.get("shares", 0) > 0:
+    if entry.get("watch_only"):
+        extra.append(f"⏸ <b>WATCH-ONLY</b> ({_e(entry.get('watch_only_reason', 'circuit'))}) — no new position sized")
+    elif pos.get("shares", 0) > 0:
         qty_str = (f"Qty={_code(str(pos['shares']))} | "
                    f"₹{pos['notional']:,.0f} | "
                    f"risk ₹{pos['risk_amount']:,.0f} ({pos['risk_pct_actual']:.1f}%)")
@@ -309,7 +311,9 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
     if prom_pct is not None:
         extra.append(f"Promoter={_code(f'{prom_pct}%')}")
     pos = entry.get("position") or {}
-    if pos.get("shares", 0) > 0:
+    if entry.get("watch_only"):
+        extra.append(f"⏸ <b>WATCH-ONLY</b> ({_e(entry.get('watch_only_reason', 'circuit'))}) — no new position sized")
+    elif pos.get("shares", 0) > 0:
         qty_str = (f"Qty={_code(str(pos['shares']))} | "
                    f"₹{pos['notional']:,.0f} | "
                    f"risk ₹{pos['risk_amount']:,.0f} ({pos['risk_pct_actual']:.1f}%)")
@@ -607,6 +611,21 @@ def _build_message(watchlist_data: dict) -> str:
             f"{'─' * 32}"
         )
         sections = [header]
+
+        circuit = watchlist_data.get("circuit") or {}
+        loss_streak = watchlist_data.get("loss_streak") or {}
+        if circuit.get("state") in ("reduced", "halted"):
+            icon = "🛑" if circuit["state"] == "halted" else "⚠️"
+            sections.append(
+                f"\n{icon} <b>CIRCUIT: {circuit['state'].upper()}</b> — book "
+                f"{circuit.get('drawdown_pct', 0):+.1f}% from peak "
+                f"({'no new positions' if circuit['state'] == 'halted' else 'risk halved on new entries'})"
+            )
+        if loss_streak.get("in_cooldown"):
+            sections.append(
+                f"\n🥶 <b>LOSS-STREAK COOLDOWN</b> — {loss_streak['streak']} consecutive stop-outs, "
+                f"watch-only until {_e(loss_streak.get('cooldown_until', '?'))}"
+            )
 
         if buy_list:
             sections.append(f"\n📈 <b>BUY WATCHLIST ({len(buy_list)} picks)</b>\n")
