@@ -307,4 +307,5 @@ async def fetch():
     print(f"Saved {len(final_picks)} structured picks → {_PICKS_OUT.name}")
 
 
-asyncio.run(fetch())
+if __name__ == "__main__":
+    asyncio.run(fetch())
