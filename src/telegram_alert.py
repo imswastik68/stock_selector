@@ -624,11 +624,19 @@ def _build_message(watchlist_data: dict) -> str:
         time_str = f" | {_e(scan_time)}" if scan_time else ""
 
         if not buy_list and not sell_list and not phase_b_list:
-            return (
+            base = (
                 f"<b>NSE/BSE Stock Scanner — {_e(scan_date)}{time_str}</b>\n\n"
                 f"No qualifying candidates today ({total} screened). "
                 f"Nifty: {_e(nifty_ctx)}"
             )
+            # Gate status is arguably MOST useful on a zero-candidate day -- append
+            # it here too, not just on the has-picks path below.
+            gates = watchlist_data.get("gates") or {}
+            if gates:
+                gs = gates.get("scanner", {}); gm = gates.get("momentum", {})
+                base += (f"\n\n🚦 <i>{_e(gs.get('status_line', ''))}\n"
+                         f"{_e(gm.get('status_line', ''))}</i>")
+            return base
 
         nifty_arrow = {"UPTREND": " ↗", "DOWNTREND": " ↘", "RANGING": " ↔"}.get(nifty_ctx, "")
         fii_dii     = watchlist_data.get("fii_dii", {})
