@@ -80,6 +80,7 @@ SAST_CACHE    = ROOT / "cache" / "sast_events"
 BULK_CACHE    = ROOT / "cache" / "bulk_deals_hist"
 ANN_CACHE     = ROOT / "cache" / "announcements_hist"
 SHP_CACHE     = ROOT / "cache" / "shareholding_hist"
+PIT_CACHE     = ROOT / "cache" / "pit_chunks"
 OUT_FILE      = OUTPUTS / "event_backtest.json"
 
 _BHAV_URL = "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{date}.csv"
@@ -92,6 +93,8 @@ _ANN_URL = "https://www.nseindia.com/api/corporate-announcements?index=equities&
 _ANN_PRIME_URL = "https://www.nseindia.com/companies-listing/corporate-filings-announcements"
 _SHP_URL = "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities&symbol={sym}"
 _SHP_PRIME_URL = "https://www.nseindia.com/companies-listing/corporate-filings-shareholding-pattern"
+_PIT_URL = "https://www.nseindia.com/api/corporates-pit?index=equities&from_date={frm}&to_date={to}"
+_PIT_PRIME_URL = "https://www.nseindia.com/companies-listing/corporate-filings-insider-trading"
 
 MIN_N_SHIP = 500
 MIN_BHAV_DAYS = 20  # below this, too few sessions for a meaningful surge/lift read
@@ -870,6 +873,119 @@ def collect_promoter_events(weeks: int, universe: list[str]) -> tuple[list[tuple
     return events, None
 
 
+# ── source (PIT): promoter open-market purchases ─────────────────────────────
+# sast_insider_buying (fires on ANY SAST filing -- pledges, creeping
+# acquisitions, inter-se transfers) backtested net-harmful (ret_lift=-0.407,
+# n=2010). The research-supported version is promoters buying their OWN stock
+# in the OPEN MARKET -- a genuine "insiders think it's cheap" signal, only
+# isolatable via the PIT (Prohibition of Insider Trading) disclosure feed.
+# Vocabulary confirmed live against the corporates-pit API before writing this
+# filter (2026-07-05, 1192-row sample): acqMode has exactly one value meaning
+# a genuine open-market trade -- "Market Purchase" -- distinct from "Off
+# Market", "Preferential Offer", "Gift", "ESOP", "Pledge Creation", "Scheme of
+# Amalgamation/...". personCategory is "Promoters" or "Promoter Group".
+# tdpTransactionType is "Buy" or "Sell".
+
+_PIT_ACQ_MODE = "Market Purchase"
+_PIT_PERSON_CATEGORIES = {"Promoters", "Promoter Group"}
+_PIT_MIN_VALUE = 1e7  # >= Rs 1 crore
+
+
+def _fetch_pit_items(weeks: int) -> tuple[list[dict], str | None]:
+    """Chunked, cache-first fetch of RAW NSE insider-trading (PIT) rows for the
+    window. Global feed (one call covers every listed company, unlike
+    shareholding-master's per-symbol calls). A 0-row response is treated as
+    suspect (observed live: one short window returned 200 with zero rows while
+    a longer window had data) -- retried once before being trusted/cached."""
+    PIT_CACHE.mkdir(parents=True, exist_ok=True)
+    end = date.today()
+    start = end - timedelta(weeks=weeks)
+    session = _make_www_session(_PIT_PRIME_URL)
+
+    items: list[dict] = []
+    any_success = False
+    total_failures = 0
+    chunk_start = start
+    while chunk_start < end:
+        chunk_end = min(chunk_start + timedelta(days=45), end)
+        cache_file = PIT_CACHE / f"pit_{chunk_start.isoformat()}_{chunk_end.isoformat()}.json"
+        if cache_file.exists():
+            try:
+                data = json.loads(cache_file.read_text()); any_success = True
+            except Exception:
+                data = None
+        else:
+            url = _PIT_URL.format(frm=chunk_start.strftime("%d-%m-%Y"), to=chunk_end.strftime("%d-%m-%Y"))
+            data = _www_get_json(session, url)
+            rows_now = data if isinstance(data, list) else (data or {}).get("data", data) if data else None
+            if data is not None and isinstance(rows_now, list) and len(rows_now) == 0:
+                time.sleep(1.5)
+                data_retry = _www_get_json(session, url, retries=2)
+                rows_retry = (data_retry if isinstance(data_retry, list)
+                              else (data_retry or {}).get("data", data_retry) if data_retry else None)
+                if isinstance(rows_retry, list) and len(rows_retry) > 0:
+                    data = data_retry
+            if data is None:
+                total_failures += 1
+            else:
+                cache_file.write_text(json.dumps(data)); any_success = True
+                session = _make_www_session(_PIT_PRIME_URL)
+            time.sleep(1.0)
+
+        if total_failures >= 4 and not any_success:
+            return [], "corporates-pit API unreachable (503) — UNTESTABLE this pass"
+
+        rows = data if isinstance(data, list) else (data or {}).get("data", data) if data else None
+        if isinstance(rows, list):
+            items.extend(r for r in rows if isinstance(r, dict))
+        chunk_start = chunk_end
+
+    if not any_success:
+        return [], "corporates-pit API unreachable (503) — UNTESTABLE this pass"
+    return items, None
+
+
+def collect_pit_events(weeks: int, universe: list[str]) -> tuple[list[tuple[date, str]], str | None]:
+    """promoter_open_mkt_buy. Event date = intimation date (`date` field), NOT
+    the acquisition date (`acqfromDt`/`acqtoDt`) -- the trade is public
+    knowledge only once intimated; using the acquisition date would be
+    look-ahead."""
+    items, reason = _fetch_pit_items(weeks)
+    if reason:
+        return [], reason
+
+    uni = {t.replace(".NS", "") for t in universe}
+    seen: set[tuple] = set()
+    events: list[tuple[date, str]] = []
+    for row in items:
+        sym = str(row.get("symbol") or "").strip().upper()
+        if sym not in uni:
+            continue
+        if row.get("personCategory") not in _PIT_PERSON_CATEGORIES:
+            continue
+        if row.get("tdpTransactionType") != "Buy":
+            continue
+        if row.get("acqMode") != _PIT_ACQ_MODE:
+            continue
+        try:
+            sec_val = float(str(row.get("secVal")).strip())
+        except (ValueError, TypeError):
+            continue
+        if sec_val < _PIT_MIN_VALUE:
+            continue
+        dt_str = str(row.get("date") or "").strip()
+        try:
+            d = pd.to_datetime(dt_str[:11], format="%d-%b-%Y").date()
+        except Exception:
+            continue
+        key = (d, sym)
+        if key in seen:
+            continue
+        seen.add(key)
+        events.append((d, f"{sym}.NS"))
+    return events, None
+
+
 # ── source (c): historical bulk deals ────────────────────────────────────────
 
 def _make_bulk_session() -> requests.Session:
@@ -1019,6 +1135,11 @@ def main(source: str, weeks: int, skip_download: bool) -> None:
         print(f"\n[backtest_events] === promoter (shareholding) ===")
         events, reason = collect_promoter_events(weeks, universe)
         _eval_single("promoter_buying", events, reason, ohlcv, universe, results)
+
+    if source in ("pit", "all"):
+        print(f"\n[backtest_events] === PIT (promoter open-market buys) ===")
+        events, reason = collect_pit_events(weeks, universe)
+        _eval_single("promoter_open_mkt_buy", events, reason, ohlcv, universe, results)
 
     if source in ("sast", "all"):
         print(f"\n[backtest_events] === sast ===")

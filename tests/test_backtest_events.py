@@ -442,3 +442,68 @@ def test_pead_skips_non_results_announcements(monkeypatch):
     assert reason is None
     assert out["pead_positive_surprise"] == []
     assert out["pead_negative_surprise"] == []
+
+
+# ── PIT: promoter open-market purchases ──────────────────────────────────────
+
+def _pit_row(symbol="FOO", personCategory="Promoters", tdpTransactionType="Buy",
+             acqMode="Market Purchase", secVal="20000000", d="10-Jan-2026 18:00"):
+    return {"symbol": symbol, "personCategory": personCategory,
+            "tdpTransactionType": tdpTransactionType, "acqMode": acqMode,
+            "secVal": secVal, "date": d, "acqfromDt": "01-Jan-2026", "acqtoDt": "05-Jan-2026"}
+
+
+def _run_pit(monkeypatch, rows, universe=("FOO.NS",)):
+    monkeypatch.setattr(be, "_fetch_pit_items", lambda weeks: (rows, None))
+    return be.collect_pit_events(weeks=156, universe=list(universe))
+
+
+def test_pit_fires_on_genuine_promoter_market_purchase(monkeypatch):
+    events, reason = _run_pit(monkeypatch, [_pit_row()])
+    assert reason is None
+    assert (date(2026, 1, 10), "FOO.NS") in events
+
+
+def test_pit_excludes_promoter_sell(monkeypatch):
+    events, reason = _run_pit(monkeypatch, [_pit_row(tdpTransactionType="Sell")])
+    assert events == []
+
+
+def test_pit_excludes_non_promoter_buyer(monkeypatch):
+    events, reason = _run_pit(monkeypatch, [_pit_row(personCategory="Employees/Designated Employees")])
+    assert events == []
+
+
+def test_pit_excludes_off_market_and_esop_and_pledge(monkeypatch):
+    """acqMode must be the EXACT string 'Market Purchase' -- 'Off Market' also
+    contains the substring 'Market', so a naive substring filter would
+    wrongly admit it. Also excludes ESOP and Pledge Creation."""
+    for mode in ("Off Market", "ESOP", "Pledge Creation", "Preferential Offer", "-"):
+        events, reason = _run_pit(monkeypatch, [_pit_row(acqMode=mode)])
+        assert events == [], f"acqMode={mode!r} must not fire"
+
+
+def test_pit_excludes_below_value_floor(monkeypatch):
+    events, reason = _run_pit(monkeypatch, [_pit_row(secVal="5000000")])  # Rs 0.5cr
+    assert events == []
+
+
+def test_pit_uses_intimation_date_not_acquisition_date(monkeypatch):
+    """Event date must be the `date` (intimation) field, not acqfromDt/acqtoDt
+    -- using the acquisition window would be look-ahead (the market only knows
+    once it's intimated)."""
+    row = _pit_row(d="15-Feb-2026 12:00")
+    row["acqfromDt"], row["acqtoDt"] = "01-Jan-2026", "05-Jan-2026"
+    events, reason = _run_pit(monkeypatch, [row])
+    assert (date(2026, 2, 15), "FOO.NS") in events
+    assert (date(2026, 1, 1), "FOO.NS") not in events
+
+
+def test_pit_dedupes_same_day_same_symbol(monkeypatch):
+    events, reason = _run_pit(monkeypatch, [_pit_row(), _pit_row()])
+    assert events.count((date(2026, 1, 10), "FOO.NS")) == 1
+
+
+def test_pit_excludes_symbol_outside_universe(monkeypatch):
+    events, reason = _run_pit(monkeypatch, [_pit_row(symbol="BAR")], universe=("FOO.NS",))
+    assert events == []
