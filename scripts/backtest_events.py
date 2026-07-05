@@ -69,21 +69,33 @@ from src.costs import round_trip_cost_pct  # noqa: E402
 from src.data.delivery import _MIN_DELIVERY_PCT, _MIN_DELIVERY_SPIKE, _make_session as _delivery_session  # noqa: E402
 from src.data.bulk_deals import _is_fii_dii  # noqa: E402
 from src.data.sast import _pnsea_available, _sast_one  # noqa: E402
+from src.data.options import _MIN_CALL_OI  # noqa: E402 (same liquidity gate the live scorer uses)
+from src.data.bse_announcements import _match_signal as _ann_match_signal  # noqa: E402
 
 OUTPUTS       = ROOT / "outputs"
 NIFTY_CSV     = ROOT / "cache" / "backtest_nifty.csv"
 BHAV_CACHE    = ROOT / "cache" / "bhavcopy"
+FO_CACHE      = ROOT / "cache" / "fo_bhavcopy"
 SAST_CACHE    = ROOT / "cache" / "sast_events"
 BULK_CACHE    = ROOT / "cache" / "bulk_deals_hist"
+ANN_CACHE     = ROOT / "cache" / "announcements_hist"
+SHP_CACHE     = ROOT / "cache" / "shareholding_hist"
 OUT_FILE      = OUTPUTS / "event_backtest.json"
 
 _BHAV_URL = "https://nsearchives.nseindia.com/products/content/sec_bhavdata_full_{date}.csv"
+# F&O UDiFF bhavcopy -- the free historical archive for options OI (see the
+# nse-free-historical-data-map memory). Reconstructs PCR + OI-buildup signals.
+_FO_BHAV_URL = "https://nsearchives.nseindia.com/content/fo/BhavCopy_NSE_FO_0_0_0_{date}_F_0000.csv.zip"
 _BULK_HIST_URL = "https://www.nseindia.com/api/historical/bulk-deals?from={frm}&to={to}"
 _BULK_PRIME_URL = "https://www.nseindia.com/report-detail/display-bulk-and-block-deals"
+_ANN_URL = "https://www.nseindia.com/api/corporate-announcements?index=equities&from_date={frm}&to_date={to}"
+_ANN_PRIME_URL = "https://www.nseindia.com/companies-listing/corporate-filings-announcements"
+_SHP_URL = "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities&symbol={sym}"
+_SHP_PRIME_URL = "https://www.nseindia.com/companies-listing/corporate-filings-shareholding-pattern"
 
 MIN_N_SHIP = 500
 MIN_BHAV_DAYS = 20  # below this, too few sessions for a meaningful surge/lift read
-DIRECTION  = "buy"  # all three sources here are buy-side signals
+DIRECTION  = "buy"  # all sources here are buy-side signals
 
 
 # ── shared: trading-day calendar ─────────────────────────────────────────────
@@ -370,6 +382,139 @@ def collect_delivery_events(weeks: int, skip_download: bool) -> tuple[list[tuple
     return events, None
 
 
+# ── source (options): PCR + OI buildup from F&O bhavcopy ─────────────────────
+# The live scorer's option signals (src/data/options.py) read a live option
+# chain -- no history. But the F&O UDiFF bhavcopy is a per-day archive with the
+# same per-strike OI, so PCR/buildup can be reconstructed exactly (same
+# _MIN_CALL_OI liquidity gate, same PCR>1.5 / <0.5 and price-vs-OI buildup
+# logic as _parse_option_chain). Buy-side signals only: options_pcr_fear,
+# options_long_buildup, options_short_covering.
+
+def _fo_path(d: date) -> Path:
+    return FO_CACHE / f"{d.strftime('%Y%m%d')}.csv.gz"
+
+
+def _fo_miss_path(d: date) -> Path:
+    return FO_CACHE / f"{d.strftime('%Y%m%d')}.miss"
+
+
+def _download_fo_bhavcopy(days: list[date]) -> None:
+    """Fetch each day's F&O UDiFF bhavcopy, aggregate STOCK-option rows to one
+    slim row per underlying (put_oi, call_oi, net_oi_chg, ul_price), gzip-cache.
+    Aggregating at download time keeps the cache tiny (~1 row/symbol/day vs the
+    ~42k raw rows). Resumable + .miss sentinels + fail-soft, mirroring
+    _download_bhavcopy."""
+    FO_CACHE.mkdir(parents=True, exist_ok=True)
+    session = _delivery_session()
+    consecutive_failures = 0
+    n_downloaded = 0
+    for i, d in enumerate(days):
+        if _fo_path(d).exists() or _fo_miss_path(d).exists():
+            continue
+        if i > 0 and i % 50 == 0:
+            session = _delivery_session()
+        url = _FO_BHAV_URL.format(date=d.strftime("%Y%m%d"))
+        try:
+            resp = session.get(url, timeout=20)
+            if resp.status_code != 200 or len(resp.content) < 1000:
+                _fo_miss_path(d).touch()
+                consecutive_failures = 0  # holiday/no-file is expected, not a failure
+                continue
+            import zipfile
+            z = zipfile.ZipFile(io.BytesIO(resp.content))
+            df = pd.read_csv(z.open(z.namelist()[0]))
+            # STO = stock options; STF = stock futures (used for underlying price)
+            opts = df[df["FinInstrmTp"] == "STO"].copy()
+            if opts.empty:
+                _fo_miss_path(d).touch()
+                continue
+            opts["OpnIntrst"] = pd.to_numeric(opts["OpnIntrst"], errors="coerce").fillna(0)
+            opts["ChngInOpnIntrst"] = pd.to_numeric(opts["ChngInOpnIntrst"], errors="coerce").fillna(0)
+            opts["UndrlygPric"] = pd.to_numeric(opts["UndrlygPric"], errors="coerce")
+            rows = []
+            for sym, g in opts.groupby("TckrSymb"):
+                ce, pe = g[g["OptnTp"] == "CE"], g[g["OptnTp"] == "PE"]
+                rows.append({
+                    "symbol": sym,
+                    "call_oi": float(ce["OpnIntrst"].sum()),
+                    "put_oi": float(pe["OpnIntrst"].sum()),
+                    "net_oi_chg": float(g["ChngInOpnIntrst"].sum()),
+                    "ul_price": float(g["UndrlygPric"].dropna().iloc[0]) if g["UndrlygPric"].notna().any() else 0.0,
+                })
+            slim = pd.DataFrame(rows)
+            with gzip.open(_fo_path(d), "wt") as f:
+                slim.to_csv(f, index=False)
+            n_downloaded += 1
+            consecutive_failures = 0
+        except Exception as exc:
+            consecutive_failures += 1
+            print(f"[backtest_events] fo {d} fetch error: {exc}")
+            if consecutive_failures >= 25:
+                print("[backtest_events] options: 25 consecutive failures, aborting download "
+                      "(partial cache kept)")
+                return
+        time.sleep(0.7)
+    print(f"[backtest_events] options: downloaded {n_downloaded} new F&O bhavcopy files")
+
+
+def _load_fo(d: date) -> dict[str, dict] | None:
+    path = _fo_path(d)
+    if not path.exists():
+        return None
+    try:
+        with gzip.open(path, "rt") as f:
+            df = pd.read_csv(f)
+        return {f"{str(r['symbol']).strip()}.NS": {
+            "call_oi": r["call_oi"], "put_oi": r["put_oi"],
+            "net_oi_chg": r["net_oi_chg"], "ul_price": r["ul_price"],
+        } for _, r in df.iterrows()}
+    except Exception:
+        return None
+
+
+def collect_options_events(weeks: int, skip_download: bool) -> tuple[dict[str, list[tuple[date, str]]], str | None]:
+    """Returns ({signal_name: [(date, ticker), ...]}, reason). Reconstructs the
+    three BUY-side option signals per (date, ticker) exactly as the live scorer
+    does, using the prior session's underlying price for buildup direction."""
+    days = trading_days(weeks)
+    if not skip_download:
+        _download_fo_bhavcopy(days)
+
+    day_maps: dict[date, dict[str, dict]] = {}
+    for d in days:
+        m = _load_fo(d)
+        if m is not None:
+            day_maps[d] = m
+
+    if len(day_maps) < MIN_BHAV_DAYS:
+        return {}, f"only {len(day_maps)} F&O bhavcopy days cached — UNTESTABLE this pass"
+
+    sorted_days = sorted(day_maps.keys())
+    out: dict[str, list[tuple[date, str]]] = {
+        "options_pcr_fear": [], "options_long_buildup": [], "options_short_covering": [],
+    }
+    for i, d in enumerate(sorted_days):
+        if i == 0:
+            continue  # need a prior session for the price-direction of buildup
+        today_map = day_maps[d]
+        prev_map = day_maps[sorted_days[i - 1]]
+        for ticker, cur in today_map.items():
+            call_oi, put_oi = cur["call_oi"], cur["put_oi"]
+            if call_oi < _MIN_CALL_OI:   # same liquidity gate as _parse_option_chain
+                continue
+            pcr = put_oi / call_oi if call_oi > 0 else None
+            prev = prev_map.get(ticker)
+            price_up = prev is not None and prev["ul_price"] > 0 and cur["ul_price"] > prev["ul_price"]
+            oi_up = cur["net_oi_chg"] > 0
+            if pcr is not None and pcr > 1.5:
+                out["options_pcr_fear"].append((d, ticker))
+            if price_up and oi_up:
+                out["options_long_buildup"].append((d, ticker))
+            if price_up and not oi_up:
+                out["options_short_covering"].append((d, ticker))
+    return out, None
+
+
 # ── source (b): SAST filings ─────────────────────────────────────────────────
 
 def collect_sast_events(weeks: int, universe: list[str]) -> tuple[list[tuple[date, str]], str | None]:
@@ -421,6 +566,165 @@ def collect_sast_events(weeks: int, universe: list[str]) -> tuple[list[tuple[dat
 
     if n_symbols == 0:
         return [], "no NIFTY500 symbols processed — UNTESTABLE"
+    return events, None
+
+
+# ── source (announcements): historical corporate filings ─────────────────────
+# The live scorer reads a recent-only feed; the same endpoint accepts
+# from_date/to_date, so the full PEAD-style history is fetchable. Classified
+# with the LIVE keyword map (_ann_match_signal, imported) so it can't drift.
+
+def _make_www_session(prime_url: str) -> requests.Session:
+    """NSE www-API session, warmed by hitting a listing page first (the API host
+    503s a cold session -- see nse-free-historical-data-map memory)."""
+    session = _delivery_session()
+    try:
+        session.get(prime_url, timeout=15)
+        time.sleep(1.0)
+    except Exception:
+        pass
+    return session
+
+
+def _www_get_json(session, url: str, retries: int = 4):
+    """GET a www-API JSON with retries for the intermittent 503. Returns parsed
+    JSON or None."""
+    for attempt in range(retries):
+        try:
+            r = session.get(url, timeout=25)
+            if r.status_code == 200:
+                return r.json()
+        except Exception:
+            pass
+        time.sleep(2.5)
+    return None
+
+
+def collect_announcement_events(weeks: int, universe: list[str]) -> tuple[dict[str, list[tuple[date, str]]], str | None]:
+    """Returns ({signal_key: [(date, ticker), ...]}, reason). Chunks the window
+    into 45-day ranges (the API caps large windows), classifies each filing with
+    the live _ann_match_signal, restricts to the NIFTY500 universe."""
+    ANN_CACHE.mkdir(parents=True, exist_ok=True)
+    end = date.today()
+    start = end - timedelta(weeks=weeks)
+    uni = {t.replace(".NS", "") for t in universe}
+    session = _make_www_session(_ANN_PRIME_URL)
+
+    out: dict[str, list[tuple[date, str]]] = {
+        "results_beat_announced": [], "buyback_announced": [],
+        "contract_win": [], "dividend_announced": [],
+    }
+    any_success = False
+    total_failures = 0
+    chunk_start = start
+    while chunk_start < end:
+        chunk_end = min(chunk_start + timedelta(days=45), end)
+        cache_file = ANN_CACHE / f"ann_{chunk_start.isoformat()}_{chunk_end.isoformat()}.json"
+        if cache_file.exists():
+            try:
+                data = json.loads(cache_file.read_text()); any_success = True
+            except Exception:
+                data = None
+        else:
+            url = _ANN_URL.format(frm=chunk_start.strftime("%d-%m-%Y"), to=chunk_end.strftime("%d-%m-%Y"))
+            data = _www_get_json(session, url)
+            if data is None:
+                total_failures += 1
+            else:
+                cache_file.write_text(json.dumps(data)); any_success = True
+                session = _make_www_session(_ANN_PRIME_URL)  # re-warm between chunks
+            time.sleep(1.0)
+
+        if total_failures >= 4 and not any_success:
+            return {}, "corporate-announcements API unreachable (503) — UNTESTABLE this pass"
+
+        rows = data if isinstance(data, list) else (data or {}).get("data", data)
+        if isinstance(rows, list):
+            for item in rows:
+                if not isinstance(item, dict):
+                    continue
+                sym = str(item.get("symbol") or "").strip().upper()
+                if sym not in uni:
+                    continue
+                desc = str(item.get("desc") or "")
+                headline = str(item.get("attchmntText") or desc)
+                sig = _ann_match_signal(desc, headline)
+                if sig is None or sig not in out:
+                    continue
+                dt_str = str(item.get("an_dt") or item.get("dt") or "").strip()
+                try:
+                    d = pd.to_datetime(dt_str[:11], format="%d-%b-%Y").date()
+                except Exception:
+                    continue
+                out[sig].append((d, f"{sym}.NS"))
+        chunk_start = chunk_end
+
+    if not any_success:
+        return {}, "corporate-announcements API unreachable (503) — UNTESTABLE this pass"
+    return out, None
+
+
+# ── source (promoter): quarterly shareholding pattern ────────────────────────
+# promoter_buying live = promoter % increased quarter-over-quarter. The
+# shareholding-master API returns ~90 historical quarters per symbol with
+# pr_and_prgrp (promoter+group %) and the quarter-end date -- reconstructs the
+# same "promoter accumulating" event historically.
+
+def collect_promoter_events(weeks: int, universe: list[str]) -> tuple[list[tuple[date, str]], str | None]:
+    SHP_CACHE.mkdir(parents=True, exist_ok=True)
+    cutoff = date.today() - timedelta(weeks=weeks)
+    session = _make_www_session(_SHP_PRIME_URL)
+
+    events: list[tuple[date, str]] = []
+    any_success = False
+    total_failures = 0
+    for idx, ticker in enumerate(universe):
+        sym = ticker.replace(".NS", "")
+        cache_file = SHP_CACHE / f"{sym}.json"
+        if cache_file.exists():
+            try:
+                data = json.loads(cache_file.read_text()); any_success = True
+            except Exception:
+                data = None
+        else:
+            data = _www_get_json(session, _SHP_URL.format(sym=sym))
+            if data is None:
+                total_failures += 1
+            else:
+                cache_file.write_text(json.dumps(data)); any_success = True
+            if idx % 50 == 49:
+                session = _make_www_session(_SHP_PRIME_URL)
+            time.sleep(0.6)
+
+        if total_failures >= 5 and not any_success:
+            return [], "shareholding-master API unreachable (503) — UNTESTABLE this pass"
+
+        rows = data if isinstance(data, list) else (data or {}).get("data", data)
+        if not isinstance(rows, list):
+            continue
+        # parse (quarter_end_date, promoter_pct), sort chronologically
+        quarters = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                qd = pd.to_datetime(str(row.get("date")).strip(), format="%d-%b-%Y").date()
+                pr = float(str(row.get("pr_and_prgrp")).strip())
+            except (ValueError, TypeError):
+                continue
+            quarters.append((qd, pr))
+        quarters.sort()
+        # event = quarter where promoter % rose vs the prior quarter, dated at the
+        # broadcast (filing) date so forward returns start after the market knew.
+        for i in range(1, len(quarters)):
+            qd, pr = quarters[i]
+            if qd < cutoff:
+                continue
+            if pr > quarters[i - 1][1] + 0.01:  # a real increase, not rounding noise
+                events.append((qd, ticker))
+
+    if not any_success:
+        return [], "shareholding-master API unreachable (503) — UNTESTABLE this pass"
     return events, None
 
 
@@ -501,52 +805,76 @@ def collect_bulk_events(weeks: int) -> tuple[list[tuple[date, str]], str | None]
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+def _eval_single(signal: str, events, reason, ohlcv, universe, results: dict) -> None:
+    if reason:
+        print(f"  {signal}: UNTESTABLE: {reason}")
+        results[signal] = {"verdict": "UNTESTABLE", "reason": reason, "suggested_weight": 0}
+        return
+    print(f"  {signal}: {len(events)} raw events, evaluating...")
+    stats = evaluate_events(events, ohlcv, universe)
+    results[signal] = stats
+    print(f"  {signal}: n={stats['n']} wr_lift={stats.get('wr_lift_pp')}pp "
+          f"ret_lift={stats.get('ret_lift')} -> {stats['verdict']}")
+
+
+def _eval_multi(events_by_signal, reason, ohlcv, universe, results: dict) -> None:
+    if reason:
+        print(f"  UNTESTABLE: {reason}")
+        for sig in (events_by_signal or {}):
+            results[sig] = {"verdict": "UNTESTABLE", "reason": reason, "suggested_weight": 0}
+        return
+    for sig, events in events_by_signal.items():
+        _eval_single(sig, events, None, ohlcv, universe, results)
+
+
+def _load_existing_results() -> dict:
+    """Merge into the prior run's results instead of overwriting, so running one
+    --source doesn't wipe another source's verdict from event_backtest.json."""
+    if OUT_FILE.exists():
+        try:
+            return json.loads(OUT_FILE.read_text()).get("signals", {})
+        except Exception:
+            pass
+    return {}
+
+
 def main(source: str, weeks: int, skip_download: bool) -> None:
     universe = _load_universe(None)
     print(f"[backtest_events] universe: {len(universe)} tickers")
     ohlcv = _load_ohlcv_cache(universe)
     print(f"[backtest_events] loaded {len(ohlcv)}/{len(universe)} tickers from OHLCV cache")
 
-    results: dict[str, dict] = {}
+    results: dict[str, dict] = _load_existing_results()
 
     if source in ("delivery", "all"):
-        print(f"\n[backtest_events] === delivery_surge ===")
-        events, untestable_reason = collect_delivery_events(weeks, skip_download)
-        if untestable_reason:
-            print(f"  UNTESTABLE: {untestable_reason}")
-            results["delivery_surge"] = {"verdict": "UNTESTABLE", "reason": untestable_reason, "suggested_weight": 0}
-        else:
-            print(f"  {len(events)} raw events, evaluating forward returns...")
-            stats = evaluate_events(events, ohlcv, universe)
-            results["delivery_surge"] = stats
-            print(f"  n={stats['n']} wr_lift={stats.get('wr_lift_pp')}pp ret_lift={stats.get('ret_lift')} "
-                  f"-> {stats['verdict']}")
+        print(f"\n[backtest_events] === delivery ===")
+        events, reason = collect_delivery_events(weeks, skip_download)
+        _eval_single("delivery_surge", events, reason, ohlcv, universe, results)
+
+    if source in ("options", "all"):
+        print(f"\n[backtest_events] === options (F&O bhavcopy) ===")
+        events_by_signal, reason = collect_options_events(weeks, skip_download)
+        _eval_multi(events_by_signal, reason, ohlcv, universe, results)
+
+    if source in ("announcements", "all"):
+        print(f"\n[backtest_events] === announcements ===")
+        events_by_signal, reason = collect_announcement_events(weeks, universe)
+        _eval_multi(events_by_signal, reason, ohlcv, universe, results)
+
+    if source in ("promoter", "all"):
+        print(f"\n[backtest_events] === promoter (shareholding) ===")
+        events, reason = collect_promoter_events(weeks, universe)
+        _eval_single("promoter_buying", events, reason, ohlcv, universe, results)
 
     if source in ("sast", "all"):
-        print(f"\n[backtest_events] === sast_insider_buying ===")
-        events, untestable_reason = collect_sast_events(weeks, universe)
-        if untestable_reason:
-            print(f"  UNTESTABLE: {untestable_reason}")
-            results["sast_insider_buying"] = {"verdict": "UNTESTABLE", "reason": untestable_reason, "suggested_weight": 0}
-        else:
-            print(f"  {len(events)} raw events, evaluating forward returns...")
-            stats = evaluate_events(events, ohlcv, universe)
-            results["sast_insider_buying"] = stats
-            print(f"  n={stats['n']} wr_lift={stats.get('wr_lift_pp')}pp ret_lift={stats.get('ret_lift')} "
-                  f"-> {stats['verdict']}")
+        print(f"\n[backtest_events] === sast ===")
+        events, reason = collect_sast_events(weeks, universe)
+        _eval_single("sast_insider_buying", events, reason, ohlcv, universe, results)
 
     if source in ("bulk", "all"):
-        print(f"\n[backtest_events] === bulk_deal_fii_dii ===")
-        events, untestable_reason = collect_bulk_events(weeks)
-        if untestable_reason:
-            print(f"  UNTESTABLE: {untestable_reason}")
-            results["bulk_deal_fii_dii"] = {"verdict": "UNTESTABLE", "reason": untestable_reason, "suggested_weight": 0}
-        else:
-            print(f"  {len(events)} raw events, evaluating forward returns...")
-            stats = evaluate_events(events, ohlcv, universe)
-            results["bulk_deal_fii_dii"] = stats
-            print(f"  n={stats['n']} wr_lift={stats.get('wr_lift_pp')}pp ret_lift={stats.get('ret_lift')} "
-                  f"-> {stats['verdict']}")
+        print(f"\n[backtest_events] === bulk deals ===")
+        events, reason = collect_bulk_events(weeks)
+        _eval_single("bulk_deal_fii_dii", events, reason, ohlcv, universe, results)
 
     out = {
         "meta": {
@@ -572,9 +900,11 @@ def main(source: str, weeks: int, skip_download: bool) -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", choices=["delivery", "sast", "bulk", "all"], default="all")
+    ap.add_argument("--source",
+                     choices=["delivery", "options", "announcements", "promoter", "sast", "bulk", "all"],
+                     default="all")
     ap.add_argument("--weeks", type=int, default=156)
     ap.add_argument("--skip-download", action="store_true",
-                     help="Re-analyze from cache only, no new network fetches (delivery source only)")
+                     help="Re-analyze from cache only, no new network fetches")
     args = ap.parse_args()
     main(args.source, args.weeks, args.skip_download)

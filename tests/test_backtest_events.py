@@ -205,3 +205,93 @@ def test_verdict_no_ship_when_holdout_inconsistent():
     assert stats["holdout_consistent"] is False
     assert stats["verdict"] == "NO-SHIP"
     assert stats["suggested_weight"] == 0
+
+
+# ── options (F&O bhavcopy) reconstruction ────────────────────────────────────
+
+def _write_fo_slim(monkeypatch, tmp_path, day_rows: dict):
+    """day_rows: {date: [{symbol, call_oi, put_oi, net_oi_chg, ul_price}, ...]}"""
+    import pandas as pd
+    fo_dir = tmp_path / "fo_bhavcopy"
+    fo_dir.mkdir(exist_ok=True)
+    monkeypatch.setattr(be, "FO_CACHE", fo_dir)
+    for d, rows in day_rows.items():
+        with gzip.open(be._fo_path(d), "wt") as f:
+            pd.DataFrame(rows).to_csv(f, index=False)
+
+
+def test_options_pcr_fear_fires_above_1_5_and_respects_liquidity_gate(tmp_path, monkeypatch):
+    d0, d1 = date(2026, 1, 1), date(2026, 1, 2)
+    _write_fo_slim(monkeypatch, tmp_path, {
+        d0: [{"symbol": "FEAR", "call_oi": 100000, "put_oi": 200000, "net_oi_chg": 0, "ul_price": 100.0},
+             {"symbol": "ILLIQ", "call_oi": 100, "put_oi": 500, "net_oi_chg": 0, "ul_price": 50.0}],
+        d1: [{"symbol": "FEAR", "call_oi": 100000, "put_oi": 200000, "net_oi_chg": 0, "ul_price": 100.0},
+             {"symbol": "ILLIQ", "call_oi": 100, "put_oi": 500, "net_oi_chg": 0, "ul_price": 50.0}],
+    })
+    monkeypatch.setattr(be, "MIN_BHAV_DAYS", 2)
+    with mock.patch.object(be, "trading_days", return_value=[d0, d1]):
+        out, reason = be.collect_options_events(weeks=1, skip_download=True)
+    assert reason is None
+    fear = set(out["options_pcr_fear"])
+    # FEAR: pcr=2.0>1.5 AND call_oi 100000 >= _MIN_CALL_OI(5000) -> fires on d1
+    assert (d1, "FEAR.NS") in fear
+    # ILLIQ: pcr=5.0 but call_oi 100 < gate -> never fires
+    assert not any(t == "ILLIQ.NS" for _, t in fear)
+
+
+def test_options_long_buildup_needs_price_up_and_oi_up(tmp_path, monkeypatch):
+    d0, d1 = date(2026, 1, 1), date(2026, 1, 2)
+    _write_fo_slim(monkeypatch, tmp_path, {
+        d0: [{"symbol": "BULL", "call_oi": 100000, "put_oi": 50000, "net_oi_chg": 0, "ul_price": 100.0}],
+        # d1: price up (110>100) AND net OI up (+5000) -> long_buildup
+        d1: [{"symbol": "BULL", "call_oi": 100000, "put_oi": 50000, "net_oi_chg": 5000, "ul_price": 110.0}],
+    })
+    monkeypatch.setattr(be, "MIN_BHAV_DAYS", 2)
+    with mock.patch.object(be, "trading_days", return_value=[d0, d1]):
+        out, reason = be.collect_options_events(weeks=1, skip_download=True)
+    assert (d1, "BULL.NS") in set(out["options_long_buildup"])
+    # not short_covering (that needs OI DOWN)
+    assert (d1, "BULL.NS") not in set(out["options_short_covering"])
+
+
+# ── announcements classification (uses the live _ann_match_signal) ───────────
+
+def test_announcement_classification_matches_live_keyword_map():
+    # buyback keyword -> buyback_announced (live map, imported)
+    assert be._ann_match_signal("Buy-back of equity shares", "") == "buyback_announced"
+    assert be._ann_match_signal("Financial Results for Q1", "") == "results_beat_announced"
+    assert be._ann_match_signal("Receipt of order worth 500cr", "") == "contract_win"
+    assert be._ann_match_signal("Board meeting intimation", "") is None
+
+
+# ── promoter quarter-over-quarter increase ───────────────────────────────────
+
+def test_promoter_event_only_on_qoq_increase(tmp_path, monkeypatch):
+    import pandas as pd
+    shp_dir = tmp_path / "shareholding_hist"
+    shp_dir.mkdir()
+    monkeypatch.setattr(be, "SHP_CACHE", shp_dir)
+    # FOO: promoter rises 50 -> 52 (increase, event) then 52 -> 51 (decrease, no event)
+    (shp_dir / "FOO.json").write_text(json.dumps([
+        {"date": "31-Mar-2025", "pr_and_prgrp": "50.0"},
+        {"date": "30-Jun-2025", "pr_and_prgrp": "52.0"},
+        {"date": "30-Sep-2025", "pr_and_prgrp": "51.0"},
+    ]))
+    with mock.patch.object(be, "_make_www_session", return_value=None):
+        events, reason = be.collect_promoter_events(weeks=520, universe=["FOO.NS"])
+    assert reason is None
+    dates = {d for d, t in events}
+    assert date(2025, 6, 30) in dates       # the increase quarter
+    assert date(2025, 9, 30) not in dates   # the decrease quarter
+
+
+# ── merge: running one source must not wipe another's verdict ────────────────
+
+def test_results_merge_does_not_clobber_prior_verdicts(tmp_path, monkeypatch):
+    out_file = tmp_path / "event_backtest.json"
+    out_file.write_text(json.dumps({"signals": {
+        "delivery_surge": {"verdict": "SHIP", "suggested_weight": 1, "n": 38279, "ret_lift": 0.316},
+    }}))
+    monkeypatch.setattr(be, "OUT_FILE", out_file)
+    existing = be._load_existing_results()
+    assert existing["delivery_surge"]["verdict"] == "SHIP"
