@@ -125,10 +125,15 @@ def trading_days(weeks: int) -> list[date]:
 
 # ── shared: forward-return evaluation + baseline + verdict ──────────────────
 
-def _evaluate_one(ticker: str, as_of: date, ohlcv: dict) -> dict | None:
+def _evaluate_one(ticker: str, as_of: date, ohlcv: dict, cost_multiplier: float = 1.0) -> dict | None:
     """Point-in-time entry/exit simulation for one (ticker, as_of) event,
     mirroring scripts/backtest.py's own trade mechanics exactly (2xATR stop,
-    3xATR target, simulate_raw's first-2-bar entry rule)."""
+    3xATR target, simulate_raw's first-2-bar entry rule).
+
+    cost_multiplier: stress-test knob (SOTA Round Phase 2) -- 1.0 (default,
+    zero behavior change for every existing caller) applies the normal
+    round-trip cost; 2.0 doubles it, for a "does the edge survive 2x
+    transaction costs" robustness check."""
     df = ohlcv.get(ticker)
     if df is None:
         return None
@@ -160,7 +165,7 @@ def _evaluate_one(ticker: str, as_of: date, ohlcv: dict) -> dict | None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         sim = simulate_raw(entry_lo, entry_hi, entry_mid, sl, t1, DIRECTION, as_of_ts, df,
-                            t2=t2, cost_pct=round_trip_cost_pct(DIRECTION))
+                            t2=t2, cost_pct=round_trip_cost_pct(DIRECTION) * cost_multiplier)
 
     if not sim.get("triggered") or sim.get("outcome") not in ("t1_hit", "t2_hit", "sl_hit", "timeout"):
         return None
@@ -169,6 +174,31 @@ def _evaluate_one(ticker: str, as_of: date, ohlcv: dict) -> dict | None:
         "ticker": ticker, "as_of": as_of, "outcome": sim["outcome"],
         "return_pct": sim["return_pct"], "win": sim["outcome"] in ("t1_hit", "t2_hit"),
     }
+
+
+def _evaluate_one_time_exit(ticker: str, as_of: date, ohlcv: dict, hold_days: int = 5,
+                             cost_multiplier: float = 1.0) -> dict | None:
+    """5-trading-day time-exit diagnostic (SOTA Round Phase 2, reversal_v2's
+    second exit model) -- no ATR stop/target, pure close-to-close holding
+    period. Entry = close of the first bar after as_of (matches simulate_raw's
+    own entry-fill convention); exit = close `hold_days` trading bars later."""
+    df = ohlcv.get(ticker)
+    if df is None:
+        return None
+    as_of_ts = pd.Timestamp(as_of)
+    future = df[df.index > as_of_ts]
+    if len(future) < hold_days + 1:
+        return None
+    if not _turnover_ok(df, as_of_ts):
+        return None
+
+    entry_px = float(future["Close"].iloc[0])
+    exit_px = float(future["Close"].iloc[hold_days])
+    if entry_px <= 0:
+        return None
+
+    ret_pct = (exit_px / entry_px - 1) * 100 - round_trip_cost_pct(DIRECTION) * cost_multiplier
+    return {"ticker": ticker, "as_of": as_of, "return_pct": round(ret_pct, 3), "win": ret_pct > 0}
 
 
 def _sample_baseline(events: list[tuple[date, str]], ohlcv: dict, universe: list[str],
@@ -260,7 +290,100 @@ def verdict_for(signal_results: list[dict], baseline_results: list[dict]) -> dic
     return stats
 
 
-def evaluate_events(events: list[tuple[date, str]], ohlcv: dict, universe: list[str]) -> dict:
+def evaluate_events(events: list[tuple[date, str]], ohlcv: dict, universe: list[str],
+                     cost_multiplier: float = 1.0) -> dict:
+    if not events:
+        return {"n": 0, "verdict": "INSUFFICIENT_SAMPLE", "suggested_weight": 0}
+
+    signal_results = []
+    for d, t in events:
+        r = _evaluate_one(t, d, ohlcv, cost_multiplier=cost_multiplier)
+        if r is not None:
+            signal_results.append(r)
+
+    baseline_events = _sample_baseline(events, ohlcv, universe)
+    baseline_results = []
+    for d, t in baseline_events:
+        r = _evaluate_one(t, d, ohlcv, cost_multiplier=cost_multiplier)
+        if r is not None:
+            baseline_results.append(r)
+
+    return verdict_for(signal_results, baseline_results)
+
+
+def _evaluate_events_time_exit(events: list[tuple[date, str]], ohlcv: dict, universe: list[str],
+                                hold_days: int = 5, cost_multiplier: float = 1.0) -> dict:
+    """Same event set, evaluated with the 5-day time-exit model instead of the
+    ATR-target template (SOTA Round Phase 2 robustness check (d): both exit
+    models must show a positive lift). Returns pooled _lift_stats only (no
+    SHIP/NO-SHIP verdict of its own -- reversal_v2_verdict combines it)."""
+    if not events:
+        return {"n": 0, "ret_lift": None, "wr_lift_pp": None}
+
+    signal_results = []
+    for d, t in events:
+        r = _evaluate_one_time_exit(t, d, ohlcv, hold_days=hold_days, cost_multiplier=cost_multiplier)
+        if r is not None:
+            signal_results.append(r)
+
+    baseline_events = _sample_baseline(events, ohlcv, universe)
+    baseline_results = []
+    for d, t in baseline_events:
+        r = _evaluate_one_time_exit(t, d, ohlcv, hold_days=hold_days, cost_multiplier=cost_multiplier)
+        if r is not None:
+            baseline_results.append(r)
+
+    return _lift_stats(signal_results, baseline_results)
+
+
+def _multi_split_stats(signal_results: list[dict], baseline_results: list[dict],
+                        n_splits: int = 5) -> list[dict]:
+    """Chronological date-range split into n_splits equal-width buckets
+    (SOTA Round Phase 2 gate (a)) -- unlike the 70/30 holdout's index-based
+    slicing, this splits by calendar time so each bucket represents a
+    genuinely distinct period, not just "however many events happened to
+    fall in the last 30% of the list"."""
+    if not signal_results:
+        return []
+    dates = sorted(r["as_of"] for r in signal_results)
+    start, end = dates[0], dates[-1]
+    total_days = (end - start).days
+    if total_days <= 0:
+        return [_lift_stats(signal_results, baseline_results)]
+
+    bucket_days = total_days / n_splits
+    boundaries = [start + timedelta(days=round(bucket_days * i)) for i in range(n_splits + 1)]
+    boundaries[-1] = end + timedelta(days=1)  # inclusive of the final date
+
+    splits = []
+    for i in range(n_splits):
+        lo, hi = boundaries[i], boundaries[i + 1]
+        sr = [r for r in signal_results if lo <= r["as_of"] < hi]
+        br = [r for r in baseline_results if lo <= r["as_of"] < hi]
+        stats = _lift_stats(sr, br)
+        stats["split_start"] = lo.isoformat()
+        stats["split_end"] = (hi - timedelta(days=1)).isoformat()
+        splits.append(stats)
+    return splits
+
+
+def reversal_v2_verdict(events: list[tuple[date, str]], ohlcv: dict, universe: list[str]) -> dict:
+    """
+    SOTA Round Phase 2 -- the pre-declared, STRICTER re-test of the no-200DMA-
+    filter reversal variant that shipped every Alpha-Round gate but was
+    excluded from promotion as diagnostic-only (anti-gate-shopping). All four
+    checks below were pre-declared before this function was run against real
+    data:
+      (a) 5 chronological splits: pooled-vs-baseline ret_lift > 0 in >= 4/5
+          splits AND in the most recent split.
+      (b) pooled wr_lift_pp > 0.
+      (c) survives 2x transaction costs: pooled ret_lift still > 0.
+      (d) both exit models positive: the standard ATR-template AND the
+          5-day time exit.
+    NO-SHIP if n < MIN_N_SHIP (same floor as every other signal here) or any
+    check fails. This is the LAST pre-declared attempt for this signal family
+    -- the Alpha-Round primary (with a 200DMA filter) already NO-SHIPped.
+    """
     if not events:
         return {"n": 0, "verdict": "INSUFFICIENT_SAMPLE", "suggested_weight": 0}
 
@@ -277,7 +400,60 @@ def evaluate_events(events: list[tuple[date, str]], ohlcv: dict, universe: list[
         if r is not None:
             baseline_results.append(r)
 
-    return verdict_for(signal_results, baseline_results)
+    pooled = _lift_stats(signal_results, baseline_results)
+    n = pooled["n"]
+    if n < MIN_N_SHIP:
+        pooled["verdict"] = "INSUFFICIENT_SAMPLE"
+        pooled["suggested_weight"] = 0
+        return pooled
+
+    # (a) 5 chronological splits
+    splits = _multi_split_stats(signal_results, baseline_results, n_splits=5)
+    n_positive_splits = sum(1 for s in splits if s["ret_lift"] is not None and s["ret_lift"] > 0)
+    most_recent_positive = bool(splits and splits[-1]["ret_lift"] is not None and splits[-1]["ret_lift"] > 0)
+    splits_pass = n_positive_splits >= 4 and most_recent_positive
+
+    # (b) pooled win-rate lift
+    wr_pass = pooled["wr_lift_pp"] is not None and pooled["wr_lift_pp"] > 0
+
+    # (c) 2x transaction costs
+    signal_2x = []
+    for d, t in events:
+        r = _evaluate_one(t, d, ohlcv, cost_multiplier=2.0)
+        if r is not None:
+            signal_2x.append(r)
+    baseline_2x = []
+    for d, t in baseline_events:
+        r = _evaluate_one(t, d, ohlcv, cost_multiplier=2.0)
+        if r is not None:
+            baseline_2x.append(r)
+    stats_2x = _lift_stats(signal_2x, baseline_2x)
+    cost_2x_pass = stats_2x["ret_lift"] is not None and stats_2x["ret_lift"] > 0
+
+    # (d) both exit models
+    time_exit_stats = _evaluate_events_time_exit(events, ohlcv, universe, hold_days=5)
+    atr_template_pass = pooled["ret_lift"] is not None and pooled["ret_lift"] > 0
+    time_exit_pass = time_exit_stats["ret_lift"] is not None and time_exit_stats["ret_lift"] > 0
+    both_exits_pass = atr_template_pass and time_exit_pass
+
+    ships = splits_pass and wr_pass and cost_2x_pass and both_exits_pass
+
+    pooled["verdict"] = "SHIP" if ships else "NO-SHIP"
+    pooled["suggested_weight"] = min(3, suggested_weight(pooled["ret_lift"])) if ships else 0
+    pooled["gate_detail"] = {
+        "splits": splits,
+        "n_positive_splits": n_positive_splits,
+        "most_recent_split_positive": most_recent_positive,
+        "splits_pass": splits_pass,
+        "wr_pass": wr_pass,
+        "cost_2x_ret_lift": stats_2x["ret_lift"],
+        "cost_2x_pass": cost_2x_pass,
+        "time_exit_ret_lift": time_exit_stats["ret_lift"],
+        "time_exit_pass": time_exit_pass,
+        "atr_template_pass": atr_template_pass,
+        "both_exits_pass": both_exits_pass,
+    }
+    return pooled
 
 
 def _load_ohlcv_cache(universe: list[str]) -> dict:
@@ -1300,6 +1476,26 @@ def main(source: str, weeks: int, skip_download: bool) -> None:
         diag_events, diag_reason = collect_reversal_diag_events(weeks, ohlcv)
         _eval_single("reversal_oversold_diag_no_trend", diag_events, diag_reason, ohlcv, universe, results)
 
+    if source in ("reversal2", "all"):
+        print(f"\n[backtest_events] === reversal v2 (pre-declared re-test, stricter gate) ===")
+        events, reason = collect_reversal_diag_events(weeks, ohlcv)
+        if reason:
+            print(f"  reversal_oversold_v2: UNTESTABLE: {reason}")
+            results["reversal_oversold_v2"] = {"verdict": "UNTESTABLE", "reason": reason, "suggested_weight": 0}
+        else:
+            print(f"  reversal_oversold_v2: {len(events)} raw events, evaluating (4 pre-declared checks)...")
+            stats = reversal_v2_verdict(events, ohlcv, universe)
+            results["reversal_oversold_v2"] = stats
+            gd = stats.get("gate_detail", {})
+            print(f"  reversal_oversold_v2: n={stats['n']} wr_lift={stats.get('wr_lift_pp')}pp "
+                  f"ret_lift={stats.get('ret_lift')} -> {stats['verdict']}")
+            if gd:
+                print(f"    splits: {gd['n_positive_splits']}/5 positive, most_recent_positive="
+                      f"{gd['most_recent_split_positive']} -> {gd['splits_pass']}")
+                print(f"    wr_pass={gd['wr_pass']}  cost_2x_ret_lift={gd['cost_2x_ret_lift']} "
+                      f"({gd['cost_2x_pass']})  time_exit_ret_lift={gd['time_exit_ret_lift']} "
+                      f"({gd['time_exit_pass']})")
+
     if source in ("options", "all"):
         print(f"\n[backtest_events] === options (F&O bhavcopy) ===")
         events_by_signal, reason = collect_options_events(weeks, skip_download)
@@ -1394,7 +1590,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--source",
                      choices=["delivery", "options", "announcements", "promoter", "sast", "bulk",
-                              "reversal", "pead", "pit", "rebalance", "all"],
+                              "reversal", "reversal2", "pead", "pit", "rebalance", "all"],
                      default="all")
     ap.add_argument("--weeks", type=int, default=156)
     ap.add_argument("--skip-download", action="store_true",

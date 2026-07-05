@@ -12,6 +12,8 @@ import json
 from datetime import date, timedelta
 from unittest import mock
 
+import pandas as pd
+
 import backtest_events as be
 
 
@@ -602,3 +604,173 @@ def test_rebalance_verdict_holdout_inconsistent_is_no_ship():
     stats = be._rebalance_verdict(results)
     assert stats["verdict"] == "NO-SHIP"
     assert stats["holdout_consistent"] is False
+
+
+# ── reversal v2: pre-declared stricter gate (SOTA Round Phase 2) ─────────────
+
+def _time_exit_df(future_closes: list[float], prior_bars: int = 15) -> "pd.DataFrame":
+    """`prior_bars` bars of stable ₹100 history (so _turnover_ok's >=10-bar,
+    >=₹2cr-median-turnover gate passes) ending at as_of, followed by
+    `future_closes` (the bars _evaluate_one_time_exit will look at)."""
+    closes = [100.0] * prior_bars + future_closes
+    idx = pd.bdate_range(start="2025-01-01", periods=len(closes))
+    return pd.DataFrame({
+        "Open": closes, "High": [c * 1.01 for c in closes], "Low": [c * 0.99 for c in closes],
+        "Close": closes, "Volume": [300000] * len(closes),
+    }, index=idx)
+
+
+def test_evaluate_one_time_exit_computes_hold_days_return():
+    """Entry = close of first bar after as_of, exit = close hold_days bars
+    later; cost deducted per the same round_trip_cost_pct convention."""
+    prior_bars = 15
+    future_closes = [101.0, 102.0, 103.0, 104.0, 110.0, 108.0]  # 6 bars: hold_days=5 -> exit=iloc[5]=108
+    df = _time_exit_df(future_closes, prior_bars=prior_bars)
+    as_of = df.index[prior_bars - 1].date()  # last prior bar = as_of
+    r = be._evaluate_one_time_exit("FOO.NS", as_of, {"FOO.NS": df}, hold_days=5)
+    assert r is not None
+    expected_entry, expected_exit = future_closes[0], future_closes[5]
+    expected_ret = (expected_exit / expected_entry - 1) * 100 - be.round_trip_cost_pct("buy")
+    assert abs(r["return_pct"] - expected_ret) < 0.01
+
+
+def test_evaluate_one_time_exit_none_when_insufficient_future_bars():
+    df = _time_exit_df([101.0])  # only 1 bar after as_of, need hold_days+1=6
+    as_of = df.index[14].date()
+    r = be._evaluate_one_time_exit("FOO.NS", as_of, {"FOO.NS": df}, hold_days=5)
+    assert r is None
+
+
+def test_multi_split_stats_splits_by_calendar_time_into_5_buckets():
+    start = date(2020, 1, 1)
+    # 500 days, one event per day, uniform +2.0 return -- baseline flat 0
+    sig = [{"as_of": start + timedelta(days=i), "return_pct": 2.0, "win": True} for i in range(500)]
+    base = [{"as_of": start + timedelta(days=i), "return_pct": 0.0, "win": False} for i in range(500)]
+    splits = be._multi_split_stats(sig, base, n_splits=5)
+    assert len(splits) == 5
+    for s in splits:
+        assert s["ret_lift"] == 2.0  # every bucket sees the same uniform lift
+    # buckets are chronologically ordered and cover the whole range with no gaps
+    assert splits[0]["split_start"] == start.isoformat()
+    assert splits[-1]["split_end"] == (start + timedelta(days=499)).isoformat()
+
+
+def test_multi_split_stats_empty_input_returns_empty_list():
+    assert be._multi_split_stats([], []) == []
+
+
+# ── reversal_v2_verdict: gate orchestration (mocked seams -- the financial
+# math of _evaluate_one/_lift_stats is already covered elsewhere; this tests
+# the AND-combination of the 4 pre-declared checks) ──────────────────────────
+
+def _mock_reversal_v2(monkeypatch, signal_ret_1x_fn, signal_ret_2x_fn, baseline_ret_fn,
+                       time_exit_ret_lift, n=520, start=date(2020, 1, 1)):
+    events = [(start + timedelta(days=i), f"SIG{i}.NS") for i in range(n)]
+    baseline_events = [(start + timedelta(days=i), f"BASE{i}.NS") for i in range(n)]
+
+    def fake_evaluate_one(t, d, ohlcv, cost_multiplier=1.0):
+        if t.startswith("SIG"):
+            ret = signal_ret_1x_fn(d) if cost_multiplier == 1.0 else signal_ret_2x_fn(d)
+        else:
+            ret = baseline_ret_fn(d)
+        return {"ticker": t, "as_of": d, "return_pct": ret, "win": ret > 0}
+
+    monkeypatch.setattr(be, "_evaluate_one", fake_evaluate_one)
+    monkeypatch.setattr(be, "_sample_baseline", lambda events, ohlcv, universe, **k: baseline_events)
+    monkeypatch.setattr(be, "_evaluate_events_time_exit",
+                         lambda events, ohlcv, universe, **k: {"n": n, "ret_lift": time_exit_ret_lift, "wr_lift_pp": 5.0})
+    return events
+
+
+def test_reversal_v2_ships_when_all_four_checks_pass(monkeypatch):
+    events = _mock_reversal_v2(
+        monkeypatch,
+        signal_ret_1x_fn=lambda d: 2.0, signal_ret_2x_fn=lambda d: 1.5,
+        baseline_ret_fn=lambda d: 0.0, time_exit_ret_lift=0.8,
+    )
+    stats = be.reversal_v2_verdict(events, {}, [])
+    assert stats["verdict"] == "SHIP"
+    gd = stats["gate_detail"]
+    assert gd["splits_pass"] is True
+    assert gd["wr_pass"] is True
+    assert gd["cost_2x_pass"] is True
+    assert gd["time_exit_pass"] is True
+    assert stats["suggested_weight"] is not None and stats["suggested_weight"] <= 3
+
+
+def test_reversal_v2_no_ship_when_too_few_splits_positive(monkeypatch):
+    """First 40% of the date range (splits 0-1) is a large negative lift,
+    rest positive -- only 3/5 splits positive, below the >=4/5 bar."""
+    def sig_ret(d):
+        day_idx = (d - date(2020, 1, 1)).days
+        return -5.0 if day_idx < 520 * 0.4 else 2.0
+    events = _mock_reversal_v2(
+        monkeypatch, signal_ret_1x_fn=sig_ret, signal_ret_2x_fn=sig_ret,
+        baseline_ret_fn=lambda d: 0.0, time_exit_ret_lift=0.8,
+    )
+    stats = be.reversal_v2_verdict(events, {}, [])
+    assert stats["verdict"] == "NO-SHIP"
+    assert stats["gate_detail"]["splits_pass"] is False
+
+
+def test_reversal_v2_no_ship_when_most_recent_split_negative(monkeypatch):
+    """4/5 splits positive but the LAST (most recent) split is negative --
+    must fail even though a naive majority vote would pass."""
+    def sig_ret(d):
+        day_idx = (d - date(2020, 1, 1)).days
+        return -5.0 if day_idx >= 520 * 0.8 else 2.0
+    events = _mock_reversal_v2(
+        monkeypatch, signal_ret_1x_fn=sig_ret, signal_ret_2x_fn=sig_ret,
+        baseline_ret_fn=lambda d: 0.0, time_exit_ret_lift=0.8,
+    )
+    stats = be.reversal_v2_verdict(events, {}, [])
+    assert stats["verdict"] == "NO-SHIP"
+    gd = stats["gate_detail"]
+    assert gd["n_positive_splits"] == 4
+    assert gd["most_recent_split_positive"] is False
+    assert gd["splits_pass"] is False
+
+
+def test_reversal_v2_no_ship_when_2x_costs_flip_negative(monkeypatch):
+    """Pooled 1x-cost ret_lift is comfortably positive, but doubling costs
+    flips it negative -- the edge doesn't survive a modest cost-stress test."""
+    events = _mock_reversal_v2(
+        monkeypatch,
+        signal_ret_1x_fn=lambda d: 0.5, signal_ret_2x_fn=lambda d: -0.5,
+        baseline_ret_fn=lambda d: 0.0, time_exit_ret_lift=0.8,
+    )
+    stats = be.reversal_v2_verdict(events, {}, [])
+    assert stats["verdict"] == "NO-SHIP"
+    assert stats["gate_detail"]["cost_2x_pass"] is False
+
+
+def test_reversal_v2_no_ship_when_time_exit_model_negative(monkeypatch):
+    """ATR-template lift is positive but the 5-day time-exit model is
+    negative -- both exit models must agree, not just one."""
+    events = _mock_reversal_v2(
+        monkeypatch,
+        signal_ret_1x_fn=lambda d: 2.0, signal_ret_2x_fn=lambda d: 1.5,
+        baseline_ret_fn=lambda d: 0.0, time_exit_ret_lift=-0.3,
+    )
+    stats = be.reversal_v2_verdict(events, {}, [])
+    assert stats["verdict"] == "NO-SHIP"
+    gd = stats["gate_detail"]
+    assert gd["atr_template_pass"] is True
+    assert gd["time_exit_pass"] is False
+    assert gd["both_exits_pass"] is False
+
+
+def test_reversal_v2_insufficient_sample_below_500(monkeypatch):
+    events = _mock_reversal_v2(
+        monkeypatch, signal_ret_1x_fn=lambda d: 2.0, signal_ret_2x_fn=lambda d: 1.5,
+        baseline_ret_fn=lambda d: 0.0, time_exit_ret_lift=0.8, n=200,
+    )
+    stats = be.reversal_v2_verdict(events, {}, [])
+    assert stats["verdict"] == "INSUFFICIENT_SAMPLE"
+    assert stats["suggested_weight"] == 0
+
+
+def test_reversal_v2_no_events_is_insufficient_sample():
+    stats = be.reversal_v2_verdict([], {}, [])
+    assert stats["verdict"] == "INSUFFICIENT_SAMPLE"
+    assert stats["n"] == 0
