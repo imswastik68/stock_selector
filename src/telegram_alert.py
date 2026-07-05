@@ -361,6 +361,18 @@ def _format_sell_entry(entry: dict, rank: int) -> str:
     return "\n".join(lines)
 
 
+def _format_pead_entry(entry: dict, rank: int) -> str:
+    ticker    = entry.get("ticker", "?")
+    direction = entry.get("direction", "?")
+    headline  = entry.get("headline", "")
+    icon = "📈" if direction == "positive" else "📉"
+    label = "beat + rally" if direction == "positive" else "miss + selloff"
+    lines = [f"{_b(f'{rank}. {ticker}')}  {icon} {_i(label)}"]
+    if headline:
+        lines.append(f"  {_e(headline[:120])}")
+    return "\n".join(lines)
+
+
 def _format_phase_b_entry(entry: dict, rank: int) -> str:
     ticker       = entry.get("ticker", "?")
     phase        = entry.get("phase", "?")
@@ -619,13 +631,14 @@ def _build_message(watchlist_data: dict) -> str:
         buy_list     = watchlist_data.get("buy_watchlist", [])
         sell_list    = watchlist_data.get("sell_watchlist", [])
         phase_b_list = watchlist_data.get("phase_b_watchlist", [])
+        pead_list    = watchlist_data.get("pead_watchlist", [])
         nifty_ctx    = watchlist_data.get("nifty_context", "ranging").upper()
         total        = watchlist_data.get("total_screened", 0)
         warnings     = watchlist_data.get("data_quality_warnings", [])
 
         time_str = f" | {_e(scan_time)}" if scan_time else ""
 
-        if not buy_list and not sell_list and not phase_b_list:
+        if not buy_list and not sell_list and not phase_b_list and not pead_list:
             base = (
                 f"<b>NSE/BSE Stock Scanner — {_e(scan_date)}{time_str}</b>\n\n"
                 f"No qualifying candidates today ({total} screened). "
@@ -633,6 +646,25 @@ def _build_message(watchlist_data: dict) -> str:
             )
             # Gate status is arguably MOST useful on a zero-candidate day -- append
             # it here too, not just on the has-picks path below.
+            gates = watchlist_data.get("gates") or {}
+            if gates:
+                gs = gates.get("scanner", {}); gm = gates.get("momentum", {})
+                base += (f"\n\n🚦 <i>{_e(gs.get('status_line', ''))}\n"
+                         f"{_e(gm.get('status_line', ''))}</i>")
+            return base
+
+        # A day can have zero qualifying candidates but still have PEAD
+        # watch-only reactions (pead_positive_surprise alone scores 1, below
+        # MIN_SCORE=2) -- render just that section rather than the terse
+        # "no candidates" message, which would otherwise hide real signal.
+        if not buy_list and not sell_list and not phase_b_list and pead_list:
+            base = (
+                f"<b>NSE/BSE Stock Scanner — {_e(scan_date)}{time_str}</b>\n\n"
+                f"No qualifying candidates today ({total} screened). "
+                f"Nifty: {_e(nifty_ctx)}\n"
+                f"\n👁 <b>PEAD WATCH ({len(pead_list)} stocks)</b>\n"
+            )
+            base += "\n".join(_format_pead_entry(e, i + 1) for i, e in enumerate(pead_list))
             gates = watchlist_data.get("gates") or {}
             if gates:
                 gs = gates.get("scanner", {}); gm = gates.get("momentum", {})
@@ -706,6 +738,10 @@ def _build_message(watchlist_data: dict) -> str:
         if phase_b_list:
             sections.append(f"\n👀 <b>WATCH LIST ({len(phase_b_list)} stocks)</b>\n")
             sections.extend(_format_phase_b_entry(e, i + 1) for i, e in enumerate(phase_b_list))
+
+        if pead_list:
+            sections.append(f"\n👁 <b>PEAD WATCH ({len(pead_list)} stocks)</b>\n")
+            sections.extend(_format_pead_entry(e, i + 1) for i, e in enumerate(pead_list))
 
         big_movers = [e.get("ticker", "?") for e in (buy_list + sell_list) if e.get("big_mover")]
         if big_movers:

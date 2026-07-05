@@ -11,7 +11,10 @@ score_candidates() converts this to a per-ticker lookup for signal scoring.
 from __future__ import annotations
 
 import re
+import warnings
+import pandas as pd
 import requests
+import yfinance as yf
 from datetime import datetime, timedelta, timezone
 
 _NSE_URL = "https://www.nseindia.com/api/corporate-announcements?index=equities"
@@ -168,3 +171,64 @@ def classify_pead_reaction(filed_at: str, df) -> str | None:
     if r_react <= -0.03:
         return "negative"
     return None
+
+
+def fetch_pead_signals(announcements: list[dict]) -> dict[str, str]:
+    """
+    Batch-classify each results_beat_announced filing's reaction-day price
+    move (classify_pead_reaction above) -- computed EARLY, before the first
+    scoring pass, so PEAD can be a first-class entry signal (SOTA Round
+    Phase 1). Previously this only ran after top-20 OHLCV enrichment, which a
+    pure-PEAD ticker (pead_positive_surprise alone scores 1, below MIN_SCORE=2)
+    would never reach -- the validated edge (n=1696, ret_lift +0.308) was
+    structurally untradeable on its own.
+
+    One batch yf.download call for just the announced tickers (typically
+    5-40/day), not the whole universe -- mirrors src.data.market_context.
+    enrich_candidate_context's MultiIndex normalisation.
+
+    Returns {ticker: "positive"|"negative"} -- only classified tickers
+    (middle-band / insufficient-data tickers are omitted, not False).
+    """
+    results_items = [a for a in announcements if a.get("signal_key") == "results_beat_announced"]
+    if not results_items:
+        return {}
+
+    tickers = sorted({a["ticker"] for a in results_items if a.get("ticker")})
+    if not tickers:
+        return {}
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            raw = yf.download(tickers, period="15d", auto_adjust=True, progress=False, group_by="ticker")
+        if raw.empty:
+            return {}
+    except Exception as exc:
+        print(f"[bse_announcements] PEAD OHLCV fetch error: {exc}")
+        return {}
+
+    if isinstance(raw.columns, pd.MultiIndex):
+        level0 = raw.columns.get_level_values(0).unique().tolist()
+        per_ticker = {t: raw[t] for t in tickers if t in level0}
+    else:
+        per_ticker = {tickers[0]: raw} if len(tickers) == 1 else {}
+
+    pead_signals: dict[str, str] = {}
+    for a in results_items:
+        t = a.get("ticker")
+        df = per_ticker.get(t)
+        if df is None or df.empty:
+            continue
+        df = df.dropna(how="all")
+        if "Close" in df.columns:
+            df = df[df["Close"].notna()]
+        if df.empty:
+            continue
+        cls = classify_pead_reaction(a.get("filed_at", ""), df)
+        if cls:
+            pead_signals[t] = cls  # last filing wins if a ticker has multiple same-day filings
+
+    print(f"[bse_announcements] PEAD: {len(pead_signals)} classified reaction(s) "
+          f"from {len(tickers)} results-filing ticker(s)")
+    return pead_signals

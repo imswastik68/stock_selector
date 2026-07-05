@@ -118,3 +118,62 @@ def test_parity_middle_band_no_signal_either_side():
     )
     assert bt_signal is None
     assert live_cls is None
+
+
+# ── fetch_pead_signals: batch OHLCV fetch + classification (SOTA Round Phase 1) ─
+
+import src.data.bse_announcements as ba
+
+
+def test_fetch_pead_signals_empty_announcements_returns_empty():
+    assert ba.fetch_pead_signals([]) == {}
+
+
+def test_fetch_pead_signals_ignores_non_results_announcements():
+    anns = [{"ticker": "FOO.NS", "signal_key": "buyback_announced",
+             "an_dt": "05-Jan-2026 10:00:00", "filed_at": "2026-01-05T10:00:00+05:30"}]
+    assert ba.fetch_pead_signals(anns) == {}
+
+
+def test_fetch_pead_signals_multi_ticker_multiindex(monkeypatch):
+    idx = pd.to_datetime(["2026-01-02", "2026-01-05"])
+    # MultiIndex columns (ticker, field) -- mirrors yf.download(group_by="ticker")
+    cols = pd.MultiIndex.from_product([["FOO.NS", "BAR.NS"], ["Close"]])
+    raw = pd.DataFrame([[100.0, 100.0], [104.0, 94.0]], index=idx, columns=cols)
+
+    monkeypatch.setattr(ba.yf, "download", lambda *a, **k: raw)
+    anns = [
+        {"ticker": "FOO.NS", "signal_key": "results_beat_announced",
+         "filed_at": "2026-01-05T10:00:00+05:30"},
+        {"ticker": "BAR.NS", "signal_key": "results_beat_announced",
+         "filed_at": "2026-01-05T10:00:00+05:30"},
+    ]
+    out = ba.fetch_pead_signals(anns)
+    assert out == {"FOO.NS": "positive", "BAR.NS": "negative"}
+
+
+def test_fetch_pead_signals_single_ticker_flat_columns(monkeypatch):
+    idx = pd.to_datetime(["2026-01-02", "2026-01-05"])
+    raw = pd.DataFrame({"Close": [100.0, 104.0]}, index=idx)
+
+    monkeypatch.setattr(ba.yf, "download", lambda *a, **k: raw)
+    anns = [{"ticker": "FOO.NS", "signal_key": "results_beat_announced",
+              "filed_at": "2026-01-05T10:00:00+05:30"}]
+    out = ba.fetch_pead_signals(anns)
+    assert out == {"FOO.NS": "positive"}
+
+
+def test_fetch_pead_signals_download_error_returns_empty(monkeypatch):
+    def _boom(*a, **k):
+        raise RuntimeError("network down")
+    monkeypatch.setattr(ba.yf, "download", _boom)
+    anns = [{"ticker": "FOO.NS", "signal_key": "results_beat_announced",
+              "filed_at": "2026-01-05T10:00:00+05:30"}]
+    assert ba.fetch_pead_signals(anns) == {}
+
+
+def test_fetch_pead_signals_empty_download_returns_empty(monkeypatch):
+    monkeypatch.setattr(ba.yf, "download", lambda *a, **k: pd.DataFrame())
+    anns = [{"ticker": "FOO.NS", "signal_key": "results_beat_announced",
+              "filed_at": "2026-01-05T10:00:00+05:30"}]
+    assert ba.fetch_pead_signals(anns) == {}

@@ -39,7 +39,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.data.bulk_deals import fetch_bulk_deals
-from src.data.bse_announcements import fetch_bse_announcements, classify_pead_reaction
+from src.data.bse_announcements import fetch_bse_announcements, fetch_pead_signals
 from src.data.delivery import fetch_delivery_signals
 from src.data.breakouts import fetch_breakouts
 from src.data.breakdowns import fetch_breakdowns
@@ -67,6 +67,37 @@ from src.portfolio import (
 from src.archive import archive_events
 
 OUTPUTS_DIR = Path(__file__).parent / "outputs"
+
+
+def _build_pead_watchlist(pead_signals: dict[str, str], announcements: list[dict],
+                           exclude: set[str]) -> list[dict]:
+    """
+    Surface PEAD-classified tickers that didn't make it into the buy/sell
+    watchlist (SOTA Round Phase 1). pead_positive_surprise alone scores 1
+    (below MIN_SCORE=2, by design -- weight follows the measured evidence),
+    so most classified tickers never appear anywhere else in the output. This
+    makes the validated edge (n=1696, ret_lift +0.308, holdout-consistent)
+    visible daily without corrupting score thresholds.
+    """
+    if not pead_signals:
+        return []
+    headline_by_ticker: dict[str, str] = {}
+    filed_by_ticker: dict[str, str] = {}
+    for a in announcements:
+        t = a.get("ticker")
+        if t in pead_signals:
+            headline_by_ticker[t] = a.get("headline", "")
+            filed_by_ticker[t] = a.get("filed_at", "")
+    return [
+        {
+            "ticker": ticker,
+            "direction": direction,
+            "headline": headline_by_ticker.get(ticker, ""),
+            "filed_at": filed_by_ticker.get(ticker, ""),
+        }
+        for ticker, direction in sorted(pead_signals.items())
+        if ticker not in exclude
+    ]
 
 
 def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, list, dict, dict, set, list, set]:
@@ -357,6 +388,13 @@ def main() -> int:
             results_calendar=results_calendar, delivery_signals=delivery_signals,
         )
 
+    # PEAD v2 (SOTA Round Phase 1): classify results-filing reaction-day moves
+    # EARLY, before the first scoring pass -- a pure-PEAD ticker only scores 1
+    # (below MIN_SCORE=2), so if this ran after top-20 enrichment (as it did
+    # before this phase) it could never reach that enrichment step in the
+    # first place. See src.data.bse_announcements.fetch_pead_signals.
+    pead_signals = fetch_pead_signals(announcements)
+
     # Count total unique tickers across all sources for the report
     all_tickers: set[str] = set()
     all_tickers.update(d["ticker"] for d in bulk_deals)
@@ -383,6 +421,7 @@ def main() -> int:
         breadth_label=breadth_label,
         nifty_trend=nifty_trend,
         breakdowns=breakdowns,
+        pead_signals=pead_signals,
     )
 
     # 3. Enrich top 20 candidates with options PCR + promoter buying
@@ -428,6 +467,7 @@ def main() -> int:
             nifty_trend=nifty_trend,
             fundamental_signals=fundamental_signals,
             breakdowns=breakdowns,
+            pead_signals=pead_signals,
         )
     else:
         options_signals     = {}
@@ -440,6 +480,7 @@ def main() -> int:
             "buy_watchlist": [],
             "sell_watchlist": [],
             "phase_b_watchlist": [],
+            "pead_watchlist": _build_pead_watchlist(pead_signals, announcements, exclude=set()),
             "nifty_context": market_wide_ctx.get("nifty_structure", {}).get("trend", "ranging"),
             "scan_date": date.today().isoformat(),
             "total_screened": total_scanned,
@@ -461,24 +502,12 @@ def main() -> int:
     market_context["gift_nifty"] = gift_nifty
     market_context["fo_eligible"] = fo_eligible
 
-    # PEAD v2 (Alpha Round Phase 2/5): classify each results_beat_announced
-    # filing's reaction-day price move -- needs both the filing timestamp
-    # (from `announcements`) and OHLCV (just fetched into market_context
-    # above), so this is the earliest point in the pipeline both exist.
-    # See src.data.bse_announcements.classify_pead_reaction for the rule.
-    pead_map: dict[str, str] = {}
-    for a in announcements:
-        if a.get("signal_key") != "results_beat_announced":
-            continue
-        t_ticker = a["ticker"]
-        df_ohlcv = market_context.get("ohlcv_90d", {}).get(t_ticker)
-        cls = classify_pead_reaction(a["filed_at"], df_ohlcv)
-        if cls:
-            pead_map[t_ticker] = cls
-
     # 5. Third re-score: incorporate RSI, RS vs Nifty, OBV, BB squeeze from technicals
     #    (only top 20 have technical data — rest get no delta, preserving their rank)
     # 2 technical signals after research review (rsi_extended, obv, bb_squeeze removed)
+    # NOTE: PEAD signals are NOT part of tech_signals -- they're computed once,
+    # early (pead_signals above) and threaded through score_candidates directly,
+    # so they apply in every scoring pass, not just this post-enrichment one.
     tech_signals = {
         ticker: {
             "rsi_momentum":        t.get("rsi_momentum", False),
@@ -491,8 +520,6 @@ def main() -> int:
             "bearish_candle":      t.get("bearish_candle", False),
             "weekly_trend_aligned":t.get("weekly_trend_aligned", False),
             "rs_quality_strong":   t.get("rs_quality_strong", False),
-            "pead_positive_surprise": pead_map.get(ticker) == "positive",
-            "pead_negative_surprise": pead_map.get(ticker) == "negative",
         }
         for ticker, t in market_context.get("technicals", {}).items()
     }
@@ -504,6 +531,7 @@ def main() -> int:
             options_signals=options_signals,
             technical_signals=tech_signals,
             delivery_signals=delivery_signals,
+            pead_signals=pead_signals,
             fo_ban_current=fo_ban_current,
             market_regime=nifty_regime,
             announcements=announcements,
@@ -526,6 +554,14 @@ def main() -> int:
         t = entry.get("ticker", "")
         if t in fundamental_signals:
             entry["fundamental"] = fundamental_signals[t]
+
+    # 6b-2. PEAD watchlist (SOTA Round Phase 1): surface classified tickers
+    # that didn't make it into buy/sell (a pure-PEAD ticker scores 1, below
+    # MIN_SCORE=2) -- makes the validated edge visible without corrupting
+    # score thresholds.
+    _already_listed = {e.get("ticker", "") for e in
+                        watchlist_data.get("buy_watchlist", []) + watchlist_data.get("sell_watchlist", [])}
+    watchlist_data["pead_watchlist"] = _build_pead_watchlist(pead_signals, announcements, exclude=_already_listed)
 
     # 6c. Circuit breaker (Phase 4): drawdown state as-of the LAST recorded
     #     equity snapshot (yesterday's, or earlier) -- gates today's new
@@ -650,6 +686,12 @@ def main() -> int:
         print(f"\n[main] === PHASE-B WATCH ({len(phase_b_list)} stocks) ===")
         for i, entry in enumerate(phase_b_list, 1):
             print(f"  {i:>2}. {entry['ticker']:<22} {entry.get('phase','?')}")
+
+    pead_list = watchlist_data.get("pead_watchlist", [])
+    if pead_list:
+        print(f"\n[main] === PEAD WATCH ({len(pead_list)} stocks) ===")
+        for i, entry in enumerate(pead_list, 1):
+            print(f"  {i:>2}. {entry['ticker']:<22} {entry.get('direction','?')}")
 
     return 0
 

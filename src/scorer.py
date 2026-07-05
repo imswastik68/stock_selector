@@ -181,6 +181,7 @@ def _build_signal_map(
     sast_data: bool = False,
     fundamental_data: dict | None = None,
     breakdown_data: dict | None = None,
+    pead_signal: str | None = None,
 ) -> dict[str, bool]:
     """Build a boolean signal map for a single ticker."""
     signals: dict[str, bool] = {
@@ -255,8 +256,16 @@ def _build_signal_map(
         signals["bearish_candle"]       = technical_data.get("bearish_candle", False)
         signals["weekly_trend_aligned"] = technical_data.get("weekly_trend_aligned", False)
         signals["rs_quality_strong"]    = technical_data.get("rs_quality_strong", False)
-        signals["pead_positive_surprise"] = technical_data.get("pead_positive_surprise", False)
-        signals["pead_negative_surprise"] = technical_data.get("pead_negative_surprise", False)
+
+    # PEAD v2 (SOTA Round Phase 1): computed EARLY from src.data.bse_announcements.
+    # fetch_pead_signals, passed as its own `pead_signal` param (not technical_data)
+    # so it's available in EVERY scoring pass, not just pass 3 -- a pure-PEAD
+    # ticker (pead_positive_surprise alone scores 1, below MIN_SCORE=2) would
+    # never reach top-20 OHLCV enrichment otherwise, making the validated edge
+    # structurally untradeable on its own. Single source of truth: this is the
+    # ONLY place these two keys are set.
+    signals["pead_positive_surprise"] = pead_signal == "positive"
+    signals["pead_negative_surprise"] = pead_signal == "negative"
 
     # Delivery volume signal from NSE bhav copy
     if delivery_data:
@@ -361,6 +370,7 @@ def score_candidates(
     nifty_trend: str = "ranging",
     fundamental_signals: dict[str, dict] | None = None,
     breakdowns: list[dict] | None = None,
+    pead_signals: dict[str, str] | None = None,
 ) -> list[dict]:
     """
     Score every unique ticker across all data sources and return qualifying candidates.
@@ -370,6 +380,9 @@ def score_candidates(
     nifty_trend:         "uptrend" | "ranging" | "downtrend" — selects REGIME_WEIGHTS override.
     fundamental_signals: {ticker: {fundamental_strong, fundamental_weak, ...}} from fundamentals.py
     breakdowns:          52-week-low candidates from src/data/breakdowns.py — short-pipeline source.
+    pead_signals:        {ticker: "positive"|"negative"} from src.data.bse_announcements.
+                          fetch_pead_signals — computed EARLY (before pass 1) so a pure-PEAD
+                          ticker enters the pool in every pass, not just post-enrichment.
     """
     breakdowns = breakdowns or []
 
@@ -381,6 +394,7 @@ def score_candidates(
     all_tickers.update(r["ticker"] for r in results_calendar)
     all_tickers.update(b["ticker"] for b in breakouts)
     all_tickers.update(b["ticker"] for b in breakdowns)
+    all_tickers.update((pead_signals or {}).keys())  # PEAD-only tickers enter the pool
 
     # Build lookup dicts for O(1) access
     volume_map: dict[str, dict] = {d["ticker"]: d for d in volume_gainers}
@@ -408,6 +422,7 @@ def score_candidates(
         ann   = ann_map.get(ticker)
         sast  = bool((sast_signals or {}).get(ticker, False))
         fund  = (fundamental_signals or {}).get(ticker)
+        pead  = (pead_signals or {}).get(ticker)
 
         signals = _build_signal_map(
             ticker, bulk_deals, vol, fo_ban_removed, results_calendar, brk,
@@ -418,6 +433,7 @@ def score_candidates(
             sast_data=sast,
             fundamental_data=fund,
             breakdown_data=bkd,
+            pead_signal=pead,
         )
 
         score, timeframe = _compute_score(signals, market_regime, nifty_trend)
