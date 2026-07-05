@@ -68,6 +68,8 @@ SIGNAL_LABELS = {
     "buyback_announced":       "buyback announced",
     "contract_win":            "order/contract win",
     "dividend_announced":      "dividend declared",
+    "pead_positive_surprise":  "earnings surprise (+drift)",
+    "pead_negative_surprise":  "earnings miss (-drift)",
     # sector rotation
     "sector_in_momentum":      "hot sector",
     "rs_quality_strong":       "quality RS",
