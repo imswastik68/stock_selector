@@ -21,9 +21,10 @@ PENDING_VALIDATION: dict[str, int] = {
     "options_pcr_fear": 1, "options_long_buildup": 1, "options_short_covering": 1,
     "fo_ban_lifted": 1, "sector_in_momentum": 1,
     "promoter_buying": 3, "sast_insider_buying": 3, "consolidation_breakout": 3,
-    "results_beat_announced": 3, "buyback_announced": 2, "contract_win": 2,
-    "dividend_announced": 1, "results_due": 1,
+    "buyback_announced": 2, "contract_win": 2, "results_due": 1,
     # delivery_surge PROMOTED 2026-07 (Phase 7) -- see SHORT_TERM_WEIGHTS entry below.
+    # results_beat_announced/dividend_announced PROMOTED as DISQUALIFIERS (SOTA
+    # Round Phase 3) -- see DISQUALIFIER_WEIGHTS entries below.
 }
 
 SHORT_TERM_WEIGHTS = {
@@ -77,12 +78,14 @@ SWING_WEIGHTS = {
                                     # The isolated open-market-buy version SHIPPED once more PIT history
                                     # accumulated -- see promoter_open_mkt_buy below.
     "consolidation_breakout": 0,    # PENDING_VALIDATION (was 3) — untested
-    "results_beat_announced": 0,    # FAILED backtest (not pending) -- fires on ANY results filing
-                                    # (beat or miss), ret_lift=-1.234, n=8824. See pead_positive_surprise
-                                    # below for the surprise-conditioned version that SHIPPED.
-    "buyback_announced": 0,         # PENDING_VALIDATION (was 2) — untested
-    "contract_win": 0,              # PENDING_VALIDATION (was 2) — untested
-    "dividend_announced": 0,        # PENDING_VALIDATION (was 1) — untested
+    "buyback_announced": 0,         # NO-SHIP (not pending) -- 260-week rerun crossed n>=500 (n=624) but
+                                    # train/holdout SIGN-FLIP (train -1.011, holdout +0.259) -- inconclusive/
+                                    # regime-dependent, not a stable effect in either direction. Do not
+                                    # promote either way without a fresh, independently-gated look.
+    "contract_win": 0,              # NO-SHIP (not pending) -- the promising small-sample point estimate
+                                    # (n=455, ret_lift +0.827) REVERSED on the 260-week rerun (n=640):
+                                    # train +1.44 -> holdout -0.731, a genuine sign-flip, not just decay.
+                                    # A real example of why n>=500 + holdout consistency both matter.
     "pead_positive_surprise": 1,    # PROMOTED (Alpha Round Phase 2/5): scripts/backtest_events.py SHIP
                                     # verdict, n=1696, ret_lift +0.308 (wr_lift +2.79pp), 70/30 holdout
                                     # sign-consistent and STRENGTHENING (train +0.214 -> holdout +0.527).
@@ -124,6 +127,17 @@ DISQUALIFIER_WEIGHTS = {
                                     # sign-aware validation -- see scripts/validate_signals.py.) Weight
                                     # magnitude follows the same round(3x|ret_lift|) convention as buy-side
                                     # promotions: round(3 x 0.55) = 2. See outputs/event_backtest.json.
+    "results_beat_announced": -3,  # PROMOTED (SOTA Round Phase 3, moved from SWING_WEIGHTS): fires on ANY
+                                    # results filing (beat or miss). 260-week rerun: n=13915 (huge sample),
+                                    # ret_lift=-1.121, train (-0.979) and holdout (-1.45) BOTH negative --
+                                    # a real, sign-consistent disqualifier, not just an unproven buy signal.
+                                    # weight = round(3 x 1.121) = 3 (capped at the round's own -3 cap for
+                                    # new promotions). See pead_positive_surprise for the surprise-
+                                    # conditioned version that ships as a BUY. outputs/event_backtest.json.
+    "dividend_announced": -2,      # PROMOTED (SOTA Round Phase 3, moved from SWING_WEIGHTS): 260-week
+                                    # rerun n=8291, ret_lift=-0.543, train (-0.708) and holdout (-0.158)
+                                    # BOTH negative -- weaker than results_beat_announced but real and
+                                    # sign-consistent. weight = round(3 x 0.543) = 2.
 }
 
 # Bearish event signals — feed the short pipeline (src/data/breakdowns.py, is_heavy_selling

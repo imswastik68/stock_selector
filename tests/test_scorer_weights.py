@@ -115,3 +115,40 @@ def test_score_candidates_near_52w_high_qualifies():
     assert len(candidates) == 1
     assert candidates[0]["ticker"] == "Y.NS"
     assert candidates[0]["score"] == 3
+
+
+def test_results_beat_announced_is_now_a_disqualifier():
+    """SOTA Round Phase 3: moved from SWING_WEIGHTS(0) to DISQUALIFIER_WEIGHTS(-3)
+    -- the 260-week rerun found it sign-consistently negative (train -0.979,
+    holdout -1.45, n=13915), not just an unproven buy signal."""
+    assert "results_beat_announced" not in s.SWING_WEIGHTS
+    assert "results_beat_announced" not in s.PENDING_VALIDATION
+    assert s.DISQUALIFIER_WEIGHTS["results_beat_announced"] == -3
+    signals = {k: False for k in
+               list(s.SHORT_TERM_WEIGHTS) + list(s.SWING_WEIGHTS)
+               + list(s.DISQUALIFIER_WEIGHTS) + list(s.BEARISH_EVENT_WEIGHTS)}
+    signals["results_beat_announced"] = True
+    score, _ = s._compute_score(signals)
+    assert score == -3
+
+
+def test_dividend_announced_is_now_a_disqualifier():
+    """Same reclassification as results_beat_announced -- n=8291, train -0.708,
+    holdout -0.158, both negative."""
+    assert "dividend_announced" not in s.SWING_WEIGHTS
+    assert "dividend_announced" not in s.PENDING_VALIDATION
+    assert s.DISQUALIFIER_WEIGHTS["dividend_announced"] == -2
+    signals = {k: False for k in
+               list(s.SHORT_TERM_WEIGHTS) + list(s.SWING_WEIGHTS)
+               + list(s.DISQUALIFIER_WEIGHTS) + list(s.BEARISH_EVENT_WEIGHTS)}
+    signals["dividend_announced"] = True
+    score, _ = s._compute_score(signals)
+    assert score == -2
+
+
+def test_buyback_and_contract_win_remain_unweighted_after_sign_flip():
+    """Both crossed n>=500 on the 260-week rerun but showed a train/holdout
+    sign-flip (inconclusive, not a stable effect) -- must stay at weight 0,
+    not be promoted either direction."""
+    assert s.SWING_WEIGHTS["buyback_announced"] == 0
+    assert s.SWING_WEIGHTS["contract_win"] == 0
