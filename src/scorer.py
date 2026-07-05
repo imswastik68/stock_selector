@@ -17,12 +17,13 @@ from __future__ import annotations
 # data/event_archive/ for the same analysis. Value = the pre-zeroing hand weight,
 # kept for the record / to restore quickly if a signal ships.
 PENDING_VALIDATION: dict[str, int] = {
-    "bulk_deal_fii_dii": 3, "delivery_surge": 2, "fundamental_strong": 2,
+    "bulk_deal_fii_dii": 3, "fundamental_strong": 2,
     "options_pcr_fear": 1, "options_long_buildup": 1, "options_short_covering": 1,
     "fo_ban_lifted": 1, "sector_in_momentum": 1,
     "promoter_buying": 3, "sast_insider_buying": 3, "consolidation_breakout": 3,
     "results_beat_announced": 3, "buyback_announced": 2, "contract_win": 2,
     "dividend_announced": 1, "results_due": 1,
+    # delivery_surge PROMOTED 2026-07 (Phase 7) -- see SHORT_TERM_WEIGHTS entry below.
 }
 
 SHORT_TERM_WEIGHTS = {
@@ -33,7 +34,11 @@ SHORT_TERM_WEIGHTS = {
                                     # (156w backtest). Stacks with actual_52w_breakout (strict
                                     # subset, proximity<=0) -- a real breakout day scores 6, faithful
                                     # to how each was independently measured. See _build_signal_map.
-    "delivery_surge": 0,            # PENDING_VALIDATION (was 2) — untested
+    "delivery_surge": 1,            # PROMOTED (2026-07, Phase 7): scripts/backtest_events.py SHIP
+                                    # verdict against real NSE bhavcopy history, n=38,279, ret_lift
+                                    # +0.316 (wr_lift +1.85pp), 70/30 holdout sign-consistent
+                                    # (train +0.406 / holdout +0.104). weight = round(3 x 0.316) = 1.
+                                    # See outputs/event_backtest.json for full stats.
     "rsi_bearish_div": 3,          # price HH + RSI LH: data shows +1.04 lift over 15k trades
     "rsi_momentum": 2,             # RSI 50-75: momentum building
     "rs_quality_strong": 0,        # FAILED backtest (not pending) -- -1.47pp WR lift, avg_return

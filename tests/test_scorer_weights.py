@@ -92,6 +92,22 @@ def test_score_candidates_bulk_deals_only_returns_empty_without_raising():
     assert candidates == []
 
 
+def test_delivery_surge_promoted_out_of_pending_validation():
+    """Phase 7: delivery_surge SHIPPED (scripts/backtest_events.py, n=38279,
+    ret_lift=0.316, 70/30 holdout sign-consistent) and was promoted to a
+    real weight -- it must no longer sit in PENDING_VALIDATION (which would
+    make test_every_pending_validation_signal_weighs_zero force it back to
+    0), and must score its promoted weight when active."""
+    assert "delivery_surge" not in s.PENDING_VALIDATION
+    signals = {k: False for k in
+               list(s.SHORT_TERM_WEIGHTS) + list(s.SWING_WEIGHTS)
+               + list(s.DISQUALIFIER_WEIGHTS) + list(s.BEARISH_EVENT_WEIGHTS)}
+    signals["delivery_surge"] = True
+    score, _ = s._compute_score(signals)
+    assert score == s.SHORT_TERM_WEIGHTS["delivery_surge"]
+    assert score > 0
+
+
 def test_score_candidates_near_52w_high_qualifies():
     breakouts = [{"ticker": "Y.NS", "today_close": 100.0, "volume_ratio": 1.5,
                   "actual_breakout": False}]
