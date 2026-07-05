@@ -2901,3 +2901,4 @@
 {"date": "2026-07-05", "source": "sast_signals", "ticker": "CMPDI.NS", "payload": {"value": false}, "hash": "de091a773b48479a"}
 {"date": "2026-07-05", "source": "sast_signals", "ticker": "AADHARHFC.NS", "payload": {"value": false}, "hash": "d570dbc0e589843e"}
 {"date": "2026-07-05", "source": "sast_signals", "ticker": "NRL.NS", "payload": {"value": false}, "hash": "034d09a424dba88e"}
+{"date": "2026-07-05", "source": "promoter_signals", "ticker": "ONELIFECAP.NS", "payload": {"promoter_pct": 64.23, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "5b6c7c4712b61467"}
