@@ -1,0 +1,122 @@
+# Nifty 50 / Nifty Next 50 semi-annual reconstitution history (Mar 2023 -> Mar 2026).
+# Compiled 2026-07-05 from NSE/niftyindices.com press releases + Indian financial
+# press (Business Standard, Business Today, ICICI Direct, Bajaj Broking, Tradebrains,
+# Outlook Money, Investing.com) -- one source_url per row for auditability.
+#
+# Scope/caveats (read before trusting a backtest verdict off this file):
+#  - NIFTY 500-level granularity was NOT obtainable (every source gave partial
+#    lists only, e.g. "31 additions incl. Groww, Meesho... and 26 others" for
+#    Feb 2026) -- NOT guessed/extrapolated, simply omitted. This file covers
+#    NIFTY50 + NIFTYNEXT50 only, so n will likely be well under a large-sample
+#    bar; the pre-declared low-frequency gate (n>=100) is designed to say so
+#    honestly rather than force a verdict off too few events.
+#  - effective_date: some source articles state the convention inconsistently
+#    ("effective from Sept 29, close of Sept 28" vs "effective Sept 30, close
+#    of Sept 27") -- used whatever exact date each source stated. Worth
+#    reconciling against niftyindices.com's reconstitution calendar before
+#    treating a 1-day boundary as precise.
+#  - announce_date for the Sept-2023 cycle is a news-publish-date proxy, not a
+#    confirmed press-release date.
+#  - The Feb-2025 and Feb-2026 NIFTYNEXT50 rows were reconstructed from
+#    WebSearch summaries of the niftyindices.com PDFs, not a direct PDF fetch
+#    -- re-fetch ind_prs21022025.pdf / the Feb-2026 equivalent directly for
+#    primary-source certainty if this signal is close to shipping.
+#  - A corrupted duplicate ("13-Jul-23" HDFC/LTIMindtree, and a garbled
+#    "30-Sep-23" Trent/BEL/DivisLab/LTIM entry that contradicted two
+#    independent "no NIFTY50 change" sources for that cycle) was found on a
+#    third-party site and excluded -- flagging in case it resurfaces elsewhere.
+#  - March 2023, September 2023 and March 2026 legitimately had ZERO NIFTY50
+#    changes (confirmed by 2+ independent sources each) -- absence of NIFTY50
+#    rows for those cycles is a fact, not a gap.
+announce_date,effective_date,index,symbol,action,source_url
+2023-02-17,2023-03-31,NIFTYNEXT50,ABB,ADD,https://www.businesstoday.in/markets/stocks/story/nse-adds-adani-wilmar-adani-power-to-few-indices-paytm-gland-pharma-3-others-out-of-nifty-next-50-370678-2023-02-18
+2023-02-17,2023-03-31,NIFTYNEXT50,ADANIWILMAR,ADD,https://www.businesstoday.in/markets/stocks/story/nse-adds-adani-wilmar-adani-power-to-few-indices-paytm-gland-pharma-3-others-out-of-nifty-next-50-370678-2023-02-18
+2023-02-17,2023-03-31,NIFTYNEXT50,CANBK,ADD,https://www.business-standard.com/article/news-cm/adani-wilmar-varun-beverages-to-enter-nifty-next-50-index-123022000412_1.html
+2023-02-17,2023-03-31,NIFTYNEXT50,PAGEIND,ADD,https://www.business-standard.com/article/news-cm/adani-wilmar-varun-beverages-to-enter-nifty-next-50-index-123022000412_1.html
+2023-02-17,2023-03-31,NIFTYNEXT50,VBL,ADD,https://www.business-standard.com/article/news-cm/adani-wilmar-varun-beverages-to-enter-nifty-next-50-index-123022000412_1.html
+2023-02-17,2023-03-31,NIFTYNEXT50,MPHASIS,DELETE,https://www.businesstoday.in/markets/stocks/story/nse-adds-adani-wilmar-adani-power-to-few-indices-paytm-gland-pharma-3-others-out-of-nifty-next-50-370678-2023-02-18
+2023-02-17,2023-03-31,NIFTYNEXT50,BANDHANBNK,DELETE,https://www.businesstoday.in/markets/stocks/story/nse-adds-adani-wilmar-adani-power-to-few-indices-paytm-gland-pharma-3-others-out-of-nifty-next-50-370678-2023-02-18
+2023-02-17,2023-03-31,NIFTYNEXT50,BIOCON,DELETE,https://www.businesstoday.in/markets/stocks/story/nse-adds-adani-wilmar-adani-power-to-few-indices-paytm-gland-pharma-3-others-out-of-nifty-next-50-370678-2023-02-18
+2023-02-17,2023-03-31,NIFTYNEXT50,GLAND,DELETE,https://www.businesstoday.in/markets/stocks/story/nse-adds-adani-wilmar-adani-power-to-few-indices-paytm-gland-pharma-3-others-out-of-nifty-next-50-370678-2023-02-18
+2023-02-17,2023-03-31,NIFTYNEXT50,PAYTM,DELETE,https://www.businesstoday.in/markets/stocks/story/nse-adds-adani-wilmar-adani-power-to-few-indices-paytm-gland-pharma-3-others-out-of-nifty-next-50-370678-2023-02-18
+2023-08-17,2023-09-29,NIFTYNEXT50,PNB,ADD,https://www.businesstoday.in/markets/top-story/story/nifty-next-50-rejig-acc-nykaa-3-others-out-from-sept-29-pnb-tvs-3-others-included-394564-2023-08-17
+2023-08-17,2023-09-29,NIFTYNEXT50,SHRIRAMFIN,ADD,https://www.businesstoday.in/markets/top-story/story/nifty-next-50-rejig-acc-nykaa-3-others-out-from-sept-29-pnb-tvs-3-others-included-394564-2023-08-17
+2023-08-17,2023-09-29,NIFTYNEXT50,TRENT,ADD,https://www.businesstoday.in/markets/top-story/story/nifty-next-50-rejig-acc-nykaa-3-others-out-from-sept-29-pnb-tvs-3-others-included-394564-2023-08-17
+2023-08-17,2023-09-29,NIFTYNEXT50,TVSMOTOR,ADD,https://www.businesstoday.in/markets/top-story/story/nifty-next-50-rejig-acc-nykaa-3-others-out-from-sept-29-pnb-tvs-3-others-included-394564-2023-08-17
+2023-08-17,2023-09-29,NIFTYNEXT50,ZYDUSLIFE,ADD,https://www.businesstoday.in/markets/top-story/story/nifty-next-50-rejig-acc-nykaa-3-others-out-from-sept-29-pnb-tvs-3-others-included-394564-2023-08-17
+2023-08-17,2023-09-29,NIFTYNEXT50,ACC,DELETE,https://www.business-standard.com/markets/news/nse-announces-five-additions-deletions-each-to-nifty-next-50-index-123082000263_1.html
+2023-08-17,2023-09-29,NIFTYNEXT50,NYKAA,DELETE,https://www.business-standard.com/markets/news/nse-announces-five-additions-deletions-each-to-nifty-next-50-index-123082000263_1.html
+2023-08-17,2023-09-29,NIFTYNEXT50,HDFCAMC,DELETE,https://www.business-standard.com/markets/news/nse-announces-five-additions-deletions-each-to-nifty-next-50-index-123082000263_1.html
+2023-08-17,2023-09-29,NIFTYNEXT50,INDUSTOWER,DELETE,https://www.business-standard.com/markets/news/nse-announces-five-additions-deletions-each-to-nifty-next-50-index-123082000263_1.html
+2023-08-17,2023-09-29,NIFTYNEXT50,PAGEIND,DELETE,https://www.business-standard.com/markets/news/nse-announces-five-additions-deletions-each-to-nifty-next-50-index-123082000263_1.html
+2024-02-28,2024-03-28,NIFTY50,SHRIRAMFIN,ADD,https://in.investing.com/analysis/changes-in-nifty-50--other-constituents-announced-by-nse-effective-28-march-2024-200611936
+2024-02-28,2024-03-28,NIFTY50,UPL,DELETE,https://in.investing.com/analysis/changes-in-nifty-50--other-constituents-announced-by-nse-effective-28-march-2024-200611936
+2024-02-28,2024-03-28,NIFTYNEXT50,JIOFIN,ADD,https://upstox.com/news/market-news/stocks/nse-announces-changes-in-various-indices-check-new-additions-exclusions-of-nifty-50-nifty-next-50-and-nifty-500/article-112644/
+2024-02-28,2024-03-28,NIFTYNEXT50,IRFC,ADD,https://upstox.com/news/market-news/stocks/nse-announces-changes-in-various-indices-check-new-additions-exclusions-of-nifty-50-nifty-next-50-and-nifty-500/article-112644/
+2024-02-28,2024-03-28,NIFTYNEXT50,RECLTD,ADD,https://upstox.com/news/market-news/stocks/nse-announces-changes-in-various-indices-check-new-additions-exclusions-of-nifty-50-nifty-next-50-and-nifty-500/article-112644/
+2024-02-28,2024-03-28,NIFTYNEXT50,PFC,ADD,https://upstox.com/news/market-news/stocks/nse-announces-changes-in-various-indices-check-new-additions-exclusions-of-nifty-50-nifty-next-50-and-nifty-500/article-112644/
+2024-02-28,2024-03-28,NIFTYNEXT50,ADANIPOWER,ADD,https://upstox.com/news/market-news/stocks/nse-announces-changes-in-various-indices-check-new-additions-exclusions-of-nifty-50-nifty-next-50-and-nifty-500/article-112644/
+2024-02-28,2024-03-28,NIFTYNEXT50,PIIND,DELETE,https://upstox.com/news/market-news/stocks/nse-announces-changes-in-various-indices-check-new-additions-exclusions-of-nifty-50-nifty-next-50-and-nifty-500/article-112644/
+2024-02-28,2024-03-28,NIFTYNEXT50,PGHH,DELETE,https://upstox.com/news/market-news/stocks/nse-announces-changes-in-various-indices-check-new-additions-exclusions-of-nifty-50-nifty-next-50-and-nifty-500/article-112644/
+2024-02-28,2024-03-28,NIFTYNEXT50,ADANIWILMAR,DELETE,https://upstox.com/news/market-news/stocks/nse-announces-changes-in-various-indices-check-new-additions-exclusions-of-nifty-50-nifty-next-50-and-nifty-500/article-112644/
+2024-02-28,2024-03-28,NIFTYNEXT50,MUTHOOTFIN,DELETE,https://upstox.com/news/market-news/stocks/nse-announces-changes-in-various-indices-check-new-additions-exclusions-of-nifty-50-nifty-next-50-and-nifty-500/article-112644/
+2024-02-28,2024-03-28,NIFTYNEXT50,SHRIRAMFIN,DELETE,https://upstox.com/news/market-news/stocks/nse-announces-changes-in-various-indices-check-new-additions-exclusions-of-nifty-50-nifty-next-50-and-nifty-500/article-112644/
+2024-08-23,2024-09-30,NIFTY50,BEL,ADD,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTY50,TRENT,ADD,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTY50,DIVISLAB,DELETE,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTY50,LTIM,DELETE,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,BHEL,ADD,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,DIVISLAB,ADD,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,JSWENERGY,ADD,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,LTIM,ADD,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,LODHA,ADD,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,NHPC,ADD,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,UNIONBANK,ADD,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,BERGEPAINT,DELETE,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,BEL,DELETE,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,COLPAL,DELETE,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,MARICO,DELETE,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,SBICARD,DELETE,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,SRF,DELETE,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2024-08-23,2024-09-30,NIFTYNEXT50,TRENT,DELETE,https://www.icicidirect.com/futures-and-options/articles/rebalancing-of-indices-sept-24-everything-you-need-to-know
+2025-02-21,2025-03-28,NIFTY50,JIOFIN,ADD,https://www.outlookmoney.com/invest/nifty-50-rejig-zomato-jio-financial-likely-to-join-index-from-march-to-see-passive-inflows-of-951-million
+2025-02-21,2025-03-28,NIFTY50,ZOMATO,ADD,https://www.outlookmoney.com/invest/nifty-50-rejig-zomato-jio-financial-likely-to-join-index-from-march-to-see-passive-inflows-of-951-million
+2025-02-21,2025-03-28,NIFTY50,BPCL,DELETE,https://www.outlookmoney.com/invest/nifty-50-rejig-zomato-jio-financial-likely-to-join-index-from-march-to-see-passive-inflows-of-951-million
+2025-02-21,2025-03-28,NIFTY50,BRITANNIA,DELETE,https://www.outlookmoney.com/invest/nifty-50-rejig-zomato-jio-financial-likely-to-join-index-from-march-to-see-passive-inflows-of-951-million
+2025-02-21,2025-03-28,NIFTYNEXT50,BAJAJHFL,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,BPCL,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,BRITANNIA,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,CGPOWER,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,HYUNDAI,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,INDHOTEL,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,ZOMATO,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,JIOFIN,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,ATGL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,BHEL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,IRCTC,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,NHPC,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTYNEXT50,UNIONBANK,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-08-22,2025-09-30,NIFTY50,INDIGO,ADD,https://www.business-standard.com/markets/news/nse-nifty-rejig-indigo-max-healthcare-set-for-nifty-entry-announcement-due-post-market-125082200518_1.html
+2025-08-22,2025-09-30,NIFTY50,MAXHEALTH,ADD,https://www.business-standard.com/markets/news/nse-nifty-rejig-indigo-max-healthcare-set-for-nifty-entry-announcement-due-post-market-125082200518_1.html
+2025-08-22,2025-09-30,NIFTY50,HEROMOTOCO,DELETE,https://www.business-standard.com/markets/news/nse-nifty-rejig-indigo-max-healthcare-set-for-nifty-entry-announcement-due-post-market-125082200518_1.html
+2025-08-22,2025-09-30,NIFTY50,INDUSINDBK,DELETE,https://www.business-standard.com/markets/news/nse-nifty-rejig-indigo-max-healthcare-set-for-nifty-entry-announcement-due-post-market-125082200518_1.html
+2025-08-22,2025-09-30,NIFTYNEXT50,HINDZINC,ADD,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
+2025-08-22,2025-09-30,NIFTYNEXT50,MAZDOCK,ADD,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
+2025-08-22,2025-09-30,NIFTYNEXT50,ENRIN,ADD,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
+2025-08-22,2025-09-30,NIFTYNEXT50,SOLARINDS,ADD,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
+2025-08-22,2025-09-30,NIFTYNEXT50,DABUR,DELETE,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
+2025-08-22,2025-09-30,NIFTYNEXT50,ICICIPRULI,DELETE,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
+2025-08-22,2025-09-30,NIFTYNEXT50,INDIGO,DELETE,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
+2025-08-22,2025-09-30,NIFTYNEXT50,SWIGGY,DELETE,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
+2026-02-24,2026-03-30,NIFTYNEXT50,CUMMINSIND,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,HDFCAMC,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,MUTHOOTFIN,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,TATACAP,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,TMCV,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,UNIONBANK,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,BAJAJHFL,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,HAVELLS,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,ICICIGI,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,NAUKRI,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,JSWENERGY,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-24,2026-03-30,NIFTYNEXT50,LICI,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more

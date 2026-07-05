@@ -564,6 +564,17 @@ def test_rebalance_verdict_insufficient_sample_below_100():
     stats = be._rebalance_verdict(results)
     assert stats["verdict"] == "INSUFFICIENT_SAMPLE"
     assert stats["n"] == 50
+    assert stats["suggested_weight"] == 0
+    # the point estimate is still reported (matches every other collector's
+    # convention of surfacing lift/abnormal-return stats even below the ship
+    # bar) -- a future re-look shouldn't need to recompute from scratch.
+    assert stats["mean_abnormal_pct"] == 5.0
+
+
+def test_rebalance_verdict_empty_results_is_insufficient_sample():
+    stats = be._rebalance_verdict([])
+    assert stats["verdict"] == "INSUFFICIENT_SAMPLE"
+    assert stats["n"] == 0
 
 
 def test_rebalance_verdict_ships_on_strong_consistent_abnormal_return():

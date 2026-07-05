@@ -1087,7 +1087,7 @@ def _load_index_changes() -> list[dict]:
     if not INDEX_CHANGES_CSV.exists():
         return []
     try:
-        df = pd.read_csv(INDEX_CHANGES_CSV)
+        df = pd.read_csv(INDEX_CHANGES_CSV, comment="#")
     except Exception:
         return []
     rows: list[dict] = []
@@ -1207,8 +1207,8 @@ def _rebalance_abnormal_returns(events: list[dict], ohlcv: dict, universe: list[
 
 def _rebalance_verdict(results: list[dict]) -> dict:
     n = len(results)
-    if n < 100:
-        return {"n": n, "verdict": "INSUFFICIENT_SAMPLE", "suggested_weight": 0}
+    if n == 0:
+        return {"n": 0, "verdict": "INSUFFICIENT_SAMPLE", "suggested_weight": 0}
 
     vals = np.array([r["abnormal_pct"] for r in results])
     mean_abn = float(np.mean(vals))
@@ -1224,19 +1224,24 @@ def _rebalance_verdict(results: list[dict]) -> dict:
     holdout_consistent = (train_mean is not None and train_mean > 0
                           and holdout_mean is not None and holdout_mean > 0)
 
-    ships = mean_abn > 0 and t_stat >= 2.0 and holdout_consistent
+    if n < 100:
+        verdict = "INSUFFICIENT_SAMPLE"
+    else:
+        ships = mean_abn > 0 and t_stat >= 2.0 and holdout_consistent
+        verdict = "SHIP" if ships else "NO-SHIP"
+
     return {
         "n": n, "mean_abnormal_pct": round(mean_abn, 3), "t_stat": round(t_stat, 2),
         "train_abnormal_pct": round(train_mean, 3) if train_mean is not None else None,
         "holdout_abnormal_pct": round(holdout_mean, 3) if holdout_mean is not None else None,
         "holdout_consistent": holdout_consistent,
-        "verdict": "SHIP" if ships else "NO-SHIP",
+        "verdict": verdict,
         # the standard suggested_weight() formula (max(0,min(5,round(3*ret_lift))))
         # is calibrated for a single ATR-target trade's return, not a multi-week
         # event-study abnormal return -- deliberately NOT auto-converted here.
         # A SHIP verdict needs a human weight decision in Phase 5, same as any
         # first-of-its-kind measurement.
-        "suggested_weight": None,
+        "suggested_weight": None if verdict == "SHIP" else 0,
     }
 
 
