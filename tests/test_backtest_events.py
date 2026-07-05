@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import gzip
 import json
-from datetime import date
+from datetime import date, timedelta
 from unittest import mock
 
 import backtest_events as be
@@ -507,3 +507,87 @@ def test_pit_dedupes_same_day_same_symbol(monkeypatch):
 def test_pit_excludes_symbol_outside_universe(monkeypatch):
     events, reason = _run_pit(monkeypatch, [_pit_row(symbol="BAR")], universe=("FOO.NS",))
     assert events == []
+
+
+# ── index rebalance: event-study (data/index_changes.csv) ───────────────────
+
+def test_load_index_changes_rejects_bad_rows(tmp_path, monkeypatch):
+    csv_path = tmp_path / "index_changes.csv"
+    csv_path.write_text(
+        "announce_date,effective_date,index,symbol,action,source_url\n"
+        "2024-01-01,2024-01-31,NIFTY50,GOOD,ADD,http://x\n"        # valid
+        "2024-01-01,2024-01-31,NIFTY50,BADACTION,MERGE,http://x\n"  # bad action
+        "not-a-date,2024-01-31,NIFTY50,BADDATE,ADD,http://x\n"      # unparseable date
+        "2024-02-01,2024-01-31,NIFTY50,BADORDER,ADD,http://x\n"     # effective before announce
+    )
+    monkeypatch.setattr(be, "INDEX_CHANGES_CSV", csv_path)
+    rows = be._load_index_changes()
+    assert {r["symbol"] for r in rows} == {"GOOD"}
+
+
+def test_collect_rebalance_events_dedupes_same_cycle_multi_index(tmp_path, monkeypatch):
+    csv_path = tmp_path / "index_changes.csv"
+    csv_path.write_text(
+        "announce_date,effective_date,index,symbol,action,source_url\n"
+        "2024-01-01,2024-01-31,NIFTY500,DUP,ADD,http://a\n"
+        "2024-01-01,2024-01-31,NIFTYNEXT50,DUP,ADD,http://b\n"
+        "2024-01-01,2024-01-31,NIFTY500,ONE,DELETE,http://c\n"
+    )
+    monkeypatch.setattr(be, "INDEX_CHANGES_CSV", csv_path)
+    adds, dels, reason = be.collect_rebalance_events()
+    assert reason is None
+    assert len(adds) == 1 and adds[0]["symbol"] == "DUP"
+    assert len(dels) == 1 and dels[0]["symbol"] == "ONE"
+
+
+def test_collect_rebalance_events_missing_csv_is_untestable(tmp_path, monkeypatch):
+    monkeypatch.setattr(be, "INDEX_CHANGES_CSV", tmp_path / "nope.csv")
+    adds, dels, reason = be.collect_rebalance_events()
+    assert adds == [] and dels == []
+    assert reason is not None
+
+
+def test_rebalance_window_buys_a_plus_1_sells_e_minus_1():
+    day_set = [date(2024, 1, i) for i in range(1, 15)]
+    window = be._rebalance_window(day_set, date(2024, 1, 5), date(2024, 1, 10))
+    assert window == (date(2024, 1, 6), date(2024, 1, 9))
+
+
+def test_rebalance_window_returns_none_when_inverted():
+    day_set = [date(2024, 1, i) for i in range(1, 5)]
+    window = be._rebalance_window(day_set, date(2024, 1, 3), date(2024, 1, 4))
+    assert window is None  # no room between A+1 and E-1
+
+
+def test_rebalance_verdict_insufficient_sample_below_100():
+    results = [{"as_of": date(2024, 1, 1), "abnormal_pct": 5.0}] * 50
+    stats = be._rebalance_verdict(results)
+    assert stats["verdict"] == "INSUFFICIENT_SAMPLE"
+    assert stats["n"] == 50
+
+
+def test_rebalance_verdict_ships_on_strong_consistent_abnormal_return():
+    """n=150, mean abnormal +2.8pp, t=19.7, both chronological halves positive
+    (train +2.90, holdout +2.70) -- verified numerically before writing this
+    fixture (seed=1)."""
+    import numpy as np
+    rng = np.random.default_rng(1)
+    vals = rng.normal(3.0, 2.0, 150)
+    results = [{"as_of": date(2024, 1, 1) + timedelta(days=i), "abnormal_pct": float(v)}
+               for i, v in enumerate(vals)]
+    stats = be._rebalance_verdict(results)
+    assert stats["verdict"] == "SHIP"
+    assert stats["t_stat"] >= 2.0
+    assert stats["holdout_consistent"] is True
+    assert stats["suggested_weight"] is None  # deliberately not auto-derived
+
+
+def test_rebalance_verdict_holdout_inconsistent_is_no_ship():
+    """Pooled mean is positive (+2.69pp) but the back 30% of the window is
+    strongly negative -- the edge decayed, so it must NOT ship even though the
+    naive pooled average looks fine."""
+    results = ([{"as_of": date(2024, 1, 1) + timedelta(days=i), "abnormal_pct": 5.0} for i in range(100)]
+               + [{"as_of": date(2024, 1, 1) + timedelta(days=100 + i), "abnormal_pct": -5.0} for i in range(30)])
+    stats = be._rebalance_verdict(results)
+    assert stats["verdict"] == "NO-SHIP"
+    assert stats["holdout_consistent"] is False

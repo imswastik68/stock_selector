@@ -1061,6 +1061,185 @@ def collect_bulk_events(weeks: int) -> tuple[list[tuple[date, str]], str | None]
     return events, None
 
 
+# ── source (rebalance): index-reconstitution drift ───────────────────────────
+# Forced passive buying between announcement and effective date -- the Nifty
+# family reconstitutes semi-annually (effective the day after the last
+# trading day of March/September), announced ~4 weeks ahead. This is an
+# EVENT STUDY, not the ATR-target trade template used everywhere else: the
+# drift window spans WEEKS (announce -> effective), so entry/exit are fixed
+# to that window, not a stop/target. Data lives in data/index_changes.csv
+# (hand-compiled from public press coverage, checked into git for
+# auditability -- see its header for sourcing).
+#
+# Pre-declared low-frequency gate (event-study; the standard n>=500 bar is
+# impossible for a twice-a-year event and wasn't designed for it -- this
+# replacement is stricter PER-EVENT via a t-stat to compensate):
+#   SHIP     = n>=100 AND mean_abnormal_pct>0 AND t_stat>=2 AND both
+#              chronological halves (70/30) have positive mean abnormal return.
+#   INSUFFICIENT_SAMPLE = n<100.
+# DELETE events are measured and reported as a diagnostic (candidate future
+# avoid/short signal) -- not gate-eligible this round.
+
+INDEX_CHANGES_CSV = ROOT / "data" / "index_changes.csv"
+
+
+def _load_index_changes() -> list[dict]:
+    if not INDEX_CHANGES_CSV.exists():
+        return []
+    try:
+        df = pd.read_csv(INDEX_CHANGES_CSV)
+    except Exception:
+        return []
+    rows: list[dict] = []
+    for _, r in df.iterrows():
+        try:
+            a = pd.to_datetime(str(r["announce_date"])).date()
+            e = pd.to_datetime(str(r["effective_date"])).date()
+        except Exception:
+            continue
+        action = str(r.get("action", "")).strip().upper()
+        sym = str(r.get("symbol", "")).strip().upper()
+        if action not in ("ADD", "DELETE") or not sym or e <= a:
+            continue
+        rows.append({"announce_date": a, "effective_date": e,
+                     "index": str(r.get("index", "")).strip(), "symbol": sym, "action": action})
+    return rows
+
+
+def collect_rebalance_events() -> tuple[list[dict], list[dict], str | None]:
+    """Returns (add_events, delete_events, reason). Deduped by
+    (announce_date, symbol) -- a stock entering multiple indices in the same
+    cycle (e.g. NIFTY 500 + NIFTY Next 50 together) counts once."""
+    rows = _load_index_changes()
+    if not rows:
+        return [], [], f"{INDEX_CHANGES_CSV.name} not found or empty — UNTESTABLE this pass"
+    seen_add, seen_del = set(), set()
+    adds, dels = [], []
+    for r in rows:
+        key = (r["announce_date"], r["symbol"])
+        if r["action"] == "ADD":
+            if key in seen_add:
+                continue
+            seen_add.add(key); adds.append(r)
+        else:
+            if key in seen_del:
+                continue
+            seen_del.add(key); dels.append(r)
+    return adds, dels, None
+
+
+def _trading_day_at_or_after(day_set: list[date], d: date) -> date | None:
+    for td in day_set:
+        if td >= d:
+            return td
+    return None
+
+
+def _trading_day_at_or_before(day_set: list[date], d: date) -> date | None:
+    result = None
+    for td in day_set:
+        if td > d:
+            break
+        result = td
+    return result
+
+
+def _close_on(df, d: date) -> float | None:
+    row = df[df.index == pd.Timestamp(d)]
+    return float(row["Close"].iloc[0]) if not row.empty else None
+
+
+def _rebalance_window(day_set: list[date], a: date, e: date) -> tuple[date, date] | None:
+    """Buy at A+1's close, sell at E-1's close (the drift window: the day
+    after announcement through the day before the forced passive-fund trade)."""
+    idx_after_a = None
+    for i, td in enumerate(day_set):
+        if td > a:
+            idx_after_a = i
+            break
+    if idx_after_a is None:
+        return None
+    buy_day = day_set[idx_after_a]
+    sell_day = _trading_day_at_or_before(day_set, e - timedelta(days=1))
+    if sell_day is None or sell_day <= buy_day:
+        return None
+    return buy_day, sell_day
+
+
+def _rebalance_abnormal_returns(events: list[dict], ohlcv: dict, universe: list[str],
+                                 day_set: list[date], seed: int = 42,
+                                 baseline_cap: int = 10) -> list[dict]:
+    rng = np.random.default_rng(seed)
+    out = []
+    for r in events:
+        ticker = f"{r['symbol']}.NS"
+        df = ohlcv.get(ticker)
+        if df is None:
+            continue
+        window = _rebalance_window(day_set, r["announce_date"], r["effective_date"])
+        if window is None:
+            continue
+        buy_day, sell_day = window
+        buy_px, sell_px = _close_on(df, buy_day), _close_on(df, sell_day)
+        if buy_px is None or sell_px is None or buy_px <= 0:
+            continue
+        sig_ret = (sell_px / buy_px - 1) * 100
+
+        candidates = [t for t in universe if t != ticker]
+        rng.shuffle(candidates)
+        baseline_rets = []
+        for t in candidates:
+            if len(baseline_rets) >= baseline_cap:
+                break
+            bdf = ohlcv.get(t)
+            if bdf is None or not _turnover_ok(bdf, pd.Timestamp(buy_day)):
+                continue
+            bp, sp = _close_on(bdf, buy_day), _close_on(bdf, sell_day)
+            if bp is None or sp is None or bp <= 0:
+                continue
+            baseline_rets.append((sp / bp - 1) * 100)
+        if not baseline_rets:
+            continue
+        abnormal = sig_ret - float(np.mean(baseline_rets))
+        out.append({"as_of": r["announce_date"], "abnormal_pct": abnormal})
+    return out
+
+
+def _rebalance_verdict(results: list[dict]) -> dict:
+    n = len(results)
+    if n < 100:
+        return {"n": n, "verdict": "INSUFFICIENT_SAMPLE", "suggested_weight": 0}
+
+    vals = np.array([r["abnormal_pct"] for r in results])
+    mean_abn = float(np.mean(vals))
+    std_abn = float(np.std(vals, ddof=1)) if n > 1 else 0.0
+    t_stat = mean_abn / (std_abn / np.sqrt(n)) if std_abn > 0 else 0.0
+
+    sr_sorted = sorted(results, key=lambda r: r["as_of"])
+    split = int(n * 0.7)
+    train_vals = np.array([r["abnormal_pct"] for r in sr_sorted[:split]])
+    holdout_vals = np.array([r["abnormal_pct"] for r in sr_sorted[split:]])
+    train_mean = float(np.mean(train_vals)) if len(train_vals) else None
+    holdout_mean = float(np.mean(holdout_vals)) if len(holdout_vals) else None
+    holdout_consistent = (train_mean is not None and train_mean > 0
+                          and holdout_mean is not None and holdout_mean > 0)
+
+    ships = mean_abn > 0 and t_stat >= 2.0 and holdout_consistent
+    return {
+        "n": n, "mean_abnormal_pct": round(mean_abn, 3), "t_stat": round(t_stat, 2),
+        "train_abnormal_pct": round(train_mean, 3) if train_mean is not None else None,
+        "holdout_abnormal_pct": round(holdout_mean, 3) if holdout_mean is not None else None,
+        "holdout_consistent": holdout_consistent,
+        "verdict": "SHIP" if ships else "NO-SHIP",
+        # the standard suggested_weight() formula (max(0,min(5,round(3*ret_lift))))
+        # is calibrated for a single ATR-target trade's return, not a multi-week
+        # event-study abnormal return -- deliberately NOT auto-converted here.
+        # A SHIP verdict needs a human weight decision in Phase 5, same as any
+        # first-of-its-kind measurement.
+        "suggested_weight": None,
+    }
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def _eval_single(signal: str, events, reason, ohlcv, universe, results: dict) -> None:
@@ -1146,6 +1325,37 @@ def main(source: str, weeks: int, skip_download: bool) -> None:
         events, reason = collect_sast_events(weeks, universe)
         _eval_single("sast_insider_buying", events, reason, ohlcv, universe, results)
 
+    if source in ("rebalance", "all"):
+        print(f"\n[backtest_events] === index rebalance (event-study) ===")
+        adds, dels, reason = collect_rebalance_events()
+        if reason:
+            print(f"  UNTESTABLE: {reason}")
+            results["index_rebalance_add"] = {"verdict": "UNTESTABLE", "reason": reason, "suggested_weight": 0}
+        else:
+            day_set = trading_days(9999)
+            add_results = _rebalance_abnormal_returns(adds, ohlcv, universe, day_set)
+            stats = _rebalance_verdict(add_results)
+            results["index_rebalance_add"] = stats
+            print(f"  index_rebalance_add: n={stats['n']} mean_abnormal={stats.get('mean_abnormal_pct')}pp "
+                  f"t={stats.get('t_stat')} -> {stats['verdict']}")
+
+            del_results = _rebalance_abnormal_returns(dels, ohlcv, universe, day_set)
+            del_stats = _rebalance_verdict(del_results)
+            results["index_rebalance_delete_diag"] = del_stats
+            print(f"  index_rebalance_delete_diag (diagnostic only, not gate-eligible): "
+                  f"n={del_stats['n']} mean_abnormal={del_stats.get('mean_abnormal_pct')}pp "
+                  f"t={del_stats.get('t_stat')} -> {del_stats['verdict']}")
+
+            # secondary diagnostic: standard ATR-target template, entry A+1 --
+            # not gate-eligible (the plan's primary measurement is the A+1->E-1
+            # event-study above; this is reported only for context).
+            atr_events = [(r["announce_date"], f"{r['symbol']}.NS") for r in adds]
+            atr_stats = evaluate_events(atr_events, ohlcv, universe)
+            results["index_rebalance_add_atr_diag"] = atr_stats
+            print(f"  index_rebalance_add_atr_diag: n={atr_stats['n']} "
+                  f"ret_lift={atr_stats.get('ret_lift')} -> {atr_stats['verdict']} "
+                  f"(diagnostic only, not gate-eligible)")
+
     if source in ("bulk", "all"):
         print(f"\n[backtest_events] === bulk deals ===")
         events, reason = collect_bulk_events(weeks)
@@ -1166,7 +1376,7 @@ def main(source: str, weeks: int, skip_download: bool) -> None:
     print(f"\n{'='*70}\n  PROMOTION CANDIDATES (paste into src/scorer.py if SHIP)\n{'='*70}")
     any_ship = False
     for sig, stats in results.items():
-        if sig.endswith("_diag"):
+        if "_diag" in sig:
             continue  # diagnostic-only variant, never a promotion candidate
         if stats.get("verdict") == "SHIP":
             any_ship = True
