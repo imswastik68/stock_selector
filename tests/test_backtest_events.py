@@ -295,3 +295,81 @@ def test_results_merge_does_not_clobber_prior_verdicts(tmp_path, monkeypatch):
     monkeypatch.setattr(be, "OUT_FILE", out_file)
     existing = be._load_existing_results()
     assert existing["delivery_surge"]["verdict"] == "SHIP"
+
+
+# ── reversal (mean reversion): opposite bet to the momentum cluster ──────────
+
+def _make_ohlcv_df(closes, start="2025-01-01", vol=300000):
+    import pandas as pd
+    idx = pd.bdate_range(start=start, periods=len(closes))
+    return pd.DataFrame({
+        "Open": closes, "High": [c * 1.01 for c in closes], "Low": [c * 0.99 for c in closes],
+        "Close": closes, "Volume": [vol] * len(closes),
+    }, index=idx)
+
+
+def _dip_fixture():
+    """205 mildly-uptrending bars, then a forced -8% 3-day dip on the last bar
+    that stays above the 200DMA and drives RSI(2) well under 10 -- verified
+    numerically: close=107.56 > sma200=106.23, ret3=-0.08, rsi2=1.7."""
+    import numpy as np
+    rng = np.random.default_rng(7)
+    base = 100 + np.cumsum(rng.normal(0.15, 0.5, 205))
+    base = np.clip(base, 50, None)
+    base[-3] = base[-4]
+    base[-2] = base[-4] * 0.95
+    base[-1] = base[-4] * 0.92
+    return list(base)
+
+
+def test_reversal_fires_on_qualifying_oversold_dip_inside_uptrend():
+    df = _make_ohlcv_df(_dip_fixture())
+    events, reason = be.collect_reversal_events(weeks=9999, ohlcv={"DIP.NS": df})
+    assert reason is None
+    assert (df.index[-1].date(), "DIP.NS") in events
+
+
+def test_reversal_excludes_dip_below_200dma_falling_knife():
+    """Same -7%+ dip and oversold RSI(2), but the whole series is flat/declining
+    so close never clears its 200DMA -- must NOT fire in the primary signal."""
+    closes = [100.0] * 205
+    closes[-4] = 100.0
+    closes[-3] = 100.0
+    closes[-2] = 95.0
+    closes[-1] = 92.0
+    df = _make_ohlcv_df(closes)
+    events, reason = be.collect_reversal_events(weeks=9999, ohlcv={"KNIFE.NS": df})
+    assert reason is None
+    assert (df.index[-1].date(), "KNIFE.NS") not in events
+
+    # the diagnostic (no-200DMA-filter) variant DOES fire on it
+    diag_events, diag_reason = be.collect_reversal_diag_events(weeks=9999, ohlcv={"KNIFE.NS": df})
+    assert diag_reason is None
+    assert (df.index[-1].date(), "KNIFE.NS") in diag_events
+
+
+def test_reversal_excludes_mild_dip_that_is_not_oversold_enough():
+    """A -7%+ 3-day move that ISN'T preceded by RSI(2)<10 exhaustion must not
+    fire -- here a sharp drop is followed by a bounce day before today, which
+    keeps RSI(2) elevated even though the cumulative 3-day return still clears
+    the -7% bar (verified numerically: ret3=-10.0%, rsi2=18.6)."""
+    import numpy as np
+    rng = np.random.default_rng(3)
+    base = 100 + np.cumsum(rng.normal(0.15, 0.5, 205))
+    base = np.clip(base, 50, None)
+    base[-3] = base[-4] * 0.90
+    base[-2] = base[-3] * 1.02
+    base[-1] = base[-2] * 0.98
+    df = _make_ohlcv_df(list(base))
+    from src.technicals import _rsi_series
+    rsi2_last = float(_rsi_series(df["Close"], period=2).iloc[-1])
+    assert rsi2_last >= 10  # confirms the fixture actually tests the RSI gate
+    events, reason = be.collect_reversal_events(weeks=9999, ohlcv={"GRIND.NS": df})
+    assert (df.index[-1].date(), "GRIND.NS") not in events
+
+
+def test_reversal_respects_weeks_cutoff():
+    df = _make_ohlcv_df(_dip_fixture())
+    events, reason = be.collect_reversal_events(weeks=0, ohlcv={"DIP.NS": df})
+    assert reason is None
+    assert events == []  # the qualifying bar is older than a 0-week cutoff

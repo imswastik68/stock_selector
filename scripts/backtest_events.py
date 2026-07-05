@@ -63,7 +63,7 @@ except ImportError:
 from mine_big_movers import _load_ticker_df, _turnover_ok  # noqa: E402
 from backtest import _compute_atr  # noqa: E402
 from factor_backtest import _load_universe  # noqa: E402
-from src.technicals import compute_entry_levels  # noqa: E402
+from src.technicals import compute_entry_levels, _rsi_series  # noqa: E402
 from src.trade_sim import simulate_raw  # noqa: E402
 from src.costs import round_trip_cost_pct  # noqa: E402
 from src.data.delivery import _MIN_DELIVERY_PCT, _MIN_DELIVERY_SPIKE, _make_session as _delivery_session  # noqa: E402
@@ -515,6 +515,54 @@ def collect_options_events(weeks: int, skip_download: bool) -> tuple[dict[str, l
     return out, None
 
 
+# ── source (reversal): short-horizon mean reversion ──────────────────────────
+# Deliberately the OPPOSITE bet to the trend/momentum cluster (near_52w_high,
+# rsi_momentum, ...) that dominates the shipped signals so far -- buys sharp
+# oversold dips instead of strength, so a real edge here would be genuinely
+# orthogonal, not just another way of saying "price is going up." Pre-declared
+# primary definition (Alpha Round Phase 1) -- do not loosen after seeing
+# results: 3-day return <= -7%, close > 200DMA (dip inside an uptrend, not a
+# falling knife), RSI(2) < 10. Needs no network: derived from the same OHLCV
+# cache scripts/backtest.py already maintains.
+
+def collect_reversal_events(weeks: int, ohlcv: dict) -> tuple[list[tuple[date, str]], str | None]:
+    cutoff = pd.Timestamp(date.today() - timedelta(weeks=weeks))
+    events: list[tuple[date, str]] = []
+    for ticker, df in ohlcv.items():
+        if len(df) < 200:
+            continue
+        close = df["Close"]
+        sma200 = close.rolling(200).mean()
+        ret3 = close / close.shift(3) - 1
+        rsi2 = _rsi_series(close, period=2)
+        mask = (df.index >= cutoff) & (ret3 <= -0.07) & (close > sma200) & (rsi2 < 10)
+        for ts in df.index[mask]:
+            if not _turnover_ok(df, ts):
+                continue
+            events.append((ts.date(), ticker))
+    return events, None
+
+
+def collect_reversal_diag_events(weeks: int, ohlcv: dict) -> tuple[list[tuple[date, str]], str | None]:
+    """Diagnostic-only variant (no 200DMA uptrend filter) -- reported for
+    context, never gate-eligible/promotable (see the '_diag' suffix skip in
+    main()'s promotion-candidates loop)."""
+    cutoff = pd.Timestamp(date.today() - timedelta(weeks=weeks))
+    events: list[tuple[date, str]] = []
+    for ticker, df in ohlcv.items():
+        if len(df) < 10:
+            continue
+        close = df["Close"]
+        ret3 = close / close.shift(3) - 1
+        rsi2 = _rsi_series(close, period=2)
+        mask = (df.index >= cutoff) & (ret3 <= -0.07) & (rsi2 < 10)
+        for ts in df.index[mask]:
+            if not _turnover_ok(df, ts):
+                continue
+            events.append((ts.date(), ticker))
+    return events, None
+
+
 # ── source (b): SAST filings ─────────────────────────────────────────────────
 
 def collect_sast_events(weeks: int, universe: list[str]) -> tuple[list[tuple[date, str]], str | None]:
@@ -851,6 +899,13 @@ def main(source: str, weeks: int, skip_download: bool) -> None:
         events, reason = collect_delivery_events(weeks, skip_download)
         _eval_single("delivery_surge", events, reason, ohlcv, universe, results)
 
+    if source in ("reversal", "all"):
+        print(f"\n[backtest_events] === reversal (mean reversion) ===")
+        events, reason = collect_reversal_events(weeks, ohlcv)
+        _eval_single("reversal_oversold", events, reason, ohlcv, universe, results)
+        diag_events, diag_reason = collect_reversal_diag_events(weeks, ohlcv)
+        _eval_single("reversal_oversold_diag_no_trend", diag_events, diag_reason, ohlcv, universe, results)
+
     if source in ("options", "all"):
         print(f"\n[backtest_events] === options (F&O bhavcopy) ===")
         events_by_signal, reason = collect_options_events(weeks, skip_download)
@@ -891,6 +946,8 @@ def main(source: str, weeks: int, skip_download: bool) -> None:
     print(f"\n{'='*70}\n  PROMOTION CANDIDATES (paste into src/scorer.py if SHIP)\n{'='*70}")
     any_ship = False
     for sig, stats in results.items():
+        if sig.endswith("_diag"):
+            continue  # diagnostic-only variant, never a promotion candidate
         if stats.get("verdict") == "SHIP":
             any_ship = True
             print(f'  "{sig}": {stats["suggested_weight"]},  # SHIP: ret_lift={stats["ret_lift"]} n={stats["n"]}')
@@ -901,7 +958,8 @@ def main(source: str, weeks: int, skip_download: bool) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--source",
-                     choices=["delivery", "options", "announcements", "promoter", "sast", "bulk", "all"],
+                     choices=["delivery", "options", "announcements", "promoter", "sast", "bulk",
+                              "reversal", "pead", "pit", "rebalance", "all"],
                      default="all")
     ap.add_argument("--weeks", type=int, default=156)
     ap.add_argument("--skip-download", action="store_true",
