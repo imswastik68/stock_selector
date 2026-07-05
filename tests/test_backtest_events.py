@@ -373,3 +373,72 @@ def test_reversal_respects_weeks_cutoff():
     events, reason = be.collect_reversal_events(weeks=0, ohlcv={"DIP.NS": df})
     assert reason is None
     assert events == []  # the qualifying bar is older than a 0-week cutoff
+
+
+# ── PEAD v2: surprise-proxied post-earnings drift ────────────────────────────
+
+def _ohlcv_at(date_close: dict) -> "pd.DataFrame":
+    import pandas as pd
+    days = sorted(date_close.keys())
+    closes = [date_close[d] for d in days]
+    idx = pd.to_datetime(days)
+    return pd.DataFrame({
+        "Open": closes, "High": [c * 1.01 for c in closes], "Low": [c * 0.99 for c in closes],
+        "Close": closes, "Volume": [300000] * len(closes),
+    }, index=idx)
+
+
+_PEAD_DAY_SET = [date(2026, 1, 2), date(2026, 1, 5), date(2026, 1, 6),
+                 date(2026, 1, 7), date(2026, 1, 8)]
+
+
+def _run_pead(monkeypatch, items, ohlcv):
+    monkeypatch.setattr(be, "_fetch_announcement_items", lambda weeks, universe: (items, None))
+    monkeypatch.setattr(be, "trading_days", lambda weeks: _PEAD_DAY_SET)
+    return be.collect_pead_events(weeks=156, universe=list(ohlcv.keys()), ohlcv=ohlcv)
+
+
+def test_pead_positive_surprise_pre_cutoff(monkeypatch):
+    """Filed before 15:30 IST -> reaction day R = the filing day itself."""
+    items = [{"symbol": "POS", "desc": "Financial Results for Q3", "attchmntText": "",
+              "an_dt": "05-Jan-2026 10:00:00"}]
+    ohlcv = {"POS.NS": _ohlcv_at({date(2026, 1, 2): 100.0, date(2026, 1, 5): 104.0})}
+    out, reason = _run_pead(monkeypatch, items, ohlcv)
+    assert reason is None
+    assert (date(2026, 1, 5), "POS.NS") in out["pead_positive_surprise"]
+    assert out["pead_negative_surprise"] == []
+
+
+def test_pead_after_cutoff_filing_reacts_next_trading_day(monkeypatch):
+    """Filed after 15:30 IST -> reaction day R = the NEXT trading day, and the
+    reaction is measured off that day's move, not the filing day's."""
+    items = [{"symbol": "NEG", "desc": "Financial Results for Q4", "attchmntText": "",
+              "an_dt": "05-Jan-2026 16:00:00"}]
+    ohlcv = {"NEG.NS": _ohlcv_at({date(2026, 1, 5): 100.0, date(2026, 1, 6): 94.0})}
+    out, reason = _run_pead(monkeypatch, items, ohlcv)
+    assert reason is None
+    assert (date(2026, 1, 6), "NEG.NS") in out["pead_negative_surprise"]
+    assert out["pead_positive_surprise"] == []
+
+
+def test_pead_middle_band_reaction_is_no_event(monkeypatch):
+    """A +1% reaction clears neither the +3%/-3% surprise threshold."""
+    items = [{"symbol": "MID", "desc": "Financial Results for Q1", "attchmntText": "",
+              "an_dt": "05-Jan-2026 10:00:00"}]
+    ohlcv = {"MID.NS": _ohlcv_at({date(2026, 1, 2): 100.0, date(2026, 1, 5): 101.0})}
+    out, reason = _run_pead(monkeypatch, items, ohlcv)
+    assert reason is None
+    assert out["pead_positive_surprise"] == []
+    assert out["pead_negative_surprise"] == []
+
+
+def test_pead_skips_non_results_announcements(monkeypatch):
+    """A buyback filing must not be classified as PEAD, even with a big
+    same-day price move -- only results_beat_announced feeds PEAD."""
+    items = [{"symbol": "BB", "desc": "Buy-back of equity shares", "attchmntText": "",
+              "an_dt": "05-Jan-2026 10:00:00"}]
+    ohlcv = {"BB.NS": _ohlcv_at({date(2026, 1, 2): 100.0, date(2026, 1, 5): 110.0})}
+    out, reason = _run_pead(monkeypatch, items, ohlcv)
+    assert reason is None
+    assert out["pead_positive_surprise"] == []
+    assert out["pead_negative_surprise"] == []

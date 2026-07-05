@@ -46,7 +46,7 @@ import json
 import sys
 import time
 import warnings
-from datetime import date, timedelta
+from datetime import date, timedelta, time as _dtime
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -648,20 +648,19 @@ def _www_get_json(session, url: str, retries: int = 4):
     return None
 
 
-def collect_announcement_events(weeks: int, universe: list[str]) -> tuple[dict[str, list[tuple[date, str]]], str | None]:
-    """Returns ({signal_key: [(date, ticker), ...]}, reason). Chunks the window
-    into 45-day ranges (the API caps large windows), classifies each filing with
-    the live _ann_match_signal, restricts to the NIFTY500 universe."""
+def _fetch_announcement_items(weeks: int, universe: list[str]) -> tuple[list[dict], str | None]:
+    """Chunked, cache-first fetch of RAW NSE corporate-announcement rows for
+    the window, restricted to `universe` symbols. Shared by
+    collect_announcement_events (per-signal classification) and
+    collect_pead_events (results-only reaction-day analysis) so the network/
+    cache logic lives in exactly one place."""
     ANN_CACHE.mkdir(parents=True, exist_ok=True)
     end = date.today()
     start = end - timedelta(weeks=weeks)
     uni = {t.replace(".NS", "") for t in universe}
     session = _make_www_session(_ANN_PRIME_URL)
 
-    out: dict[str, list[tuple[date, str]]] = {
-        "results_beat_announced": [], "buyback_announced": [],
-        "contract_win": [], "dividend_announced": [],
-    }
+    items: list[dict] = []
     any_success = False
     total_failures = 0
     chunk_start = start
@@ -684,7 +683,7 @@ def collect_announcement_events(weeks: int, universe: list[str]) -> tuple[dict[s
             time.sleep(1.0)
 
         if total_failures >= 4 and not any_success:
-            return {}, "corporate-announcements API unreachable (503) — UNTESTABLE this pass"
+            return [], "corporate-announcements API unreachable (503) — UNTESTABLE this pass"
 
         rows = data if isinstance(data, list) else (data or {}).get("data", data)
         if isinstance(rows, list):
@@ -694,21 +693,116 @@ def collect_announcement_events(weeks: int, universe: list[str]) -> tuple[dict[s
                 sym = str(item.get("symbol") or "").strip().upper()
                 if sym not in uni:
                     continue
-                desc = str(item.get("desc") or "")
-                headline = str(item.get("attchmntText") or desc)
-                sig = _ann_match_signal(desc, headline)
-                if sig is None or sig not in out:
-                    continue
-                dt_str = str(item.get("an_dt") or item.get("dt") or "").strip()
-                try:
-                    d = pd.to_datetime(dt_str[:11], format="%d-%b-%Y").date()
-                except Exception:
-                    continue
-                out[sig].append((d, f"{sym}.NS"))
+                items.append(item)
         chunk_start = chunk_end
 
     if not any_success:
-        return {}, "corporate-announcements API unreachable (503) — UNTESTABLE this pass"
+        return [], "corporate-announcements API unreachable (503) — UNTESTABLE this pass"
+    return items, None
+
+
+def collect_announcement_events(weeks: int, universe: list[str]) -> tuple[dict[str, list[tuple[date, str]]], str | None]:
+    """Returns ({signal_key: [(date, ticker), ...]}, reason). Classifies each
+    raw filing with the live _ann_match_signal."""
+    items, reason = _fetch_announcement_items(weeks, universe)
+    if reason:
+        return {}, reason
+
+    out: dict[str, list[tuple[date, str]]] = {
+        "results_beat_announced": [], "buyback_announced": [],
+        "contract_win": [], "dividend_announced": [],
+    }
+    for item in items:
+        sym = str(item.get("symbol") or "").strip().upper()
+        desc = str(item.get("desc") or "")
+        headline = str(item.get("attchmntText") or desc)
+        sig = _ann_match_signal(desc, headline)
+        if sig is None or sig not in out:
+            continue
+        dt_str = str(item.get("an_dt") or item.get("dt") or "").strip()
+        try:
+            d = pd.to_datetime(dt_str[:11], format="%d-%b-%Y").date()
+        except Exception:
+            continue
+        out[sig].append((d, f"{sym}.NS"))
+    return out, None
+
+
+# ── source (PEAD v2): surprise-proxied post-earnings drift ───────────────────
+# results_beat_announced (fires on ANY results filing, unconditioned) backtested
+# at ret_lift=-1.234, n=8824 -- proven net-harmful (see nse-free-historical-
+# data-map / event_backtest.json). The literature-supported version conditions
+# on SURPRISE. Without a paid consensus-estimate feed, the standard retail
+# proxy is the announcement-day price reaction itself: drift continues in the
+# direction of the initial reaction. Pre-declared (Alpha Round Phase 2, do not
+# tune after seeing results):
+#   reaction day R = announcement day if filed by 15:30 IST, else next trading day
+#   r_R = close_R / close_{R-1} - 1
+#   r_R >= +3%  -> pead_positive_surprise   (candidate BUY signal)
+#   r_R <= -3%  -> pead_negative_surprise   (candidate DISQUALIFIER -- validated
+#                  by NEGATIVE lift, mirroring the sign-aware disqualifier logic
+#                  in validate_signals.py; NOT expected to "ship" as a buy)
+# Entry is R+1 (evaluate_events' as_of=R, whose entry window is as_of+1) --
+# never R itself, since the reaction has already happened by R's close.
+
+_PEAD_REACTION_CUTOFF = _dtime(15, 30)
+
+
+def collect_pead_events(weeks: int, universe: list[str], ohlcv: dict) -> tuple[dict[str, list[tuple[date, str]]], str | None]:
+    items, reason = _fetch_announcement_items(weeks, universe)
+    if reason:
+        return {}, reason
+
+    day_set = trading_days(weeks + 4)  # pad so a late R can still resolve to R+1
+    day_index = {d: i for i, d in enumerate(day_set)}
+
+    def _next_trading_day(d: date) -> date | None:
+        for td in day_set:
+            if td > d:
+                return td
+        return None
+
+    out: dict[str, list[tuple[date, str]]] = {
+        "pead_positive_surprise": [], "pead_negative_surprise": [],
+    }
+    for item in items:
+        desc = str(item.get("desc") or "")
+        headline = str(item.get("attchmntText") or desc)
+        if _ann_match_signal(desc, headline) != "results_beat_announced":
+            continue
+        sym = str(item.get("symbol") or "").strip().upper()
+        ticker = f"{sym}.NS"
+        df = ohlcv.get(ticker)
+        if df is None:
+            continue
+        dt_str = str(item.get("an_dt") or "").strip()
+        try:
+            filed = pd.to_datetime(dt_str, format="%d-%b-%Y %H:%M:%S")
+        except Exception:
+            continue
+        filed_date = filed.date()
+        if filed.time() <= _PEAD_REACTION_CUTOFF and filed_date in day_index:
+            r_day = filed_date
+        else:
+            r_day = _next_trading_day(filed_date)
+        if r_day is None or r_day not in day_index:
+            continue
+        r_idx = day_index[r_day]
+        if r_idx == 0:
+            continue
+        r_prev = day_set[r_idx - 1]
+        df_r = df[df.index == pd.Timestamp(r_day)]
+        df_prev = df[df.index == pd.Timestamp(r_prev)]
+        if df_r.empty or df_prev.empty:
+            continue
+        close_r, close_prev = float(df_r["Close"].iloc[0]), float(df_prev["Close"].iloc[0])
+        if close_prev <= 0:
+            continue
+        r_react = close_r / close_prev - 1
+        if r_react >= 0.03:
+            out["pead_positive_surprise"].append((r_day, ticker))
+        elif r_react <= -0.03:
+            out["pead_negative_surprise"].append((r_day, ticker))
     return out, None
 
 
@@ -914,6 +1008,11 @@ def main(source: str, weeks: int, skip_download: bool) -> None:
     if source in ("announcements", "all"):
         print(f"\n[backtest_events] === announcements ===")
         events_by_signal, reason = collect_announcement_events(weeks, universe)
+        _eval_multi(events_by_signal, reason, ohlcv, universe, results)
+
+    if source in ("pead", "all"):
+        print(f"\n[backtest_events] === PEAD v2 (surprise-proxied) ===")
+        events_by_signal, reason = collect_pead_events(weeks, universe, ohlcv)
         _eval_multi(events_by_signal, reason, ohlcv, universe, results)
 
     if source in ("promoter", "all"):
