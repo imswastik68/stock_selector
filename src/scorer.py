@@ -74,11 +74,8 @@ SWING_WEIGHTS = {
     "promoter_buying": 0,           # PENDING_VALIDATION (was 3) — sets timeframe -> 5-7d still (see _compute_score)
     "sast_insider_buying": 0,       # FAILED backtest (not pending) -- fires on ANY SAST filing (pledges,
                                     # creeping acquisitions, inter-se transfers), ret_lift=-0.407, n=2010.
-                                    # The isolated open-market-buy version (promoter_open_mkt_buy,
-                                    # scripts/backtest_events.py --source pit) has a promising point
-                                    # estimate (wr_lift +5.38pp, ret_lift +0.833) but INSUFFICIENT_SAMPLE
-                                    # (n=258, needs >=500) -- not live-wired, revisit once more PIT
-                                    # history accumulates. See outputs/event_backtest.json.
+                                    # The isolated open-market-buy version SHIPPED once more PIT history
+                                    # accumulated -- see promoter_open_mkt_buy below.
     "consolidation_breakout": 0,    # PENDING_VALIDATION (was 3) — untested
     "results_beat_announced": 0,    # FAILED backtest (not pending) -- fires on ANY results filing
                                     # (beat or miss), ret_lift=-1.234, n=8824. See pead_positive_surprise
@@ -92,6 +89,15 @@ SWING_WEIGHTS = {
                                     # Fires on a results filing whose reaction-day close move is >=+3%
                                     # (see src.data.bse_announcements.classify_pead_reaction). weight =
                                     # round(3 x 0.308) = 1. See outputs/event_backtest.json.
+    "promoter_open_mkt_buy": 3,     # PROMOTED (SOTA Round Phase 3): scripts/backtest_events.py SHIP
+                                    # verdict on the 260-week rerun, n=617, ret_lift +1.063 (wr_lift
+                                    # +5.38pp), 70/30 holdout sign-consistent (train +1.152 -> holdout
+                                    # +0.866). Isolates promoters buying their OWN stock in the OPEN
+                                    # MARKET (acqMode=="Market Purchase") from the SAST filing stream
+                                    # (which fires on any filing incl. pledges/creeping acquisitions and
+                                    # backtested net-harmful). weight = round(3 x 1.063) = 3. See
+                                    # src.data.insider.fetch_promoter_open_mkt_buys and
+                                    # outputs/event_backtest.json.
 }
 
 DISQUALIFIER_WEIGHTS = {
@@ -198,6 +204,7 @@ def _build_signal_map(
     breakdown_data: dict | None = None,
     pead_signal: str | None = None,
     reversal_data: dict | None = None,
+    promoter_open_mkt_data: dict | None = None,
 ) -> dict[str, bool]:
     """Build a boolean signal map for a single ticker."""
     signals: dict[str, bool] = {
@@ -319,6 +326,12 @@ def _build_signal_map(
     # SAST filing: SEBI mandatory disclosure for creeping acquisitions ≥5% stake
     signals["sast_insider_buying"] = bool(sast_data)
 
+    # Promoter open-market purchase (SOTA Round Phase 3) -- src.data.insider
+    # only emits a candidate when the PIT filter already fired (acqMode ==
+    # "Market Purchase", value >= Rs 1cr), so presence IS the signal.
+    if promoter_open_mkt_data:
+        signals["promoter_open_mkt_buy"] = True
+
     # Fundamental quality from yfinance .info (soft gate — missing data → neutral)
     if fundamental_data:
         signals["fundamental_strong"] = bool(fundamental_data.get("fundamental_strong", False))
@@ -395,6 +408,7 @@ def score_candidates(
     breakdowns: list[dict] | None = None,
     pead_signals: dict[str, str] | None = None,
     reversal_signals: list[dict] | None = None,
+    promoter_open_mkt_signals: list[dict] | None = None,
 ) -> list[dict]:
     """
     Score every unique ticker across all data sources and return qualifying candidates.
@@ -409,9 +423,12 @@ def score_candidates(
                           ticker enters the pool in every pass, not just post-enrichment.
     reversal_signals:    [{ticker, ret_3d_pct, rsi2, today_close}] from src.data.reversal.
                           fetch_reversal_signals (reversal_oversold_v2, SHIP verdict).
+    promoter_open_mkt_signals: [{ticker, intimation_date, value_rs}] from src.data.insider.
+                          fetch_promoter_open_mkt_buys (promoter_open_mkt_buy, SHIP verdict).
     """
     breakdowns = breakdowns or []
     reversal_signals = reversal_signals or []
+    promoter_open_mkt_signals = promoter_open_mkt_signals or []
 
     # Collect all unique tickers across all data sources
     all_tickers: set[str] = set()
@@ -423,12 +440,14 @@ def score_candidates(
     all_tickers.update(b["ticker"] for b in breakdowns)
     all_tickers.update((pead_signals or {}).keys())  # PEAD-only tickers enter the pool
     all_tickers.update(r["ticker"] for r in reversal_signals)
+    all_tickers.update(r["ticker"] for r in promoter_open_mkt_signals)
 
     # Build lookup dicts for O(1) access
     volume_map: dict[str, dict] = {d["ticker"]: d for d in volume_gainers}
     breakout_map: dict[str, dict] = {b["ticker"]: b for b in breakouts}
     breakdown_map: dict[str, dict] = {b["ticker"]: b for b in breakdowns}
     reversal_map: dict[str, dict] = {r["ticker"]: r for r in reversal_signals}
+    promoter_open_mkt_map: dict[str, dict] = {r["ticker"]: r for r in promoter_open_mkt_signals}
 
     # Build announcements lookup: {ticker: {signal_key: True, ...}}
     # A ticker can have multiple announcements; last one per signal_key wins (all are True anyway).
@@ -453,6 +472,7 @@ def score_candidates(
         fund  = (fundamental_signals or {}).get(ticker)
         pead  = (pead_signals or {}).get(ticker)
         rev   = reversal_map.get(ticker)
+        prom_omb = promoter_open_mkt_map.get(ticker)
 
         signals = _build_signal_map(
             ticker, bulk_deals, vol, fo_ban_removed, results_calendar, brk,
@@ -465,6 +485,7 @@ def score_candidates(
             breakdown_data=bkd,
             pead_signal=pead,
             reversal_data=rev,
+            promoter_open_mkt_data=prom_omb,
         )
 
         score, timeframe = _compute_score(signals, market_regime, nifty_trend)

@@ -72,6 +72,9 @@ from src.data.sast import _pnsea_available, _sast_one  # noqa: E402
 from src.data.options import _MIN_CALL_OI  # noqa: E402 (same liquidity gate the live scorer uses)
 from src.data.bse_announcements import _match_signal as _ann_match_signal  # noqa: E402
 from src.data.reversal import RET_3D_THRESHOLD as _REV_RET_3D, RSI2_THRESHOLD as _REV_RSI2  # noqa: E402
+from src.data.insider import (  # noqa: E402
+    PIT_URL as _PIT_URL, PIT_PRIME_URL as _PIT_PRIME_URL, _matches_filter as _pit_matches_filter,
+)
 
 OUTPUTS       = ROOT / "outputs"
 NIFTY_CSV     = ROOT / "cache" / "backtest_nifty.csv"
@@ -94,8 +97,6 @@ _ANN_URL = "https://www.nseindia.com/api/corporate-announcements?index=equities&
 _ANN_PRIME_URL = "https://www.nseindia.com/companies-listing/corporate-filings-announcements"
 _SHP_URL = "https://www.nseindia.com/api/corporate-share-holdings-master?index=equities&symbol={sym}"
 _SHP_PRIME_URL = "https://www.nseindia.com/companies-listing/corporate-filings-shareholding-pattern"
-_PIT_URL = "https://www.nseindia.com/api/corporates-pit?index=equities&from_date={frm}&to_date={to}"
-_PIT_PRIME_URL = "https://www.nseindia.com/companies-listing/corporate-filings-insider-trading"
 
 MIN_N_SHIP = 500
 MIN_BHAV_DAYS = 20  # below this, too few sessions for a meaningful surge/lift read
@@ -1061,16 +1062,14 @@ def collect_promoter_events(weeks: int, universe: list[str]) -> tuple[list[tuple
 # n=2010). The research-supported version is promoters buying their OWN stock
 # in the OPEN MARKET -- a genuine "insiders think it's cheap" signal, only
 # isolatable via the PIT (Prohibition of Insider Trading) disclosure feed.
-# Vocabulary confirmed live against the corporates-pit API before writing this
-# filter (2026-07-05, 1192-row sample): acqMode has exactly one value meaning
-# a genuine open-market trade -- "Market Purchase" -- distinct from "Off
+# The filter logic (_pit_matches_filter, imported above) is the SINGLE SOURCE
+# OF TRUTH shared with src.data.insider's live fetcher (SOTA Round Phase 3) --
+# vocabulary confirmed live against the corporates-pit API before writing it
+# (2026-07-05, 1192-row sample): acqMode has exactly one value meaning a
+# genuine open-market trade -- "Market Purchase" -- distinct from "Off
 # Market", "Preferential Offer", "Gift", "ESOP", "Pledge Creation", "Scheme of
 # Amalgamation/...". personCategory is "Promoters" or "Promoter Group".
 # tdpTransactionType is "Buy" or "Sell".
-
-_PIT_ACQ_MODE = "Market Purchase"
-_PIT_PERSON_CATEGORIES = {"Promoters", "Promoter Group"}
-_PIT_MIN_VALUE = 1e7  # >= Rs 1 crore
 
 
 def _fetch_pit_items(weeks: int) -> tuple[list[dict], str | None]:
@@ -1143,17 +1142,7 @@ def collect_pit_events(weeks: int, universe: list[str]) -> tuple[list[tuple[date
         sym = str(row.get("symbol") or "").strip().upper()
         if sym not in uni:
             continue
-        if row.get("personCategory") not in _PIT_PERSON_CATEGORIES:
-            continue
-        if row.get("tdpTransactionType") != "Buy":
-            continue
-        if row.get("acqMode") != _PIT_ACQ_MODE:
-            continue
-        try:
-            sec_val = float(str(row.get("secVal")).strip())
-        except (ValueError, TypeError):
-            continue
-        if sec_val < _PIT_MIN_VALUE:
+        if not _pit_matches_filter(row):
             continue
         dt_str = str(row.get("date") or "").strip()
         try:
