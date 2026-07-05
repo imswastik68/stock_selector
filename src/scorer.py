@@ -86,12 +86,14 @@ SWING_WEIGHTS = {
                                     # (n=455, ret_lift +0.827) REVERSED on the 260-week rerun (n=640):
                                     # train +1.44 -> holdout -0.731, a genuine sign-flip, not just decay.
                                     # A real example of why n>=500 + holdout consistency both matter.
-    "pead_positive_surprise": 1,    # PROMOTED (Alpha Round Phase 2/5): scripts/backtest_events.py SHIP
-                                    # verdict, n=1696, ret_lift +0.308 (wr_lift +2.79pp), 70/30 holdout
-                                    # sign-consistent and STRENGTHENING (train +0.214 -> holdout +0.527).
-                                    # Fires on a results filing whose reaction-day close move is >=+3%
-                                    # (see src.data.bse_announcements.classify_pead_reaction). weight =
-                                    # round(3 x 0.308) = 1. See outputs/event_backtest.json.
+    "pead_positive_surprise": 1,    # PROMOTED (Alpha Round Phase 2/5, reconfirmed SOTA Round Phase 3b on
+                                    # the 260-week rerun): n=2582 (was 1696), ret_lift +0.297 (wr_lift
+                                    # +2.98pp), 70/30 holdout essentially IDENTICAL to train (+0.297 vs
+                                    # +0.296) -- no decay at all with 50% more data, the most stable
+                                    # verdict in this codebase. Fires on a results filing whose
+                                    # reaction-day close move is >=+3% (see src.data.bse_announcements.
+                                    # classify_pead_reaction). weight = round(3 x 0.297) = 1 (unchanged).
+                                    # See outputs/event_backtest.json.
     "promoter_open_mkt_buy": 3,     # PROMOTED (SOTA Round Phase 3): scripts/backtest_events.py SHIP
                                     # verdict on the 260-week rerun, n=617, ret_lift +1.063 (wr_lift
                                     # +5.38pp), 70/30 holdout sign-consistent (train +1.152 -> holdout
@@ -116,17 +118,18 @@ DISQUALIFIER_WEIGHTS = {
     "bearish_candle": -1,          # shooting_star / bearish_engulfing / bearish_marubozu on last bar
     "options_pcr_greed": -1,       # PCR < 0.5: extreme complacency (min OI required)
     "options_long_unwinding": -1,  # price down + OI down = longs exiting (min OI required)
-    "pead_negative_surprise": -2,  # PROMOTED (Alpha Round Phase 2/5): a results filing whose reaction-day
-                                    # close move is <=-3% (src.data.bse_announcements.classify_pead_reaction).
-                                    # Backtested as a would-be-buy: n=1772, ret_lift=-0.55 -- correctly
-                                    # NO-SHIPs as a buy (it's a bearish signal), but train (-0.45) and
-                                    # holdout (-0.784) are BOTH negative -- a real, consistent disqualifier
-                                    # candidate. (The harness's stored holdout_consistent field is False
-                                    # here only because it checks positive-direction consistency; this is
-                                    # a hand reconciliation, same convention as every other disqualifier's
+    "pead_negative_surprise": -2,  # PROMOTED (Alpha Round Phase 2/5, reconfirmed SOTA Round Phase 3b): a
+                                    # results filing whose reaction-day close move is <=-3%
+                                    # (src.data.bse_announcements.classify_pead_reaction). 260-week rerun:
+                                    # n=2696 (was 1772), ret_lift=-0.611 -- correctly NO-SHIPs as a buy
+                                    # (it's a bearish signal), and train (-0.357)/holdout (-1.203) are
+                                    # BOTH negative and STRENGTHENING -- a real, consistent disqualifier.
+                                    # (The harness's stored holdout_consistent field is False here only
+                                    # because it checks positive-direction consistency; this is a hand
+                                    # reconciliation, same convention as every other disqualifier's
                                     # sign-aware validation -- see scripts/validate_signals.py.) Weight
                                     # magnitude follows the same round(3x|ret_lift|) convention as buy-side
-                                    # promotions: round(3 x 0.55) = 2. See outputs/event_backtest.json.
+                                    # promotions: round(3 x 0.611) = 2 (unchanged). See outputs/event_backtest.json.
     "results_beat_announced": -3,  # PROMOTED (SOTA Round Phase 3, moved from SWING_WEIGHTS): fires on ANY
                                     # results filing (beat or miss). 260-week rerun: n=13915 (huge sample),
                                     # ret_lift=-1.121, train (-0.979) and holdout (-1.45) BOTH negative --
