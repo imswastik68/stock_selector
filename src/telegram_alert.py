@@ -73,6 +73,7 @@ SIGNAL_LABELS = {
     # sector rotation
     "sector_in_momentum":      "hot sector",
     "rs_quality_strong":       "quality RS",
+    "reversal_oversold_v2":    "oversold reversal",
     # insider / SAST
     "sast_insider_buying":     "SAST insider buying",
     # short pipeline (Phase 3)

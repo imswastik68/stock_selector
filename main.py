@@ -42,6 +42,7 @@ from src.data.bulk_deals import fetch_bulk_deals
 from src.data.bse_announcements import fetch_bse_announcements, fetch_pead_signals
 from src.data.delivery import fetch_delivery_signals
 from src.data.breakouts import fetch_breakouts
+from src.data.reversal import fetch_reversal_signals
 from src.data.breakdowns import fetch_breakdowns
 from src.data.fii_dii import fetch_fii_dii_data
 from src.data.fo_ban import fetch_fo_ban_delta
@@ -100,8 +101,8 @@ def _build_pead_watchlist(pead_signals: dict[str, str], announcements: list[dict
     ]
 
 
-def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, list, dict, dict, set, list, set]:
-    """Fetch all data sources concurrently. Returns 14-tuple."""
+def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, list, dict, dict, set, list, set, list]:
+    """Fetch all data sources concurrently. Returns 15-tuple."""
     print("[main] fetching market data...")
     t0 = time.time()
 
@@ -119,6 +120,7 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, lis
             "fii_dii": pool.submit(fetch_fii_dii_data),
             "gift_nifty": pool.submit(fetch_gift_nifty),
             "fo_eligible": pool.submit(fetch_fo_eligible),
+            "reversal": pool.submit(fetch_reversal_signals),
         }
 
         results = {}
@@ -167,6 +169,7 @@ def fetch_all_data() -> tuple[list, list, list, list, list, dict, dict, set, lis
         hot_sector_tickers,
         results["breakdowns"],
         results["fo_eligible"],
+        results["reversal"],
     )
 
 
@@ -375,7 +378,7 @@ def main() -> int:
     print(f"[main] === Stock Selector run: {date.today().isoformat()}  mode={scan_mode} ===")
 
     # 1. Fetch (parallel)
-    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals, fo_ban_current, announcements, fii_dii, gift_nifty, hot_sector_tickers, breakdowns, fo_eligible = fetch_all_data()
+    bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts, market_wide_ctx, delivery_signals, fo_ban_current, announcements, fii_dii, gift_nifty, hot_sector_tickers, breakdowns, fo_eligible, reversal_signals = fetch_all_data()
 
     # Proprietary event archive (Phase 3) -- these sources are fetched fresh every
     # day and previously discarded (src/cache.py is a same-day reuse cache, not a
@@ -404,6 +407,7 @@ def main() -> int:
     all_tickers.update(b["ticker"] for b in breakouts)
     all_tickers.update(b["ticker"] for b in breakdowns)
     all_tickers.update(a["ticker"] for a in announcements)
+    all_tickers.update(r["ticker"] for r in reversal_signals)
     total_scanned = len(all_tickers)
 
     # 2. Initial score (without options/promoter — those need per-ticker API calls)
@@ -422,6 +426,7 @@ def main() -> int:
         nifty_trend=nifty_trend,
         breakdowns=breakdowns,
         pead_signals=pead_signals,
+        reversal_signals=reversal_signals,
     )
 
     # 3. Enrich top 20 candidates with options PCR + promoter buying
@@ -468,6 +473,7 @@ def main() -> int:
             fundamental_signals=fundamental_signals,
             breakdowns=breakdowns,
             pead_signals=pead_signals,
+            reversal_signals=reversal_signals,
         )
     else:
         options_signals     = {}
@@ -532,6 +538,7 @@ def main() -> int:
             technical_signals=tech_signals,
             delivery_signals=delivery_signals,
             pead_signals=pead_signals,
+            reversal_signals=reversal_signals,
             fo_ban_current=fo_ban_current,
             market_regime=nifty_regime,
             announcements=announcements,

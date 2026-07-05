@@ -52,6 +52,21 @@ SHORT_TERM_WEIGHTS = {
     "fo_ban_lifted": 0,             # PENDING_VALIDATION (was 1) — untested
     "weekly_trend_aligned": 1,     # weekly EMA10 > EMA20: daily signal aligns with larger timeframe
     "sector_in_momentum": 0,       # PENDING_VALIDATION (was 1) — untested
+    "reversal_oversold_v2": 3,     # PROMOTED (SOTA Round Phase 2): scripts/backtest_events.py SHIP
+                                    # verdict, n=6843, ret_lift +2.102 -- the single strongest measured
+                                    # lift in this codebase, and deliberately the OPPOSITE bet to the
+                                    # trend cluster above (buys oversold dips, not strength). Passed a
+                                    # stricter re-test than the standard gate: 5/5 chronological splits
+                                    # positive (incl. most recent), both exit models agree (ATR-template
+                                    # +2.102, 5-day time-exit +0.892). Weight capped at 3 (not
+                                    # round(3x2.102)=6) for score-scale integrity -- no single signal
+                                    # should dominate the funnel (MIN_SCORE=2, typical qualifying score
+                                    # 5-6). NOTE: the pre-declared "survives 2x transaction costs" check
+                                    # also passed, but turned out to be a mathematical tautology under
+                                    # this cost model (signal and baseline both incur the same buy-side
+                                    # cost, which cancels exactly in the differential lift) -- reported
+                                    # honestly, doesn't change the verdict (the other 3 checks are
+                                    # genuinely independent). See outputs/event_backtest.json.
 }
 
 SWING_WEIGHTS = {
@@ -182,6 +197,7 @@ def _build_signal_map(
     fundamental_data: dict | None = None,
     breakdown_data: dict | None = None,
     pead_signal: str | None = None,
+    reversal_data: dict | None = None,
 ) -> dict[str, bool]:
     """Build a boolean signal map for a single ticker."""
     signals: dict[str, bool] = {
@@ -234,6 +250,13 @@ def _build_signal_map(
     if breakdown_data:
         signals["actual_52w_breakdown"]   = breakdown_data.get("actual_breakdown", False)
         signals["consolidation_breakdown"] = breakdown_data.get("consolidation_breakdown", False)
+
+    # Short-horizon mean reversion (SOTA Round Phase 2) -- src/data/reversal.py
+    # only emits a candidate when the pre-declared condition (3d return<=-7%,
+    # RSI(2)<10) already fired, so presence IS the signal (same construction
+    # as breakout_data/near_52w_high above).
+    if reversal_data:
+        signals["reversal_oversold_v2"] = True
 
     # Options signals — PCR only at extremes; long_buildup gated by min OI in options.py
     if options_data:
@@ -371,6 +394,7 @@ def score_candidates(
     fundamental_signals: dict[str, dict] | None = None,
     breakdowns: list[dict] | None = None,
     pead_signals: dict[str, str] | None = None,
+    reversal_signals: list[dict] | None = None,
 ) -> list[dict]:
     """
     Score every unique ticker across all data sources and return qualifying candidates.
@@ -383,8 +407,11 @@ def score_candidates(
     pead_signals:        {ticker: "positive"|"negative"} from src.data.bse_announcements.
                           fetch_pead_signals — computed EARLY (before pass 1) so a pure-PEAD
                           ticker enters the pool in every pass, not just post-enrichment.
+    reversal_signals:    [{ticker, ret_3d_pct, rsi2, today_close}] from src.data.reversal.
+                          fetch_reversal_signals (reversal_oversold_v2, SHIP verdict).
     """
     breakdowns = breakdowns or []
+    reversal_signals = reversal_signals or []
 
     # Collect all unique tickers across all data sources
     all_tickers: set[str] = set()
@@ -395,11 +422,13 @@ def score_candidates(
     all_tickers.update(b["ticker"] for b in breakouts)
     all_tickers.update(b["ticker"] for b in breakdowns)
     all_tickers.update((pead_signals or {}).keys())  # PEAD-only tickers enter the pool
+    all_tickers.update(r["ticker"] for r in reversal_signals)
 
     # Build lookup dicts for O(1) access
     volume_map: dict[str, dict] = {d["ticker"]: d for d in volume_gainers}
     breakout_map: dict[str, dict] = {b["ticker"]: b for b in breakouts}
     breakdown_map: dict[str, dict] = {b["ticker"]: b for b in breakdowns}
+    reversal_map: dict[str, dict] = {r["ticker"]: r for r in reversal_signals}
 
     # Build announcements lookup: {ticker: {signal_key: True, ...}}
     # A ticker can have multiple announcements; last one per signal_key wins (all are True anyway).
@@ -423,6 +452,7 @@ def score_candidates(
         sast  = bool((sast_signals or {}).get(ticker, False))
         fund  = (fundamental_signals or {}).get(ticker)
         pead  = (pead_signals or {}).get(ticker)
+        rev   = reversal_map.get(ticker)
 
         signals = _build_signal_map(
             ticker, bulk_deals, vol, fo_ban_removed, results_calendar, brk,
@@ -434,6 +464,7 @@ def score_candidates(
             fundamental_data=fund,
             breakdown_data=bkd,
             pead_signal=pead,
+            reversal_data=rev,
         )
 
         score, timeframe = _compute_score(signals, market_regime, nifty_trend)
@@ -451,7 +482,7 @@ def score_candidates(
         if score < MIN_SCORE or len(active) < MIN_SIGNALS:
             continue
 
-        today_close = (vol or brk or bkd or {}).get("today_close")
+        today_close = (vol or brk or bkd or rev or {}).get("today_close")
         is_penny = today_close is not None and today_close < PENNY_THRESHOLD
 
         candidates.append({

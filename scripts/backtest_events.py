@@ -71,6 +71,7 @@ from src.data.bulk_deals import _is_fii_dii  # noqa: E402
 from src.data.sast import _pnsea_available, _sast_one  # noqa: E402
 from src.data.options import _MIN_CALL_OI  # noqa: E402 (same liquidity gate the live scorer uses)
 from src.data.bse_announcements import _match_signal as _ann_match_signal  # noqa: E402
+from src.data.reversal import RET_3D_THRESHOLD as _REV_RET_3D, RSI2_THRESHOLD as _REV_RSI2  # noqa: E402
 
 OUTPUTS       = ROOT / "outputs"
 NIFTY_CSV     = ROOT / "cache" / "backtest_nifty.csv"
@@ -714,7 +715,7 @@ def collect_reversal_events(weeks: int, ohlcv: dict) -> tuple[list[tuple[date, s
         sma200 = close.rolling(200).mean()
         ret3 = close / close.shift(3) - 1
         rsi2 = _rsi_series(close, period=2)
-        mask = (df.index >= cutoff) & (ret3 <= -0.07) & (close > sma200) & (rsi2 < 10)
+        mask = (df.index >= cutoff) & (ret3 <= _REV_RET_3D) & (close > sma200) & (rsi2 < _REV_RSI2)
         for ts in df.index[mask]:
             if not _turnover_ok(df, ts):
                 continue
@@ -723,9 +724,14 @@ def collect_reversal_events(weeks: int, ohlcv: dict) -> tuple[list[tuple[date, s
 
 
 def collect_reversal_diag_events(weeks: int, ohlcv: dict) -> tuple[list[tuple[date, str]], str | None]:
-    """Diagnostic-only variant (no 200DMA uptrend filter) -- reported for
-    context, never gate-eligible/promotable (see the '_diag' suffix skip in
-    main()'s promotion-candidates loop)."""
+    """The reversal_oversold_v2 condition (no 200DMA uptrend filter) -- module
+    constants (_REV_RET_3D/_REV_RSI2) are imported from src.data.reversal,
+    the SAME module the live scanner uses, so live and backtest can't
+    silently drift. Still also used, unchanged, as the diagnostic-only event
+    set under --source reversal (see the '_diag' suffix skip in main()'s
+    promotion-candidates loop) -- reversal_v2's own stricter gate
+    (reversal_v2_verdict) is what makes THIS event set promotable under
+    --source reversal2."""
     cutoff = pd.Timestamp(date.today() - timedelta(weeks=weeks))
     events: list[tuple[date, str]] = []
     for ticker, df in ohlcv.items():
@@ -734,7 +740,7 @@ def collect_reversal_diag_events(weeks: int, ohlcv: dict) -> tuple[list[tuple[da
         close = df["Close"]
         ret3 = close / close.shift(3) - 1
         rsi2 = _rsi_series(close, period=2)
-        mask = (df.index >= cutoff) & (ret3 <= -0.07) & (rsi2 < 10)
+        mask = (df.index >= cutoff) & (ret3 <= _REV_RET_3D) & (rsi2 < _REV_RSI2)
         for ts in df.index[mask]:
             if not _turnover_ok(df, ts):
                 continue
