@@ -2889,3 +2889,15 @@
 {"date": "2026-07-05", "source": "sast_signals", "ticker": "CUPID.NS", "payload": {"value": false}, "hash": "8355d772e5e79dae"}
 {"date": "2026-07-05", "source": "sast_signals", "ticker": "CREDITACC.NS", "payload": {"value": false}, "hash": "696787bcf3cb8536"}
 {"date": "2026-07-05", "source": "sast_signals", "ticker": "ZYDUSLIFE.NS", "payload": {"value": false}, "hash": "0e2c1e84565e23bf"}
+{"date": "2026-07-05", "source": "promoter_signals", "ticker": "LTF.NS", "payload": {"promoter_pct": 65.97, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "30849d9f75688537"}
+{"date": "2026-07-05", "source": "promoter_signals", "ticker": "OBEROIRLTY.NS", "payload": {"promoter_pct": 67.7, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "8e416d124b35ab46"}
+{"date": "2026-07-05", "source": "promoter_signals", "ticker": "ONELIFECAP.NS", "payload": {"promoter_pct": 64.23, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": null}, "hash": "75ed4b39e942aa2a"}
+{"date": "2026-07-05", "source": "promoter_signals", "ticker": "CMPDI.NS", "payload": {"promoter_pct": 85.0, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "6744b84a4c9da4c2"}
+{"date": "2026-07-05", "source": "promoter_signals", "ticker": "AADHARHFC.NS", "payload": {"promoter_pct": 74.78, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": 0.0}, "hash": "d629d61e85fd8b31"}
+{"date": "2026-07-05", "source": "promoter_signals", "ticker": "NRL.NS", "payload": {"promoter_pct": null, "promoter_bought": false, "promoter_deal_today": false, "shp_delta_pct": null}, "hash": "5884de26cb4d4a41"}
+{"date": "2026-07-05", "source": "sast_signals", "ticker": "LTF.NS", "payload": {"value": false}, "hash": "d36c588da8e3940e"}
+{"date": "2026-07-05", "source": "sast_signals", "ticker": "OBEROIRLTY.NS", "payload": {"value": false}, "hash": "bc21a35af7b3a3d7"}
+{"date": "2026-07-05", "source": "sast_signals", "ticker": "ONELIFECAP.NS", "payload": {"value": false}, "hash": "6bfbc9863d5a8f7b"}
+{"date": "2026-07-05", "source": "sast_signals", "ticker": "CMPDI.NS", "payload": {"value": false}, "hash": "de091a773b48479a"}
+{"date": "2026-07-05", "source": "sast_signals", "ticker": "AADHARHFC.NS", "payload": {"value": false}, "hash": "d570dbc0e589843e"}
+{"date": "2026-07-05", "source": "sast_signals", "ticker": "NRL.NS", "payload": {"value": false}, "hash": "034d09a424dba88e"}
