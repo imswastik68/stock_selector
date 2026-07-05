@@ -102,3 +102,16 @@ def test_backtest_only_column_names_mapped_to_live_keys(monkeypatch, tmp_path):
     assert "volume_5x" in rows
     assert rows["volume_5x"]["live_weight"] == -1
     assert rows["volume_5x"]["action"] == "OK"
+
+
+def test_diagnostic_signal_is_never_a_promotion_candidate(monkeypatch, tmp_path):
+    """A signal name containing '_diag' (backtest_events.py's convention for a
+    deliberately non-promotable variant, e.g. reversal_oversold_diag_no_trend)
+    must not be flagged PROMOTE even if it SHIPs -- it was excluded from the
+    gate on purpose (anti-gate-shopping), not because it's unweighted by
+    oversight."""
+    rows = _run_collect(monkeypatch, tmp_path,
+                        event_signals={"reversal_oversold_diag_no_trend": {
+                            "n": 6843, "wr_lift_pp": 6.87, "ret_lift": 2.102, "verdict": "SHIP"}},
+                        short_term={"reversal_oversold_diag_no_trend": 0})
+    assert rows["reversal_oversold_diag_no_trend"]["action"] == "OK"

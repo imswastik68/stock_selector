@@ -109,7 +109,9 @@ def _collect() -> list[dict]:
         n, ret = r["n"], r["ret_lift"]
         n_ok = n is not None and n >= MIN_N_SHIP
 
-        if v in ("UNTESTABLE",):
+        if "_diag" in r["signal"]:
+            r["action"] = "OK"  # diagnostic-only variant (see backtest_events.py), never a promotion candidate
+        elif v in ("UNTESTABLE",):
             r["action"] = "WAIT (no data)"
         elif v == "INSUFFICIENT_SAMPLE":
             r["action"] = f"WAIT (n<{MIN_N_SHIP})"

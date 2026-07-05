@@ -114,3 +114,57 @@ def fetch_bse_announcements(hours_back: int = 20) -> list[dict]:
 
     print(f"[bse_announcements] {len(results)} actionable announcements in last {hours_back}h")
     return results
+
+
+# PEAD v2 (Alpha Round Phase 2/5): results_beat_announced fires on ANY results
+# filing and backtested net-harmful (ret_lift=-1.234, n=8824 -- see
+# outputs/event_backtest.json / scripts/backtest_events.py). The version that
+# shipped conditions on the announcement-day price REACTION as a surprise
+# proxy. Same pre-declared rule as the backtest, applied live:
+#   reaction day R = filing day if filed by 15:30 IST, else the next
+#     available trading bar in the ticker's own OHLCV;
+#   r_R = close_R / close_{R-1} - 1
+#   r_R >= +3%  -> "positive" (pead_positive_surprise)
+#   r_R <= -3%  -> "negative" (pead_negative_surprise)
+_PEAD_REACTION_CUTOFF = 15 * 60 + 30  # 15:30 IST, in minutes-since-midnight
+
+
+def classify_pead_reaction(filed_at: str, df) -> str | None:
+    """`filed_at` is an ISO datetime string (as produced by
+    fetch_bse_announcements's `filed_at`), `df` is the ticker's OHLCV
+    DataFrame (datetime index, must include a `Close` column). Returns
+    "positive", "negative", or None (middle band / not enough data)."""
+    if df is None or df.empty:
+        return None
+    try:
+        filed = datetime.fromisoformat(filed_at)
+    except Exception:
+        return None
+    filed_date = filed.date()
+    filed_minutes = filed.hour * 60 + filed.minute
+
+    idx = df.index
+    # normalise to plain dates for comparison against filed_date
+    dates = [ts.date() if hasattr(ts, "date") else ts for ts in idx]
+
+    if filed_minutes <= _PEAD_REACTION_CUTOFF and filed_date in dates:
+        r_pos = dates.index(filed_date)
+    else:
+        r_pos = next((i for i, d in enumerate(dates) if d > filed_date), None)
+    if r_pos is None or r_pos == 0:
+        return None
+
+    try:
+        close_r = float(df["Close"].iloc[r_pos])
+        close_prev = float(df["Close"].iloc[r_pos - 1])
+    except Exception:
+        return None
+    if close_prev <= 0:
+        return None
+
+    r_react = close_r / close_prev - 1
+    if r_react >= 0.03:
+        return "positive"
+    if r_react <= -0.03:
+        return "negative"
+    return None

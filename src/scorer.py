@@ -57,12 +57,26 @@ SHORT_TERM_WEIGHTS = {
 SWING_WEIGHTS = {
     "results_due": 0,               # PENDING_VALIDATION (was 1) — informational only, untested
     "promoter_buying": 0,           # PENDING_VALIDATION (was 3) — sets timeframe -> 5-7d still (see _compute_score)
-    "sast_insider_buying": 0,       # PENDING_VALIDATION (was 3) — untested
+    "sast_insider_buying": 0,       # FAILED backtest (not pending) -- fires on ANY SAST filing (pledges,
+                                    # creeping acquisitions, inter-se transfers), ret_lift=-0.407, n=2010.
+                                    # The isolated open-market-buy version (promoter_open_mkt_buy,
+                                    # scripts/backtest_events.py --source pit) has a promising point
+                                    # estimate (wr_lift +5.38pp, ret_lift +0.833) but INSUFFICIENT_SAMPLE
+                                    # (n=258, needs >=500) -- not live-wired, revisit once more PIT
+                                    # history accumulates. See outputs/event_backtest.json.
     "consolidation_breakout": 0,    # PENDING_VALIDATION (was 3) — untested
-    "results_beat_announced": 0,    # PENDING_VALIDATION (was 3) — untested
+    "results_beat_announced": 0,    # FAILED backtest (not pending) -- fires on ANY results filing
+                                    # (beat or miss), ret_lift=-1.234, n=8824. See pead_positive_surprise
+                                    # below for the surprise-conditioned version that SHIPPED.
     "buyback_announced": 0,         # PENDING_VALIDATION (was 2) — untested
     "contract_win": 0,              # PENDING_VALIDATION (was 2) — untested
     "dividend_announced": 0,        # PENDING_VALIDATION (was 1) — untested
+    "pead_positive_surprise": 1,    # PROMOTED (Alpha Round Phase 2/5): scripts/backtest_events.py SHIP
+                                    # verdict, n=1696, ret_lift +0.308 (wr_lift +2.79pp), 70/30 holdout
+                                    # sign-consistent and STRENGTHENING (train +0.214 -> holdout +0.527).
+                                    # Fires on a results filing whose reaction-day close move is >=+3%
+                                    # (see src.data.bse_announcements.classify_pead_reaction). weight =
+                                    # round(3 x 0.308) = 1. See outputs/event_backtest.json.
 }
 
 DISQUALIFIER_WEIGHTS = {
@@ -78,6 +92,17 @@ DISQUALIFIER_WEIGHTS = {
     "bearish_candle": -1,          # shooting_star / bearish_engulfing / bearish_marubozu on last bar
     "options_pcr_greed": -1,       # PCR < 0.5: extreme complacency (min OI required)
     "options_long_unwinding": -1,  # price down + OI down = longs exiting (min OI required)
+    "pead_negative_surprise": -2,  # PROMOTED (Alpha Round Phase 2/5): a results filing whose reaction-day
+                                    # close move is <=-3% (src.data.bse_announcements.classify_pead_reaction).
+                                    # Backtested as a would-be-buy: n=1772, ret_lift=-0.55 -- correctly
+                                    # NO-SHIPs as a buy (it's a bearish signal), but train (-0.45) and
+                                    # holdout (-0.784) are BOTH negative -- a real, consistent disqualifier
+                                    # candidate. (The harness's stored holdout_consistent field is False
+                                    # here only because it checks positive-direction consistency; this is
+                                    # a hand reconciliation, same convention as every other disqualifier's
+                                    # sign-aware validation -- see scripts/validate_signals.py.) Weight
+                                    # magnitude follows the same round(3x|ret_lift|) convention as buy-side
+                                    # promotions: round(3 x 0.55) = 2. See outputs/event_backtest.json.
 }
 
 # Bearish event signals — feed the short pipeline (src/data/breakdowns.py, is_heavy_selling
@@ -230,6 +255,8 @@ def _build_signal_map(
         signals["bearish_candle"]       = technical_data.get("bearish_candle", False)
         signals["weekly_trend_aligned"] = technical_data.get("weekly_trend_aligned", False)
         signals["rs_quality_strong"]    = technical_data.get("rs_quality_strong", False)
+        signals["pead_positive_surprise"] = technical_data.get("pead_positive_surprise", False)
+        signals["pead_negative_surprise"] = technical_data.get("pead_negative_surprise", False)
 
     # Delivery volume signal from NSE bhav copy
     if delivery_data:

@@ -39,7 +39,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.data.bulk_deals import fetch_bulk_deals
-from src.data.bse_announcements import fetch_bse_announcements
+from src.data.bse_announcements import fetch_bse_announcements, classify_pead_reaction
 from src.data.delivery import fetch_delivery_signals
 from src.data.breakouts import fetch_breakouts
 from src.data.breakdowns import fetch_breakdowns
@@ -461,6 +461,21 @@ def main() -> int:
     market_context["gift_nifty"] = gift_nifty
     market_context["fo_eligible"] = fo_eligible
 
+    # PEAD v2 (Alpha Round Phase 2/5): classify each results_beat_announced
+    # filing's reaction-day price move -- needs both the filing timestamp
+    # (from `announcements`) and OHLCV (just fetched into market_context
+    # above), so this is the earliest point in the pipeline both exist.
+    # See src.data.bse_announcements.classify_pead_reaction for the rule.
+    pead_map: dict[str, str] = {}
+    for a in announcements:
+        if a.get("signal_key") != "results_beat_announced":
+            continue
+        t_ticker = a["ticker"]
+        df_ohlcv = market_context.get("ohlcv_90d", {}).get(t_ticker)
+        cls = classify_pead_reaction(a["filed_at"], df_ohlcv)
+        if cls:
+            pead_map[t_ticker] = cls
+
     # 5. Third re-score: incorporate RSI, RS vs Nifty, OBV, BB squeeze from technicals
     #    (only top 20 have technical data — rest get no delta, preserving their rank)
     # 2 technical signals after research review (rsi_extended, obv, bb_squeeze removed)
@@ -476,6 +491,8 @@ def main() -> int:
             "bearish_candle":      t.get("bearish_candle", False),
             "weekly_trend_aligned":t.get("weekly_trend_aligned", False),
             "rs_quality_strong":   t.get("rs_quality_strong", False),
+            "pead_positive_surprise": pead_map.get(ticker) == "positive",
+            "pead_negative_surprise": pead_map.get(ticker) == "negative",
         }
         for ticker, t in market_context.get("technicals", {}).items()
     }
