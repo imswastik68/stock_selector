@@ -8,8 +8,12 @@ day if filed by 15:30 IST else the next available bar; r_R = close_R/close_
 
 from __future__ import annotations
 
+from datetime import date
+from unittest import mock
+
 import pandas as pd
 
+import backtest_events as be
 from src.data.bse_announcements import classify_pead_reaction
 
 
@@ -55,3 +59,62 @@ def test_no_future_bar_available_returns_none():
     (e.g. a stale/short-lived cache) -- must not crash or misfire."""
     df = _df({"2026-01-05": 100.0})
     assert classify_pead_reaction("2026-01-05T16:00:00+05:30", df) is None
+
+
+# ── permanent backtest<->live parity (Phase 0b) ──────────────────────────────
+# The backtest (collect_pead_events) and the live path (classify_pead_reaction)
+# use DIFFERENT mechanisms to find the reaction day -- the backtest walks a
+# cached Nifty trading-day calendar, live walks the ticker's own OHLCV index.
+# They must never silently diverge. This was verified ad-hoc once; pinning it
+# here makes it a permanent regression, with all three classification outcomes.
+
+def _shared_day_set():
+    return [date(2026, 1, 2), date(2026, 1, 5), date(2026, 1, 6), date(2026, 1, 7)]
+
+
+def _both_classify(symbol: str, an_dt: str, filed_at_iso: str, closes: dict):
+    """Run the SAME (filing, OHLCV) input through both the backtest engine and
+    the live classifier; return (backtest_signal_or_None, live_classification)."""
+    day_set = _shared_day_set()
+    df = _df({d.isoformat(): c for d, c in closes.items()})
+    item = {"symbol": symbol, "desc": "Financial Results Q3", "attchmntText": "", "an_dt": an_dt}
+
+    with mock.patch.object(be, "_fetch_announcement_items", return_value=([item], None)), \
+         mock.patch.object(be, "trading_days", return_value=day_set):
+        out, reason = be.collect_pead_events(156, [f"{symbol}.NS"], {f"{symbol}.NS": df})
+    assert reason is None
+
+    bt_signal = None
+    for sig in ("pead_positive_surprise", "pead_negative_surprise"):
+        if any(t == f"{symbol}.NS" for _, t in out[sig]):
+            bt_signal = sig
+
+    live_cls = classify_pead_reaction(filed_at_iso, df)
+    return bt_signal, live_cls
+
+
+def test_parity_positive_reaction_pre_cutoff():
+    bt_signal, live_cls = _both_classify(
+        "PARX", "05-Jan-2026 10:00:00", "2026-01-05T10:00:00+05:30",
+        {date(2026, 1, 2): 100.0, date(2026, 1, 5): 104.0, date(2026, 1, 6): 104.0, date(2026, 1, 7): 104.0},
+    )
+    assert bt_signal == "pead_positive_surprise"
+    assert live_cls == "positive"
+
+
+def test_parity_negative_reaction_post_cutoff():
+    bt_signal, live_cls = _both_classify(
+        "PARY", "05-Jan-2026 16:00:00", "2026-01-05T16:00:00+05:30",
+        {date(2026, 1, 2): 100.0, date(2026, 1, 5): 100.0, date(2026, 1, 6): 94.0, date(2026, 1, 7): 94.0},
+    )
+    assert bt_signal == "pead_negative_surprise"
+    assert live_cls == "negative"
+
+
+def test_parity_middle_band_no_signal_either_side():
+    bt_signal, live_cls = _both_classify(
+        "PARZ", "05-Jan-2026 10:00:00", "2026-01-05T10:00:00+05:30",
+        {date(2026, 1, 2): 100.0, date(2026, 1, 5): 101.0, date(2026, 1, 6): 101.0, date(2026, 1, 7): 101.0},
+    )
+    assert bt_signal is None
+    assert live_cls is None

@@ -31,30 +31,47 @@ def scanner_gate(perf: dict | None = None) -> dict:
     """
     Buckets decided picks (t1_hit/t2_hit = win, sl_hit = loss; timeout and
     open excluded, matching src.performance.performance_summary's own
-    win/loss semantics) by the scan_date's calendar month.
+    win/loss semantics) by the scan_date's calendar month -- V2-METHODOLOGY
+    ONLY (pick.get("eval_method") == "next_day_zone_v2"). Picks recorded
+    before that stamp existed were evaluated with a scan-day point-entry bug
+    (same-day stop-outs on a bar that had already happened by scan time --
+    see src/performance.py's evaluate_prior_picks as_of comment) and must not
+    poison the verdict that answers "has this actually made money." Their
+    counts are still surfaced (legacy_decided/legacy_wr_pct) as context, never
+    as gate input.
 
     cleared = the GATE_CONSEC_MONTHS most recent months (by scan_date month,
     including the current partial month if that's what's most recent) each
-    have >= GATE_MIN_DECIDED decided picks AND >= GATE_MIN_WR_PCT win rate.
-    Fewer than GATE_CONSEC_MONTHS distinct months of data at all -> not
+    have >= GATE_MIN_DECIDED v2-decided picks AND >= GATE_MIN_WR_PCT v2 win
+    rate. Fewer than GATE_CONSEC_MONTHS distinct months of data at all -> not
     cleared (insufficient history, not a special case).
 
     Returns {"cleared": bool, "months": [{"month","decided","wins","wr_pct","passes"}, ...],
-             "overall_wr_pct", "overall_decided", "status_line"}.
+             "overall_wr_pct", "overall_decided" (both v2-only),
+             "legacy_decided", "legacy_wr_pct", "status_line"}.
     """
     perf = perf if perf is not None else _load_perf()
 
     by_month: dict[str, dict[str, int]] = {}
+    legacy_wins = 0
+    legacy_losses = 0
     for scan_date, picks in perf.items():
         month = scan_date[:7]  # "YYYY-MM"
         bucket = by_month.setdefault(month, {"wins": 0, "losses": 0})
         for pick in picks.values():
             outcome = pick.get("outcome", "open")
+            is_v2 = pick.get("eval_method") == "next_day_zone_v2"
             if outcome in ("t1_hit", "t2_hit"):
-                bucket["wins"] += 1
+                if is_v2:
+                    bucket["wins"] += 1
+                else:
+                    legacy_wins += 1
             elif outcome == "sl_hit":
-                bucket["losses"] += 1
-            # timeout and open are excluded from decided counts
+                if is_v2:
+                    bucket["losses"] += 1
+                else:
+                    legacy_losses += 1
+            # timeout and open are excluded from decided counts (v2 or legacy)
 
     months_sorted = sorted(by_month.keys())
     month_rows = []
@@ -74,14 +91,23 @@ def scanner_gate(perf: dict | None = None) -> dict:
     total_decided = sum(m["decided"] for m in month_rows)
     overall_wr_pct = round(total_wins / total_decided * 100, 1) if total_decided > 0 else None
 
+    legacy_decided = legacy_wins + legacy_losses
+    legacy_wr_pct = round(legacy_wins / legacy_decided * 100, 1) if legacy_decided > 0 else None
+
     if cleared:
         status_line = (
-            f"SCANNER GATE: CLEARED (win rate {overall_wr_pct}% over {total_decided} decided, "
+            f"SCANNER GATE: CLEARED (v2 win rate {overall_wr_pct}% over {total_decided} decided, "
             f"last {GATE_CONSEC_MONTHS} months each >= {GATE_MIN_WR_PCT}% with >= {GATE_MIN_DECIDED} decided)"
         )
     else:
+        v2_part = (f"v2: {overall_wr_pct}% over {total_decided} decided" if total_decided > 0
+                   else "v2: no decided picks yet")
+        legacy_part = (
+            f"; legacy {legacy_wr_pct}% over {legacy_decided}, excluded — pre-fix methodology"
+            if legacy_decided > 0 else ""
+        )
         status_line = (
-            f"SCANNER GATE: NOT CLEARED (win rate {overall_wr_pct}% over {total_decided} decided, "
+            f"SCANNER GATE: NOT CLEARED ({v2_part}{legacy_part}, "
             f"need >= {GATE_MIN_WR_PCT}% x {GATE_CONSEC_MONTHS} consecutive months "
             f"with >= {GATE_MIN_DECIDED} decided)"
         )
@@ -91,6 +117,8 @@ def scanner_gate(perf: dict | None = None) -> dict:
         "months": month_rows,
         "overall_wr_pct": overall_wr_pct,
         "overall_decided": total_decided,
+        "legacy_decided": legacy_decided,
+        "legacy_wr_pct": legacy_wr_pct,
         "status_line": status_line,
     }
 
