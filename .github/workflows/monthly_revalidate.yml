@@ -1,0 +1,83 @@
+name: Monthly Signal Revalidation
+
+# Automated ship/no-ship drift check (SOTA Round Phase 4): re-run BOTH
+# backtests (OHLCV signal stats + all event sources at --weeks 260) and
+# reconcile every live scorer weight against the fresh evidence via
+# scripts/validate_signals.py. A signal that quietly decayed (should be
+# DEMOTEd) or newly shipped (should be PROMOTEd) but hasn't been hand-applied
+# to src/scorer.py yet is exactly the kind of silent drift a human won't
+# notice by eyeballing the daily scan -- this job fails loudly instead.
+#
+# Neither backtest is automatically applied to src/scorer.py -- a human still
+# reviews the artifact and decides the weight change, same "never
+# auto-applies" principle as src/gates.py.
+
+on:
+  schedule:
+    # 03:00 UTC (8:30 AM IST) on any Saturday landing in days 1-7 of the
+    # month -- i.e. always exactly the FIRST Saturday (cron has no native
+    # "nth weekday of month" syntax).
+    - cron: "0 3 1-7 * 6"
+  workflow_dispatch:  # manual trigger for testing
+
+permissions:
+  contents: read
+
+jobs:
+  revalidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240  # SAST alone can take 1-2h even with a warm chunk cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download stock universe (NIFTY500 + SME)
+        run: python scripts/download_universe.py || echo "Universe download failed; using fallback list"
+
+      # Persistent, cumulative cache across monthly runs -- both backtests'
+      # network fetchers (SAST/PIT/announcements chunking, OHLCV per-ticker
+      # CSVs) are resumable via on-disk cache files, so a warm cache turns
+      # "re-download 5 years of history" into "fetch the last month's delta."
+      - name: Restore backtest cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            cache/
+            outputs/
+          key: monthly-revalidate-cache-${{ runner.os }}-${{ github.run_number }}
+          restore-keys: |
+            monthly-revalidate-cache-${{ runner.os }}-
+
+      - name: Re-run both backtests and reconcile
+        run: python scripts/validate_signals.py --run --json
+
+      - name: Fail loudly on any drift
+        run: |
+          python -c "
+          import json, sys
+          data = json.loads(open('outputs/signal_validation.json').read())
+          flags = [r for r in data['signals'] if r['action'] in ('PROMOTE', 'DEMOTE')]
+          if flags:
+              print(f'DRIFT DETECTED: {len(flags)} signal(s) out of sync with live weights')
+              for r in flags:
+                  print(f\"  {r['action']:<8} {r['signal']:<30} verdict={r.get('verdict')} \"
+                        f\"ret_lift={r.get('ret_lift')} n={r.get('n')} live_weight={r.get('live_weight')}\")
+              sys.exit(1)
+          print('No drift -- live weights still consistent with every backtest verdict.')
+          "
+
+      - name: Upload validation artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: signal-validation-${{ github.run_id }}
+          path: outputs/signal_validation.json
+          retention-days: 90

@@ -115,3 +115,29 @@ def test_diagnostic_signal_is_never_a_promotion_candidate(monkeypatch, tmp_path)
                             "n": 6843, "wr_lift_pp": 6.87, "ret_lift": 2.102, "verdict": "SHIP"}},
                         short_term={"reversal_oversold_diag_no_trend": 0})
     assert rows["reversal_oversold_diag_no_trend"]["action"] == "OK"
+
+
+# ── --run subprocess invocation (SOTA Round Phase 4) ─────────────────────────
+
+def test_run_flag_invokes_backtest_events_with_weeks_260(monkeypatch, tmp_path):
+    """--run must pass --weeks 260 to backtest_events.py -- not silently fall
+    back to that script's own 156w default, which would understate every
+    event-signal sample size on the monthly automated revalidation."""
+    stats_file = tmp_path / "backtest_signal_stats.json"
+    event_file = tmp_path / "event_backtest.json"
+    out_file = tmp_path / "signal_validation.json"
+    stats_file.write_text(json.dumps({"signals": {}}))
+    event_file.write_text(json.dumps({"signals": {}}))
+    monkeypatch.setattr(vs, "SIGNAL_STATS", stats_file)
+    monkeypatch.setattr(vs, "EVENT_BT", event_file)
+    monkeypatch.setattr(vs, "OUT_FILE", out_file)
+
+    calls = []
+    monkeypatch.setattr(vs.subprocess, "run", lambda args, **k: calls.append(args))
+    vs.main(do_run=True, as_json=False)
+
+    assert len(calls) == 2
+    backtest_events_call = calls[1]
+    assert "backtest_events.py" in str(backtest_events_call[1])
+    assert "--weeks" in backtest_events_call
+    assert backtest_events_call[backtest_events_call.index("--weeks") + 1] == "260"

@@ -138,8 +138,14 @@ def main(do_run: bool, as_json: bool) -> None:
     if do_run:
         print("[validate_signals] re-running scripts/backtest.py ...")
         subprocess.run([sys.executable, str(ROOT / "scripts" / "backtest.py")], check=False)
-        print("[validate_signals] re-running scripts/backtest_events.py ...")
-        subprocess.run([sys.executable, str(ROOT / "scripts" / "backtest_events.py")], check=False)
+        # --weeks 260 (SOTA Round Phase 3): the event-source APIs (PIT,
+        # announcements) confirmed live to serve the full 5-year window --
+        # don't silently fall back to backtest_events.py's own 156w default,
+        # which would understate every event-signal sample size on every
+        # future automated revalidation.
+        print("[validate_signals] re-running scripts/backtest_events.py --weeks 260 ...")
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "backtest_events.py"),
+                         "--weeks", "260"], check=False)
 
     rows = _collect()
     rows.sort(key=lambda r: (r["action"] != "PROMOTE", r["action"] != "DEMOTE",
