@@ -2,21 +2,30 @@
 Automated ship/no-ship gate status -- the single source of truth for "has
 anything in this system actually earned real money yet," so a human doesn't
 have to eyeball outputs/performance.json or outputs/factor_backtest.json
-every day and judge for themselves. Two gates:
+every day and judge for themselves. Three gates:
 
-  scanner_gate()  -- daily TA scanner's live win rate, bucketed by month.
-  momentum_gate() -- moved here from scripts/factor_scan.py:_gate_status
-                     (src/ must not import from scripts/; factor_scan.py
-                     delegates to this module instead).
+  scanner_gate()    -- daily TA scanner's live win rate, bucketed by month.
+                       Simple and intuitive, but a 45% win rate proves
+                       nothing without a benchmark -- see live_alpha_gate.
+  momentum_gate()   -- moved here from scripts/factor_scan.py:_gate_status
+                       (src/ must not import from scripts/; factor_scan.py
+                       delegates to this module instead).
+  live_alpha_gate() -- Live-Proof Round (Phase 4): per-signal AND aggregate
+                       forward alpha vs NIFTY, with a pre-declared
+                       significance test. THIS is what actually proves an
+                       EDGE rather than a possibly-lucky win rate.
 
-Neither gate auto-applies anything -- main.py and scripts/factor_scan.py
+Neither win-rate gate auto-applies anything -- main.py and scripts/factor_scan.py
 print/render the status; a human still decides whether to act on it.
 """
 
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
+
+import numpy as np
 
 from src.performance import _load_perf
 
@@ -25,6 +34,15 @@ OUTPUTS = Path(__file__).parent.parent / "outputs"
 GATE_MIN_WR_PCT    = 45.0
 GATE_MIN_DECIDED   = 40
 GATE_CONSEC_MONTHS = 3
+
+# Live-Proof Round Phase 4 -- FROZEN NOW, before data accumulates. Never
+# loosened after seeing results (that would be exactly the p-hacking this
+# exists to prevent). Metric = mean abnormal_10d (fwd_10d - nifty_fwd_10d,
+# already cost-netted -- see src/performance.py:evaluate_live_alpha).
+LIVE_ALPHA_MIN_N_PER_SIGNAL = 30     # decided-for-alpha picks carrying that signal
+LIVE_ALPHA_MIN_N_AGGREGATE  = 100
+LIVE_ALPHA_MIN_MONTHS       = 3      # distinct calendar months spanned
+LIVE_ALPHA_SIGNIFICANCE     = 0.05   # one-sample t-test p-value, H0: mean abnormal_10d = 0
 
 
 def scanner_gate(perf: dict | None = None) -> dict:
@@ -120,6 +138,127 @@ def scanner_gate(perf: dict | None = None) -> dict:
         "legacy_decided": legacy_decided,
         "legacy_wr_pct": legacy_wr_pct,
         "status_line": status_line,
+    }
+
+
+def _two_tailed_p_value(t_stat: float, n: int) -> float:
+    """Two-tailed p-value for a one-sample t-test, via the normal
+    approximation (math.erf) -- no scipy dependency (matches this codebase's
+    existing convention of computing t-stats inline, e.g.
+    scripts/backtest_events.py:_rebalance_verdict). At n >=
+    LIVE_ALPHA_MIN_N_PER_SIGNAL (30) the t- and normal distributions are close
+    enough for a binary ship/no-ship decision. Known direction of the
+    approximation error: the t-distribution has fatter tails at low df, so
+    this normal approximation is slightly ANTI-conservative (a shade easier
+    to clear than an exact t-test) -- if it biases the gate at all, it biases
+    toward false "PROVEN," never toward hiding a real edge. Worth swapping
+    for an exact incomplete-beta t-CDF (or adding scipy) if this ever becomes
+    a real go/no-go for capital, not just an internal instrument."""
+    z = abs(t_stat)
+    return 2 * (1 - 0.5 * (1 + math.erf(z / math.sqrt(2))))
+
+
+def _alpha_verdict(rows: list[tuple[str, float]], min_n: int) -> dict:
+    """One-sample t-test (H0: mean=0) on the abnormal-return values in `rows`
+    (each a (month, value) pair). Returns {n, months, mean, t_stat, p_value,
+    verdict}, verdict in {"PROVEN", "NO-EDGE", "INSUFFICIENT"}.
+
+    PROVEN requires ALL of: n >= min_n, mean > 0, p_value < SIGNIFICANCE, AND
+    the rows span >= LIVE_ALPHA_MIN_MONTHS distinct calendar months (enough n
+    crammed into one wild week is not the same as a proven edge over time)."""
+    n = len(rows)
+    months = len({m for m, _ in rows})
+    if n < min_n:
+        return {
+            "n": n, "months": months,
+            "mean": round(float(np.mean([v for _, v in rows])), 3) if n else None,
+            "t_stat": None, "p_value": None, "verdict": "INSUFFICIENT",
+        }
+
+    values = np.array([v for _, v in rows])
+    mean = float(np.mean(values))
+    std = float(np.std(values, ddof=1)) if n > 1 else 0.0
+    t_stat = mean / (std / math.sqrt(n)) if std > 0 else 0.0
+    p_value = _two_tailed_p_value(t_stat, n)
+
+    if months < LIVE_ALPHA_MIN_MONTHS:
+        verdict = "INSUFFICIENT"  # enough n, not enough calendar spread yet
+    elif mean > 0 and p_value < LIVE_ALPHA_SIGNIFICANCE:
+        verdict = "PROVEN"
+    else:
+        verdict = "NO-EDGE"
+
+    return {
+        "n": n, "months": months, "mean": round(mean, 3),
+        "t_stat": round(t_stat, 2), "p_value": round(p_value, 4), "verdict": verdict,
+    }
+
+
+def live_alpha_gate(perf: dict | None = None) -> dict:
+    """
+    Live-Proof Round Phase 4 -- the gate that actually proves an EDGE, not
+    just a win rate. Buckets every v2-methodology, cost-netted abnormal_10d
+    value (src.performance.evaluate_live_alpha) by each signal in the pick's
+    active_signals (a pick with 3 signals counts toward all 3 -- this is
+    ATTRIBUTION, not a partition of the sample) plus one aggregate-over-all-
+    buys bucket. "Decided" here means "abnormal_10d has been computed" (10+
+    forward trading bars exist) -- NOT that the SL/T1 exit outcome is
+    decided; those are deliberately independent (see evaluate_live_alpha).
+
+    BUY-ONLY: the benchmark math (fwd_10d vs nifty_fwd_10d) assumes a long
+    position: a short's alpha vs "did nothing" isn't "beat long-NIFTY," so
+    sell-direction picks are excluded here rather than silently mismeasured.
+    The short pipeline isn't live today anyway (see src/agent.py's
+    SHORT_PIPELINE_LIVE), so this excludes ~nothing in practice.
+
+    Also reports reversal_oversold_v2's 2x-cost STRESS verdict alongside its
+    normal one -- the explicit, honest slippage check on the single most
+    survivorship-inflated backtest in this codebase (+2.10 lift, see
+    src/scorer.py's reversal_oversold_v2 comment).
+
+    Returns {"per_signal": {signal: {n, months, mean, t_stat, p_value, verdict}, ...},
+             "aggregate": {...}, "reversal_oversold_v2_stress": {...} | None}.
+    """
+    perf = perf if perf is not None else _load_perf()
+
+    by_signal: dict[str, list[tuple[str, float]]] = {}
+    aggregate: list[tuple[str, float]] = []
+    reversal_stress: list[tuple[str, float]] = []
+
+    for scan_date, picks in perf.items():
+        month = scan_date[:7]
+        for pick in picks.values():
+            if pick.get("eval_method") != "next_day_zone_v2":
+                continue  # v2-only, same discipline as scanner_gate
+            if pick.get("direction") != "buy":
+                continue  # see BUY-ONLY note above
+            abnormal = pick.get("abnormal_10d")
+            if abnormal is None:
+                continue  # not yet computed, or entry never filled
+
+            aggregate.append((month, abnormal))
+            active_signals = pick.get("active_signals") or []
+            for sig in active_signals:
+                by_signal.setdefault(sig, []).append((month, abnormal))
+
+            if "reversal_oversold_v2" in active_signals:
+                stress = pick.get("abnormal_10d_stress")
+                if stress is not None:
+                    reversal_stress.append((month, stress))
+
+    per_signal = {
+        sig: _alpha_verdict(rows, LIVE_ALPHA_MIN_N_PER_SIGNAL)
+        for sig, rows in sorted(by_signal.items())
+    }
+    agg = _alpha_verdict(aggregate, LIVE_ALPHA_MIN_N_AGGREGATE)
+    reversal_stress_verdict = (
+        _alpha_verdict(reversal_stress, LIVE_ALPHA_MIN_N_PER_SIGNAL) if reversal_stress else None
+    )
+
+    return {
+        "per_signal": per_signal,
+        "aggregate": agg,
+        "reversal_oversold_v2_stress": reversal_stress_verdict,
     }
 
 

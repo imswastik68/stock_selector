@@ -203,3 +203,138 @@ def test_factor_scan_gate_status_delegates_to_gates_module(tmp_path):
         is_live, reason = factor_scan._gate_status()
     assert is_live is True
     assert "mom_gated" in reason
+
+
+# ── live_alpha_gate (Live-Proof Round Phase 4) ───────────────────────────────
+# Gate is FROZEN: LIVE_ALPHA_MIN_N_PER_SIGNAL=30, LIVE_ALPHA_MIN_N_AGGREGATE=100,
+# LIVE_ALPHA_MIN_MONTHS=3, LIVE_ALPHA_SIGNIFICANCE=0.05. These tests pin the
+# math and the gate logic against hand-computed fixtures -- never loosen the
+# thresholds to make a test (or real data) pass.
+
+def _rows(month_values: dict[str, list[float]]) -> list[tuple[str, float]]:
+    return [(month, v) for month, values in month_values.items() for v in values]
+
+
+def test_alpha_verdict_proven_low_variance_positive_mean_3_months():
+    """n=30, mean=1.0 (hand-verified: t=32.98, p=0.0), spanning 3 months."""
+    rows = _rows({
+        "2026-01": [1.0] * 10,
+        "2026-02": [1.2] * 10,
+        "2026-03": [0.8] * 10,
+    })
+    result = g._alpha_verdict(rows, g.LIVE_ALPHA_MIN_N_PER_SIGNAL)
+    assert result["n"] == 30
+    assert result["months"] == 3
+    assert abs(result["mean"] - 1.0) < 1e-6
+    assert abs(result["t_stat"] - 32.98) < 0.1
+    assert result["p_value"] < 0.0001
+    assert result["verdict"] == "PROVEN"
+
+
+def test_alpha_verdict_insufficient_when_n_below_min():
+    """Same distribution as the PROVEN case but only 20 rows -- n < 30."""
+    rows = _rows({"2026-01": [1.0] * 7, "2026-02": [1.2] * 7, "2026-03": [0.8] * 6})
+    result = g._alpha_verdict(rows, g.LIVE_ALPHA_MIN_N_PER_SIGNAL)
+    assert result["n"] == 20
+    assert result["verdict"] == "INSUFFICIENT"
+
+
+def test_alpha_verdict_no_edge_when_mean_positive_but_not_significant():
+    """n=30, mean=+0.38 (hand-verified: t=0.54, p=0.588 > 0.05) -- a small
+    positive mean swamped by variance is NOT proof of an edge."""
+    values = [1.8236, -4.8999, 4.0523, 5.0028, -9.4552, -6.2109, 0.9392, -1.2812, 0.216, -3.9652,
+              4.697, 4.189, 0.6302, 5.9362, 2.6375, -3.9965, 2.1438, -4.4944, 4.6923, 0.0504,
+              -0.6243, -3.1046, 6.4127, -0.4726, -1.8416, -1.4607, 2.9615, 2.1272, 2.3637, 2.4541]
+    rows = _rows({"2026-01": values[:10], "2026-02": values[10:20], "2026-03": values[20:]})
+    result = g._alpha_verdict(rows, g.LIVE_ALPHA_MIN_N_PER_SIGNAL)
+    assert result["n"] == 30
+    assert abs(result["mean"] - 0.384) < 0.01
+    assert abs(result["p_value"] - 0.588) < 0.01
+    assert result["p_value"] >= g.LIVE_ALPHA_SIGNIFICANCE
+    assert result["verdict"] == "NO-EDGE"
+
+
+def test_alpha_verdict_insufficient_when_months_below_min_despite_n_and_mean():
+    """Same n=30/mean=1.0 as the PROVEN case, but all crammed into ONE
+    calendar month -- enough n is not the same as a proven edge over time."""
+    rows = _rows({"2026-01": [1.0] * 10 + [1.2] * 10 + [0.8] * 10})
+    result = g._alpha_verdict(rows, g.LIVE_ALPHA_MIN_N_PER_SIGNAL)
+    assert result["n"] == 30
+    assert result["months"] == 1
+    assert result["verdict"] == "INSUFFICIENT"
+
+
+def test_alpha_verdict_insufficient_at_two_months():
+    rows = _rows({"2026-01": [1.0] * 15, "2026-02": [1.0] * 15})
+    result = g._alpha_verdict(rows, g.LIVE_ALPHA_MIN_N_PER_SIGNAL)
+    assert result["months"] == 2
+    assert result["verdict"] == "INSUFFICIENT"
+
+
+def test_two_tailed_p_value_matches_hand_computation():
+    """t=32.98 (n=30) should produce an effectively-zero p-value; t=0 must
+    produce p=1.0 exactly (no evidence against H0 whatsoever)."""
+    assert g._two_tailed_p_value(0.0, 30) == 1.0
+    assert g._two_tailed_p_value(32.98, 30) < 1e-6
+
+
+# ── live_alpha_gate: bucketing (attribution, buy-only, reversal stress) ─────
+
+def _alpha_pick(direction="buy", active_signals=None, abnormal_10d=1.0, abnormal_10d_stress=None):
+    return {
+        "direction": direction, "eval_method": "next_day_zone_v2",
+        "active_signals": active_signals or [], "abnormal_10d": abnormal_10d,
+        "abnormal_10d_stress": abnormal_10d_stress,
+    }
+
+
+def test_live_alpha_gate_attributes_one_pick_to_multiple_signals():
+    """A pick firing 2 signals counts toward BOTH signals' buckets --
+    attribution, not a partition of the sample."""
+    perf = {"2026-01-05": {"MULTI.NS": _alpha_pick(active_signals=["sig_a", "sig_b"])}}
+    result = g.live_alpha_gate(perf)
+    assert "sig_a" in result["per_signal"]
+    assert "sig_b" in result["per_signal"]
+    assert result["per_signal"]["sig_a"]["n"] == 1
+    assert result["per_signal"]["sig_b"]["n"] == 1
+    assert result["aggregate"]["n"] == 1
+
+
+def test_live_alpha_gate_excludes_sell_direction_picks():
+    perf = {"2026-01-05": {"SHORT.NS": _alpha_pick(direction="sell", active_signals=["sig_a"])}}
+    result = g.live_alpha_gate(perf)
+    assert result["aggregate"]["n"] == 0
+    assert "sig_a" not in result["per_signal"]
+
+
+def test_live_alpha_gate_excludes_legacy_non_v2_picks():
+    perf = {"2026-01-05": {"OLD.NS": {
+        "direction": "buy", "eval_method": None, "active_signals": ["sig_a"], "abnormal_10d": 1.0,
+    }}}
+    result = g.live_alpha_gate(perf)
+    assert result["aggregate"]["n"] == 0
+
+
+def test_live_alpha_gate_excludes_picks_without_computed_abnormal_10d():
+    perf = {"2026-01-05": {"PENDING.NS": _alpha_pick(abnormal_10d=None)}}
+    result = g.live_alpha_gate(perf)
+    assert result["aggregate"]["n"] == 0
+
+
+def test_live_alpha_gate_reversal_stress_only_from_reversal_signal_picks():
+    perf = {
+        "2026-01-05": {
+            "REV.NS": _alpha_pick(active_signals=["reversal_oversold_v2"],
+                                    abnormal_10d=1.0, abnormal_10d_stress=0.7),
+            "OTHER.NS": _alpha_pick(active_signals=["near_52w_high"], abnormal_10d=1.0),
+        },
+    }
+    result = g.live_alpha_gate(perf)
+    assert result["reversal_oversold_v2_stress"] is not None
+    assert result["reversal_oversold_v2_stress"]["n"] == 1
+
+
+def test_live_alpha_gate_no_reversal_picks_gives_none_stress_verdict():
+    perf = {"2026-01-05": {"OTHER.NS": _alpha_pick(active_signals=["near_52w_high"])}}
+    result = g.live_alpha_gate(perf)
+    assert result["reversal_oversold_v2_stress"] is None
