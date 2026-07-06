@@ -1,0 +1,16 @@
+{
+  "per_signal": {},
+  "aggregate": {
+    "n": 0,
+    "months": 0,
+    "mean": null,
+    "win_pct": null,
+    "t_stat": null,
+    "p_value": null,
+    "verdict": "INSUFFICIENT"
+  },
+  "reversal_oversold_v2_stress": null,
+  "lines": [
+    "AGGREGATE (all buys): INSUFFICIENT (n=0/100, 0/3 months)"
+  ]
+}
