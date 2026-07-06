@@ -114,6 +114,29 @@ jobs:
             echo "No archive changes to commit"
           fi
 
+      # Persist the live-proof record (Live-Proof Round Phase 1). Like the event
+      # archive above, outputs/performance.json + outputs/portfolio.json +
+      # outputs/live_proof.json are NOT cached-and-discarded -- they're the
+      # immutable, git-committed audit trail of every live recommendation ever
+      # made. A cache eviction (7-day idle or the 10 GB LRU cap -- cache/ alone is
+      # already 1.8 GB) would otherwise permanently destroy the entire track
+      # record with no way to reconstruct it. EOD-only: that's the run with the
+      # real, final watchlist (pre_market/mid_day see partial/stale data and
+      # would commit a less meaningful snapshot for the same calendar day).
+      - name: Commit live-proof record
+        if: always() && env.SCAN_MODE == 'eod'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add outputs/performance.json outputs/portfolio.json outputs/live_proof.json
+          if ! git diff --cached --quiet; then
+            git commit -m "live-proof: $(date +%F) [skip ci]"
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          else
+            echo "No live-proof changes to commit"
+          fi
+
       # Upload today's watchlist JSON as a run artifact
       - name: Upload watchlist artifact
         uses: actions/upload-artifact@v4

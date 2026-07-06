@@ -8,7 +8,17 @@
 data/fo_ban_prev.json
 data/promoter_shp.json
 data/sector_map.json
-outputs/
+# outputs/ is bulk-ignored (regenerable backtest artifacts), EXCEPT the live-proof
+# record (Live-Proof Round Phase 1) -- performance.json/portfolio.json/live_proof.json
+# are the immutable audit trail of every live recommendation ever made. Losing them
+# to a cache eviction would permanently destroy the track record, so they're
+# git-committed daily by .github/workflows/daily_scan.yml instead of cached.
+# NOTE: `outputs/*` (not `outputs/`) is required here -- git cannot re-include a file
+# whose PARENT DIRECTORY is itself excluded, only files matched by a same-level glob.
+outputs/*
+!outputs/performance.json
+!outputs/portfolio.json
+!outputs/live_proof.json
 cache/
 
 # Python
