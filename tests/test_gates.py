@@ -338,3 +338,50 @@ def test_live_alpha_gate_no_reversal_picks_gives_none_stress_verdict():
     perf = {"2026-01-05": {"OTHER.NS": _alpha_pick(active_signals=["near_52w_high"])}}
     result = g.live_alpha_gate(perf)
     assert result["reversal_oversold_v2_stress"] is None
+
+
+# ── live_proof_report (Live-Proof Round Phase 5) ─────────────────────────────
+
+def test_live_proof_report_writes_outputs_file_and_lines(tmp_path):
+    perf = {"2026-01-05": {"SIG.NS": _alpha_pick(active_signals=["near_52w_high"])}}
+    with mock.patch.object(g, "OUTPUTS", tmp_path):
+        report = g.live_proof_report(perf)
+
+    out_file = tmp_path / "live_proof.json"
+    assert out_file.exists()
+    saved = json.loads(out_file.read_text())
+    assert saved["per_signal"]["near_52w_high"]["n"] == 1
+    assert any("near_52w_high" in line for line in report["lines"])
+    assert any("AGGREGATE" in line for line in report["lines"])
+
+
+def test_live_proof_report_insufficient_line_format():
+    result = {"n": 5, "months": 1, "mean": 0.5, "win_pct": 60.0, "t_stat": None,
+              "p_value": None, "verdict": "INSUFFICIENT"}
+    line = g._format_alpha_line("sig_x", result, 30)
+    assert "INSUFFICIENT" in line
+    assert "5/30" in line
+
+
+def test_live_proof_report_proven_line_shows_checkmark():
+    result = {"n": 30, "months": 3, "mean": 1.0, "win_pct": 90.0, "t_stat": 32.98,
+              "p_value": 0.0001, "verdict": "PROVEN"}
+    line = g._format_alpha_line("sig_x", result, 30)
+    assert "✅" in line
+    assert "PROVEN" in line
+
+
+def test_live_proof_report_no_edge_line_shows_cross():
+    result = {"n": 30, "months": 3, "mean": 0.38, "win_pct": 50.0, "t_stat": 0.54,
+              "p_value": 0.588, "verdict": "NO-EDGE"}
+    line = g._format_alpha_line("sig_x", result, 30)
+    assert "❌" in line
+    assert "NO-EDGE" in line
+
+
+def test_live_proof_report_includes_reversal_stress_line_when_present(tmp_path):
+    perf = {"2026-01-05": {"REV.NS": _alpha_pick(
+        active_signals=["reversal_oversold_v2"], abnormal_10d=1.0, abnormal_10d_stress=0.7)}}
+    with mock.patch.object(g, "OUTPUTS", tmp_path):
+        report = g.live_proof_report(perf)
+    assert any("2x-cost stress" in line for line in report["lines"])

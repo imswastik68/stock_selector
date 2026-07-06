@@ -683,6 +683,17 @@ def main() -> int:
     except Exception as exc:
         print(f"[main] gate status error (non-fatal): {exc}")
 
+    # 7d. Live-proof alpha report (Live-Proof Round Phase 5): per-signal AND
+    # aggregate forward alpha vs NIFTY, with significance -- the actual proof
+    # instrument, not just scanner_gate's win rate. Separate try/except.
+    try:
+        from src.gates import live_proof_report
+        live_proof = live_proof_report()
+        watchlist_data["live_proof"] = live_proof
+        print("\n".join(live_proof["lines"]))
+    except Exception as exc:
+        print(f"[main] live-proof report error (non-fatal): {exc}")
+
     # 8. Telegram alert
     send_telegram_alert(watchlist_data)
 

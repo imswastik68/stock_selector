@@ -623,6 +623,19 @@ def _build_scoreboard_message(data: dict) -> str:
     return "\n\n".join(sections)
 
 
+def _live_proof_section(watchlist_data: dict) -> str:
+    """Live-Proof Round Phase 5 -- renders src.gates.live_proof_report's
+    per-signal/aggregate/reversal-stress lines, same optional-section pattern
+    as the 🚦 gates block above it. Returns "" (nothing rendered) until at
+    least one signal has enough live data for a real line."""
+    live_proof = watchlist_data.get("live_proof") or {}
+    lines = live_proof.get("lines") or []
+    if not lines:
+        return ""
+    body = "\n".join(_e(l) for l in lines)
+    return f"\n📊 <i>LIVE PROOF (vs NIFTY, cost-netted):\n{body}</i>"
+
+
 # ── message builder ───────────────────────────────────────────────────────────
 
 def _build_message(watchlist_data: dict) -> str:
@@ -653,6 +666,7 @@ def _build_message(watchlist_data: dict) -> str:
                 gs = gates.get("scanner", {}); gm = gates.get("momentum", {})
                 base += (f"\n\n🚦 <i>{_e(gs.get('status_line', ''))}\n"
                          f"{_e(gm.get('status_line', ''))}</i>")
+            base += _live_proof_section(watchlist_data)
             return base
 
         # A day can have zero qualifying candidates but still have PEAD
@@ -672,6 +686,7 @@ def _build_message(watchlist_data: dict) -> str:
                 gs = gates.get("scanner", {}); gm = gates.get("momentum", {})
                 base += (f"\n\n🚦 <i>{_e(gs.get('status_line', ''))}\n"
                          f"{_e(gm.get('status_line', ''))}</i>")
+            base += _live_proof_section(watchlist_data)
             return base
 
         nifty_arrow = {"UPTREND": " ↗", "DOWNTREND": " ↘", "RANGING": " ↔"}.get(nifty_ctx, "")
@@ -727,6 +742,9 @@ def _build_message(watchlist_data: dict) -> str:
             sections.append(
                 f"\n🚦 <i>{_e(gs.get('status_line', ''))}\n{_e(gm.get('status_line', ''))}</i>"
             )
+        live_proof_text = _live_proof_section(watchlist_data)
+        if live_proof_text:
+            sections.append(live_proof_text)
 
         if buy_list:
             sections.append(f"\n📈 <b>BUY WATCHLIST ({len(buy_list)} picks)</b>\n")

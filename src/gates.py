@@ -160,19 +160,24 @@ def _two_tailed_p_value(t_stat: float, n: int) -> float:
 
 def _alpha_verdict(rows: list[tuple[str, float]], min_n: int) -> dict:
     """One-sample t-test (H0: mean=0) on the abnormal-return values in `rows`
-    (each a (month, value) pair). Returns {n, months, mean, t_stat, p_value,
-    verdict}, verdict in {"PROVEN", "NO-EDGE", "INSUFFICIENT"}.
+    (each a (month, value) pair). Returns {n, months, mean, win_pct, t_stat,
+    p_value, verdict}, verdict in {"PROVEN", "NO-EDGE", "INSUFFICIENT"}.
+    win_pct = % of rows that beat NIFTY at all (value > 0) -- reported for
+    human context only, NOT part of the gate decision (a signal can win most
+    of the time with a small mean, or lose most of the time with a few huge
+    winners; the t-test on the mean is what actually decides PROVEN/NO-EDGE).
 
     PROVEN requires ALL of: n >= min_n, mean > 0, p_value < SIGNIFICANCE, AND
     the rows span >= LIVE_ALPHA_MIN_MONTHS distinct calendar months (enough n
     crammed into one wild week is not the same as a proven edge over time)."""
     n = len(rows)
     months = len({m for m, _ in rows})
+    win_pct = round(sum(1 for _, v in rows if v > 0) / n * 100, 1) if n else None
     if n < min_n:
         return {
             "n": n, "months": months,
             "mean": round(float(np.mean([v for _, v in rows])), 3) if n else None,
-            "t_stat": None, "p_value": None, "verdict": "INSUFFICIENT",
+            "win_pct": win_pct, "t_stat": None, "p_value": None, "verdict": "INSUFFICIENT",
         }
 
     values = np.array([v for _, v in rows])
@@ -189,7 +194,7 @@ def _alpha_verdict(rows: list[tuple[str, float]], min_n: int) -> dict:
         verdict = "NO-EDGE"
 
     return {
-        "n": n, "months": months, "mean": round(mean, 3),
+        "n": n, "months": months, "mean": round(mean, 3), "win_pct": win_pct,
         "t_stat": round(t_stat, 2), "p_value": round(p_value, 4), "verdict": verdict,
     }
 
@@ -260,6 +265,52 @@ def live_alpha_gate(perf: dict | None = None) -> dict:
         "aggregate": agg,
         "reversal_oversold_v2_stress": reversal_stress_verdict,
     }
+
+
+def _format_alpha_line(name: str, result: dict, min_n: int) -> str:
+    if result["verdict"] == "INSUFFICIENT":
+        return (f"{name}: INSUFFICIENT (n={result['n']}/{min_n}, "
+                f"{result['months']}/{LIVE_ALPHA_MIN_MONTHS} months)")
+    icon = "✅" if result["verdict"] == "PROVEN" else "❌"
+    sign = "+" if result["mean"] >= 0 else ""
+    return (f"{name}: {sign}{result['mean']}% α over n={result['n']} "
+            f"(win {result['win_pct']}%), p={result['p_value']} {icon} {result['verdict']}")
+
+
+def live_proof_report(perf: dict | None = None) -> dict:
+    """
+    Live-Proof Round Phase 5 -- consolidates live_alpha_gate() into a
+    printable report and the outputs/live_proof.json artifact (git-committed,
+    Phase 1), so "which signals have actually PROVEN a live edge" never
+    requires a human to cross-reference performance.json by hand.
+
+    Reconciliation note (read this before citing either number as "the"
+    proof): outputs/performance.json (unconstrained, every pick regardless of
+    capital) is what THIS report reads -- it proves the SIGNAL edge exists.
+    outputs/portfolio.json (capital-constrained, cost-netted, drawdown-
+    tracked) proves TRADEABLE P&L -- a signal can have a real live alpha here
+    and still be un-deployable at scale if positions can't be sized without
+    moving the price (see reversal_oversold_v2's stress row: this exact
+    concern is why it gets one). Neither file alone is "proof" -- report both.
+
+    Returns {**live_alpha_gate()'s dict, "lines": [str, ...]}, and writes the
+    same structure to outputs/live_proof.json.
+    """
+    gate = live_alpha_gate(perf)
+
+    lines = [_format_alpha_line(sig, result, LIVE_ALPHA_MIN_N_PER_SIGNAL)
+             for sig, result in gate["per_signal"].items()]
+    lines.append(_format_alpha_line("AGGREGATE (all buys)", gate["aggregate"], LIVE_ALPHA_MIN_N_AGGREGATE))
+    if gate["reversal_oversold_v2_stress"] is not None:
+        lines.append(_format_alpha_line(
+            "reversal_oversold_v2 [2x-cost stress]", gate["reversal_oversold_v2_stress"],
+            LIVE_ALPHA_MIN_N_PER_SIGNAL,
+        ))
+
+    report = {**gate, "lines": lines}
+    OUTPUTS.mkdir(parents=True, exist_ok=True)
+    (OUTPUTS / "live_proof.json").write_text(json.dumps(report, indent=2, default=str))
+    return report
 
 
 def momentum_gate() -> dict:
