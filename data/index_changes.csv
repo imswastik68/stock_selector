@@ -1,26 +1,39 @@
-# Nifty 50 / Nifty Next 50 semi-annual reconstitution history (Mar 2023 -> Mar 2026).
-# Compiled 2026-07-05 from NSE/niftyindices.com press releases + Indian financial
-# press (Business Standard, Business Today, ICICI Direct, Bajaj Broking, Tradebrains,
-# Outlook Money, Investing.com) -- one source_url per row for auditability.
+# Nifty 50 / Nifty Next 50 / Nifty 500 semi-annual reconstitution history
+# (Mar 2023 -> Mar 2026).
+#
+# NIFTY50/NIFTYNEXT50 rows compiled 2026-07-05 from NSE/niftyindices.com press
+# releases + Indian financial press (Business Standard, Business Today, ICICI
+# Direct, Bajaj Broking, Tradebrains, Outlook Money, Investing.com).
+#
+# NIFTY500 rows added 2026-07-06 (SOTA Round Phase 3c) -- the granularity gap
+# noted below has been CLOSED: all 7 press-release PDFs were downloaded
+# directly from niftyindices.com/Press_Release/ and parsed with pdftotext
+# -layout + a row-pattern regex (not WebSearch summaries, not hand-typed).
+# Every cycle's exclude-count matched its include-count exactly (an internal
+# consistency check reconstitutions always satisfy), and the 2025-02-21
+# NIFTY500 list was spot-verified by eye against the raw PDF text before
+# trusting the parser on the other 6. One correction found in the process:
+# the Feb-2026 cycle's announce_date was 2026-02-24 (a news-article-publish-
+# date proxy) -- the ACTUAL press release (ind_prs23022026.pdf) is dated
+# 2026-02-23; all 12 NIFTYNEXT50 rows for that cycle were corrected to match.
+#
+# One source URL is disambiguated with a "_1" suffix (ind_prs17022023_1.pdf)
+# -- niftyindices.com sometimes publishes an unrelated release (Nifty Fixed
+# Income / debt index changes) under the "obvious" DDMMYYYY-guessed filename
+# for the same date; the equity-indices release needed the _1 suffix (or, for
+# 2026-02-23, was dated one day before the initially-guessed 2026-02-24).
+# Confirmed via WebSearch before trusting either PDF's content.
 #
 # Scope/caveats (read before trusting a backtest verdict off this file):
-#  - NIFTY 500-level granularity was NOT obtainable (every source gave partial
-#    lists only, e.g. "31 additions incl. Groww, Meesho... and 26 others" for
-#    Feb 2026) -- NOT guessed/extrapolated, simply omitted. This file covers
-#    NIFTY50 + NIFTYNEXT50 only, so n will likely be well under a large-sample
-#    bar; the pre-declared low-frequency gate (n>=100) is designed to say so
-#    honestly rather than force a verdict off too few events.
 #  - effective_date: some source articles state the convention inconsistently
 #    ("effective from Sept 29, close of Sept 28" vs "effective Sept 30, close
-#    of Sept 27") -- used whatever exact date each source stated. Worth
+#    of Sept 27") -- used whatever exact date each source/PDF stated. Worth
 #    reconciling against niftyindices.com's reconstitution calendar before
 #    treating a 1-day boundary as precise.
-#  - announce_date for the Sept-2023 cycle is a news-publish-date proxy, not a
-#    confirmed press-release date.
-#  - The Feb-2025 and Feb-2026 NIFTYNEXT50 rows were reconstructed from
-#    WebSearch summaries of the niftyindices.com PDFs, not a direct PDF fetch
-#    -- re-fetch ind_prs21022025.pdf / the Feb-2026 equivalent directly for
-#    primary-source certainty if this signal is close to shipping.
+#  - announce_date for the Sept-2023 NIFTY50/NIFTYNEXT50 rows is a news-
+#    publish-date proxy, not a confirmed press-release date (the NIFTY500 rows
+#    for that same cycle use the PDF's own header date, 2023-08-17, which
+#    happens to match).
 #  - A corrupted duplicate ("13-Jul-23" HDFC/LTIMindtree, and a garbled
 #    "30-Sep-23" Trent/BEL/DivisLab/LTIM entry that contradicted two
 #    independent "no NIFTY50 change" sources for that cycle) was found on a
@@ -108,15 +121,371 @@ announce_date,effective_date,index,symbol,action,source_url
 2025-08-22,2025-09-30,NIFTYNEXT50,ICICIPRULI,DELETE,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
 2025-08-22,2025-09-30,NIFTYNEXT50,INDIGO,DELETE,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
 2025-08-22,2025-09-30,NIFTYNEXT50,SWIGGY,DELETE,https://tradebrains.in/nifty-50-nifty-next-rejig-full-list-of-stocks-added-removed-sept-2025/
-2026-02-24,2026-03-30,NIFTYNEXT50,CUMMINSIND,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,HDFCAMC,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,MUTHOOTFIN,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,TATACAP,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,TMCV,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,UNIONBANK,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,BAJAJHFL,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,HAVELLS,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,ICICIGI,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,NAUKRI,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,JSWENERGY,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
-2026-02-24,2026-03-30,NIFTYNEXT50,LICI,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,CUMMINSIND,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,HDFCAMC,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,MUTHOOTFIN,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,TATACAP,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,TMCV,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,UNIONBANK,ADD,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,BAJAJHFL,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,HAVELLS,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,ICICIGI,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,NAUKRI,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,JSWENERGY,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2026-02-23,2026-03-30,NIFTYNEXT50,LICI,DELETE,https://www.bajajbroking.in/share-market-news/nifty-indices-rejig-february-2026-which-stocks-were-added-and-dropped-from-nifty-100-500-next-50-and-more
+2023-02-17,2023-03-31,NIFTY500,AARTIIND,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,ADANIPOWER,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,APARINDS,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,ACI,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,BIKAJI,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,BLS,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,CRAFTSMAN,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,DATAPATTNS,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,FIVESTAR,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,MEDANTA,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,INGERRAND,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,JINDWORLD,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,KENNAMET,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,RUSTOMJEE,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,KFINTECH,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,KSB,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,MFL,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,NMDC,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,PEL,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,TMB,ADD,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,ABSLAMC,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,ALOKINDS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,ASTRAZEN,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,BHARATRAS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,CAPLIPOINT,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,DHANI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,DBL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,HATSUN,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,INDOCO,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,MOIL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,PRIVISCL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,PGHL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,SFL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,SHILPAMED,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,SIS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,SUDARSCHEM,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,SYMPHONY,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,TATACOFFEE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,THYROCARE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-02-17,2023-03-31,NIFTY500,WOCKPHARMA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17022023_1.pdf
+2023-08-17,2023-09-29,NIFTY500,ALLCARGO,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,ALOKINDS,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,GILLETTE,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,GLS,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,GPIL,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,IRCON,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,JINDALSAW,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,KAYNES,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,KIRLFER,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,MINDACORP,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,PGHL,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,SAFARI,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,SAREGAMA,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,SFL,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,SYMPHONY,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,SYRMA,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,UJJIVANSFB,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,USHAMART,ADD,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,BASF,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,GARFIBRES,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,GODREJAGRO,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,GREENPANEL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,HIKAL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,HGS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,IFBIND,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,IBREALEST,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,JINDWORLD,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,KENNAMET,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,RUSTOMJEE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,MAHLOG,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,NOCIL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,TMB,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,TCIEXP,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,TCNSBRANDS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,TCI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2023-08-17,2023-09-29,NIFTY500,UFLEX,DELETE,https://www.niftyindices.com/Press_Release/ind_prs17082023.pdf
+2024-02-28,2024-03-28,NIFTY500,ACE,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,ANANDRATHI,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,ASTRAZEN,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,CAPLIPOINT,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,CELLO,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,CHENNPETRO,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,DOMS,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,ELECON,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,GRSE,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,GMDCLTD,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,HAPPYFORGE,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,HBLPOWER,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,HSCL,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,HONASA,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,IREDA,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,INOXWIND,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,JAIBALAJI,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,J&KBANK,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,JIOFIN,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,JSWINFRA,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,JWL,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,LLOYDSME,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,MAHSEAMLES,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,NUVAMA,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,RRKABEL,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,RAILTEL,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,RKFORGE,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,SBFC,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,SCHNEIDER,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,SIGNATURE,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,TMB,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,TATATECH,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,TITAGARH,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,TVSSCS,ADD,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,AARTIDRUGS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,BCG,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,DELTACORP,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,EPIGRAL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,GRINFRA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,GALAXYSURF,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,GOCOLORS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,GUJALKALI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,HLEGLAS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,INFIBEAM,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,INGERRAND,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,JAMNAAUTO,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,LAXMIMACH,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,LUXIND,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,NAZARA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,ORIENTELEC,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,PFIZER,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,POLYPLEX,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,PGHL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,RAIN,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,RALLIS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,RELAXO,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,ROSSARI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,SHARDACROP,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,SFL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,SHOPERSTOP,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,SUPRAJIT,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,SYMPHONY,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,TEAMLEASE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,TTKPRESTIG,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,VGUARD,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,VINATIORGA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,VMART,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-02-28,2024-03-28,NIFTY500,ZYDUSWELL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs28022024.pdf
+2024-08-23,2024-09-30,NIFTY500,AADHARHFC,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,ABSLAMC,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,ANANTRAJ,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,BASF,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,BHARTIHEXA,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,GRINFRA,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,GET&D,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,GODIGIT,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,GODREJAGRO,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,IFCI,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,INDGN,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,IREDA,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,INOXINDIA,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,JPPOWER,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,JKTYRE,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,JYOTICNC,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,KIRLOSBROS,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,KIRLOSENG,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,NETWEB,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,NEWGEN,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,PFIZER,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,PTCIL,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,SCI,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,TBOTEK,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,TECHNOE,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,DBREALTY,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,VINATIORGA,ADD,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,AETHER,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,ALLCARGO,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,ANURAS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,BORORENEW,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,CSBBANK,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,DCMSHRIRAM,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,EPL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,FDC,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,GLS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,GMMPFAUDLR,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,HAPPYFORGE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,INDIGOPNTS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,JAIBALAJI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,JKPAPER,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,KRBL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,LXCHEM,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,MHRIL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,MEDPLUS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,MTARTECH,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,PRINCEPIPE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,RBA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,SAFARI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,STLTECH,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,SUNTECK,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,TMB,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,VAIBHAVGBL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2024-08-23,2024-09-30,NIFTY500,IDEA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23082024.pdf
+2025-02-21,2025-03-28,NIFTY500,ACMESOLAR,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,AFCONS,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,ALIVUS,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,AIIL,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,BAJAJHFL,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,FIRSTCRY,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,DCMSHRIRAM,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,GRAVITA,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,HYUNDAI,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,IGIL,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,IKS,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,JSWHL,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,LTFOODS,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,NAVA,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,NEULANDLAB,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,NIVABUPA,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,NTPCGREEN,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,OLAELEC,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,PGEL,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,PREMIERENE,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,RPOWER,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,SAGILITY,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,SAILIFE,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,SARDAEN,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,SWIGGY,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,TARIL,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,VMM,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,WAAREEENER,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,WOCKPHARMA,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,ZENTEC,ADD,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,ACI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,AVANTIFEED,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,BALAMINES,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,BIRLACORPN,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,CELLO,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,CHEMPLASTS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,CIEINDIA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,EASEMYTRIP,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,EQUITASBNK,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,FINEORG,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,GRINFRA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,GRINDWELL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,GAEL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,GSFC,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,JKLAKSHMI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,KSB,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,MAHLIFE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,METROBRAND,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,NUVOCO,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,PGHH,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,RAJESHEXPO,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,RATNAMANI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,SANOFI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,SPARC,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,SUNDRMFAST,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,TVSSCS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,UJJIVANSFB,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,VIPIND,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,VARROC,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-02-21,2025-03-28,NIFTY500,VINATIORGA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs21022025.pdf
+2025-08-22,2025-09-30,NIFTY500,ABLBL,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,AEGISVOPAK,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,AKZOINDIA,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,ATHERENERG,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,BLUEJET,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,CHOICEIN,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,AGARWALEYE,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,FORCEMOT,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,HEXT,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,ITCHOTELS,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,KSB,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,MAHSCOOTER,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,NUVOCO,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,ONESOURCE,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,PGHH,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,THELEELA,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,ENRIN,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,VENTIVE,ADD,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,ALIVUS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,GNFC,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,GPPL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,JSWHL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,JUSTDIAL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,KANSAINER,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,KNRCON,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,MASTEK,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,NETWORK18,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,PNCINFRA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,RTNINDIA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,RAYMONDLSL,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,RAYMOND,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,ROUTE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,RENUKA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,SWSOLAR,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,TANLA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2025-08-22,2025-09-30,NIFTY500,WESTLIFE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs22082025.pdf
+2026-02-23,2026-03-30,NIFTY500,ACUTAAS,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,CPPLUS,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,ABDL,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,ANTHEM,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,ANURAS,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,BELRISE,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,GROWW,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,CANHLIFE,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,CARTRADE,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,CEMPRO,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,EMMVEE,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,GABRIEL,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,GALLANTT,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,HDBFS,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,ICICIAMC,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,JAINREC,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,LENSKART,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,LGEINDIA,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,MEESHO,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,PARADEEP,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,PWL,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,PINELABS,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,PIRAMALFIN,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,SPLPETRO,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,TATACAP,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,TMCV,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,TEGA,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,TENNIND,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,TRAVELFOOD,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,URBANCO,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,ZYDUSWELL,ADD,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,AKUMS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,APLLTD,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,ALKYLAMINE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,ALOKINDS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,ASTRAZEN,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,BASF,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,CAMPUS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,CENTURYPLY,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,CERA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,AGARWALEYE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,FINPIPE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,GODREJAGRO,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,GUJGASLTD,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,HAPPSTMNDS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,INOXINDIA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,JYOTHYLAB,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,KIRLOSBROS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,KSB,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,MAHSCOOTER,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,MAHSEAMLES,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,METROPOLIS,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,PRAJIND,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,PGHH,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,RCF,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,RELINFRA,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,SUNDRMFAST,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,TRIVENI,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,DBREALTY,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,MANYAVAR,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,VENTIVE,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
+2026-02-23,2026-03-30,NIFTY500,VGUARD,DELETE,https://www.niftyindices.com/Press_Release/ind_prs23022026.pdf
