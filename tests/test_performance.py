@@ -294,3 +294,153 @@ def test_decided_outcome_never_reevaluated(tmp_path):
     pick = updated[scan_date]["DONE.NS"]
     assert pick["outcome"] == "sl_hit"
     assert pick["outcome_date"] == day1.isoformat()
+
+
+# ── Live-Proof Round Phase 3: fixed-horizon alpha vs NIFTY ──────────────────
+
+def _alpha_fixture_pick(entry_lo=95.0, entry_hi=105.0, stop_loss=50.0, target_1=200.0,
+                         active_signals=None) -> dict:
+    return {
+        "direction": "buy", "entry": 100.0, "entry_lo": entry_lo, "entry_hi": entry_hi,
+        "stop_loss": stop_loss, "target_1": target_1, "target_2": None,
+        "outcome": "open", "outcome_date": None, "exit_policy": "static",
+        "active_signals": active_signals or [], "regime": "ranging", "nifty_at_emission": 20000.0,
+        "fwd_5d": None, "fwd_10d": None, "fwd_20d": None,
+    }
+
+
+def _alpha_ohlcv_df(scan_date: date) -> pd.DataFrame:
+    """13 bdays starting at scan_date. Bar 0 = scan date (not used for entry
+    checks -- simulate_raw only looks strictly after as_of). Bar 1 = entry
+    fill day (close 100, matching entry_mid). Bar 10 = the fwd_10d reference
+    bar, close 110 -- a clean +10% gross move. SL(50)/T1(200) are set far
+    away so the pick never decides (stays "open") across the whole window,
+    isolating the fwd_Nd calc from the exit-outcome machinery."""
+    idx = pd.bdate_range(start=scan_date, periods=13)
+    closes = [100.0, 100.0, 101, 102, 103, 104, 105, 106, 107, 108, 110.0, 112, 113]
+    return pd.DataFrame({
+        "Open": closes, "High": [c * 1.02 for c in closes], "Low": [c * 0.98 for c in closes],
+        "Close": closes, "Volume": [300000] * len(closes),
+    }, index=idx)
+
+
+def _flat_nifty_df(scan_date: date, level: float = 20000.0) -> pd.DataFrame:
+    idx = pd.bdate_range(start=scan_date, periods=13)
+    return pd.DataFrame({"Close": [level] * len(idx)}, index=idx)
+
+
+def test_evaluate_live_alpha_computes_fwd_10d_and_abnormal_vs_flat_nifty(tmp_path):
+    perf_file = tmp_path / "performance.json"
+    scan_date = (pd.Timestamp(date.today()) - pd.tseries.offsets.BDay(10)).date()  # always a weekday
+    scan_date_iso = scan_date.isoformat()
+    perf_file.write_text(json.dumps({scan_date_iso: {"ALPHA.NS": _alpha_fixture_pick()}}))
+
+    stock_df = _alpha_ohlcv_df(scan_date)
+    nifty_df = _flat_nifty_df(scan_date)
+
+    def _fake_download(tickers, **kwargs):
+        return nifty_df if tickers == p._NIFTY_TICKER else stock_df
+
+    with mock.patch.object(p, "_PERF_FILE", perf_file), mock.patch.object(p, "yf") as mock_yf:
+        mock_yf.download.side_effect = _fake_download
+        updated = p.evaluate_live_alpha()
+
+    pick = updated[scan_date_iso]["ALPHA.NS"]
+    # gross fwd_10d = (110-100)/100*100 = 10.0; net of 0.30% round-trip buy cost
+    assert pick["fwd_10d"] == 9.7
+    assert pick["nifty_fwd_10d"] == 0.0  # flat benchmark -> zero benchmark return
+    assert pick["abnormal_10d"] == 9.7   # fwd_10d - nifty_fwd_10d
+    assert pick["realized_return_pct"] is None  # still "open" -- not a closed/realized trade
+    assert pick["abnormal_10d_stress"] is None  # not a reversal_oversold_v2 pick
+
+
+def test_evaluate_live_alpha_reversal_stress_field_applies_2x_cost(tmp_path):
+    perf_file = tmp_path / "performance.json"
+    scan_date = (pd.Timestamp(date.today()) - pd.tseries.offsets.BDay(10)).date()  # always a weekday
+    scan_date_iso = scan_date.isoformat()
+    perf_file.write_text(json.dumps({
+        scan_date_iso: {"REV.NS": _alpha_fixture_pick(active_signals=["reversal_oversold_v2"])},
+    }))
+
+    stock_df = _alpha_ohlcv_df(scan_date)
+    nifty_df = _flat_nifty_df(scan_date)
+
+    def _fake_download(tickers, **kwargs):
+        return nifty_df if tickers == p._NIFTY_TICKER else stock_df
+
+    with mock.patch.object(p, "_PERF_FILE", perf_file), mock.patch.object(p, "yf") as mock_yf:
+        mock_yf.download.side_effect = _fake_download
+        updated = p.evaluate_live_alpha()
+
+    pick = updated[scan_date_iso]["REV.NS"]
+    assert pick["abnormal_10d"] == 9.7        # standard 1x-cost figure, same as any signal
+    assert pick["abnormal_10d_stress"] == 9.4  # 10.0 - 2*0.30 = 9.4, minus flat nifty (0)
+
+
+def test_evaluate_live_alpha_write_once_does_not_recompute(tmp_path):
+    perf_file = tmp_path / "performance.json"
+    scan_date = (pd.Timestamp(date.today()) - pd.tseries.offsets.BDay(10)).date()  # always a weekday
+    scan_date_iso = scan_date.isoformat()
+    pick = _alpha_fixture_pick()
+    pick["fwd_10d"] = 42.0  # already computed by a prior run
+    perf_file.write_text(json.dumps({scan_date_iso: {"DONE.NS": pick}}))
+
+    with mock.patch.object(p, "_PERF_FILE", perf_file), mock.patch.object(p, "yf") as mock_yf:
+        updated = p.evaluate_live_alpha()
+        mock_yf.download.assert_not_called()  # no ticker was pending -- no network call at all
+
+    assert updated[scan_date_iso]["DONE.NS"]["fwd_10d"] == 42.0
+
+
+def test_evaluate_live_alpha_insufficient_forward_bars_leaves_fwd_10d_unset(tmp_path):
+    """A pick recorded too recently (only a few forward bars exist yet) must
+    be skipped, not crash or write a wrong value -- it stays None so a later
+    run (once more days pass) can compute it."""
+    perf_file = tmp_path / "performance.json"
+    scan_date = (pd.Timestamp(date.today()) - pd.tseries.offsets.BDay(10)).date()  # always a weekday
+    scan_date_iso = scan_date.isoformat()
+    perf_file.write_text(json.dumps({scan_date_iso: {"YOUNG.NS": _alpha_fixture_pick()}}))
+
+    # Only 3 bdays after scan_date -- not enough for fwd_10d (needs 10)
+    idx = pd.bdate_range(start=scan_date, periods=4)
+    short_df = pd.DataFrame({
+        "Open": [100.0] * 4, "High": [102.0] * 4, "Low": [98.0] * 4,
+        "Close": [100.0] * 4, "Volume": [300000] * 4,
+    }, index=idx)
+    nifty_df = _flat_nifty_df(scan_date)
+
+    def _fake_download(tickers, **kwargs):
+        return nifty_df if tickers == p._NIFTY_TICKER else short_df
+
+    with mock.patch.object(p, "_PERF_FILE", perf_file), mock.patch.object(p, "yf") as mock_yf:
+        mock_yf.download.side_effect = _fake_download
+        updated = p.evaluate_live_alpha()
+
+    pick = updated[scan_date_iso]["YOUNG.NS"]
+    assert pick.get("fwd_10d") is None
+
+
+def test_evaluate_live_alpha_realized_return_set_once_decided(tmp_path):
+    """Once a trade is DECIDED (not "open"), realized_return_pct must be
+    populated (cost-netted) -- not left None like the still-open case."""
+    perf_file = tmp_path / "performance.json"
+    scan_date = (pd.Timestamp(date.today()) - pd.tseries.offsets.BDay(10)).date()  # always a weekday
+    scan_date_iso = scan_date.isoformat()
+    # target_1 = 105 -- will be hit early (bar closes reach 106+ by bar index 6)
+    perf_file.write_text(json.dumps({
+        scan_date_iso: {"DECIDED.NS": _alpha_fixture_pick(target_1=105.0)},
+    }))
+
+    stock_df = _alpha_ohlcv_df(scan_date)
+    nifty_df = _flat_nifty_df(scan_date)
+
+    def _fake_download(tickers, **kwargs):
+        return nifty_df if tickers == p._NIFTY_TICKER else stock_df
+
+    with mock.patch.object(p, "_PERF_FILE", perf_file), mock.patch.object(p, "yf") as mock_yf:
+        mock_yf.download.side_effect = _fake_download
+        updated = p.evaluate_live_alpha()
+
+    pick = updated[scan_date_iso]["DECIDED.NS"]
+    assert pick["realized_return_pct"] is not None
+    assert pick["fwd_10d"] == 9.7  # fwd_10d is still measured on the fixed horizon regardless

@@ -248,6 +248,7 @@ def simulate_raw(
     return {
         "triggered":     True,
         "outcome":       outcome,
+        "entry_date":    entry_idx.date().isoformat() if hasattr(entry_idx, "date") else str(entry_idx),
         "exit_date":     exit_idx.date().isoformat() if hasattr(exit_idx, "date") else str(exit_idx),
         "entry_price":   round(entry_price, 2),
         "exit_price":    round(exit_price, 2),

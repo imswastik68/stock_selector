@@ -37,8 +37,11 @@ import pandas as pd
 import yfinance as yf
 
 from src.trade_sim import WINNER_POLICY, simulate_raw
+from src.costs import round_trip_cost_pct
 
 _PERF_FILE = Path(__file__).parent.parent / "outputs" / "performance.json"
+_NIFTY_TICKER = "^NSEI"
+_ALPHA_LOOKBACK_DAYS = 45  # entry + up to 20 trading bars forward + weekend/holiday buffer
 
 
 def _parse_price(s) -> float | None:
@@ -242,6 +245,187 @@ def evaluate_prior_picks(lookback_days: int = 7) -> dict:
     if updated:
         _save_perf(perf)
         print(f"[performance] updated {updated} pick outcomes")
+
+    return perf
+
+
+def _index_fwd_return(index_df: pd.DataFrame, entry_date: str | None, n: int) -> float | None:
+    """Benchmark's raw price return from entry_date's close to the close n-1
+    bars later -- the SAME 'n bars, counting entry day as bar 1' window
+    convention src.trade_sim.simulate_raw uses for its own fwd_Nd fields, so
+    the stock's forward window and the benchmark's forward window line up
+    exactly. (One asymmetry, unavoidable and documented here: the stock side
+    measures from its actual FILL PRICE -- possibly an intraday gap-open --
+    while the benchmark has no equivalent "fill," so it measures from its
+    closing price on the entry day. This is the standard way to construct a
+    passive-benchmark comparison window; it is not a bug.)"""
+    if not entry_date:
+        return None
+    future = index_df[index_df.index >= pd.Timestamp(entry_date)]
+    if len(future) < n:
+        return None
+    entry_close = float(future["Close"].iloc[0])
+    fwd_close = float(future["Close"].iloc[n - 1])
+    if entry_close <= 0:
+        return None
+    return round((fwd_close - entry_close) / entry_close * 100, 2)
+
+
+def evaluate_live_alpha(lookback_days: int = _ALPHA_LOOKBACK_DAYS) -> dict:
+    """
+    Compute fixed-horizon forward returns + NIFTY-relative alpha for every
+    pick whose entry has filled, once enough forward data exists (Live-Proof
+    Round Phase 3) -- the inputs src.gates.live_alpha_gate reconciles into a
+    proven/insufficient/no-edge verdict per signal.
+
+    Deliberately SEPARATE from evaluate_prior_picks (which resolves SL/T1/
+    timeout outcomes over a 7-day lookback): alpha needs a much LONGER
+    lookback (an entry needs up to 20 TRADING days of forward data to exist
+    at all) and must also revisit picks whose outcome is already DECIDED --
+    fwd_Nd measures the raw signal over a fixed horizon, deliberately
+    independent of whether/when the SL or T1 exit rule fired first.
+
+    Write-once per pick (same discipline as record_picks): a pick that
+    already has fwd_10d set is never recomputed, even if this runs again.
+
+    Adds, once entry fills and >=10 forward trading bars exist:
+      realized_return_pct  -- cost-netted P&L, but ONLY once the trade is
+                              DECIDED (None while still open -- "realized"
+                              means closed, not a mark-to-market snapshot)
+      fwd_5d / fwd_10d / fwd_20d  -- fixed-horizon forward return from the
+                              actual entry fill, cost-netted, ignoring the
+                              stop entirely (isolates the raw signal from the
+                              exit rule -- a pick that got stopped out at -2%
+                              might still have fwd_10d > 0)
+      nifty_fwd_10d         -- NIFTY's return over the IDENTICAL window
+      abnormal_10d          -- fwd_10d - nifty_fwd_10d: the live alpha, net
+                              of cost. THE primary proof metric.
+      abnormal_10d_stress   -- reversal_oversold_v2 picks ONLY: fwd_10d
+                              recomputed with a 2x cost haircut instead of
+                              1x, minus nifty_fwd_10d. reversal's falling-
+                              knife entries have the worst real slippage of
+                              any shipped signal (see src/scorer.py's
+                              reversal_oversold_v2 comment) -- this is an
+                              explicit, honest stress test on that one
+                              signal, reported alongside rather than hidden
+                              behind the same cost model as everything else.
+    """
+    perf = _load_perf()
+    today = date.today()
+    cutoff = (today - timedelta(days=lookback_days)).isoformat()
+
+    pending: list[tuple[str, str, dict]] = []  # (scan_date, ticker, pick)
+    for scan_date, picks in perf.items():
+        if scan_date < cutoff:
+            continue
+        for ticker, pick in picks.items():
+            if pick.get("fwd_10d") is not None:
+                continue  # already computed -- write-once
+            if not pick.get("entry_lo") and not pick.get("entry"):
+                continue  # malformed/legacy pick with no price reference
+            pending.append((scan_date, ticker, pick))
+
+    if not pending:
+        return perf
+
+    tickers = sorted({t for _, t, _ in pending})
+    print(f"[performance] computing live alpha for {len(tickers)} ticker(s)...")
+
+    period_str = f"{lookback_days + 30}d"
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            raw = yf.download(
+                tickers, period=period_str, interval="1d",
+                auto_adjust=True, progress=False, group_by="ticker",
+            )
+            nifty_df = yf.download(
+                _NIFTY_TICKER, period=period_str, interval="1d",
+                auto_adjust=True, progress=False,
+            )
+    except Exception as exc:
+        print(f"[performance] live-alpha OHLC fetch error: {exc}")
+        return perf
+
+    if nifty_df is None or nifty_df.empty:
+        print("[performance] no NIFTY data -- skipping live-alpha this run")
+        return perf
+    if isinstance(nifty_df.columns, pd.MultiIndex):
+        nifty_df.columns = nifty_df.columns.get_level_values(0)
+
+    updated = 0
+    for scan_date, ticker, pick in pending:
+        try:
+            if isinstance(raw.columns, pd.MultiIndex):
+                if ticker not in raw.columns.get_level_values(0):
+                    continue
+                df = raw[ticker].dropna(how="all")
+            elif len(tickers) == 1:
+                df = raw.dropna(how="all")
+            else:
+                continue
+            if df.empty:
+                continue
+
+            as_of = pd.Timestamp(scan_date)
+            entry_price = float(pick["entry"] or 0)
+            entry_lo  = float(pick.get("entry_lo") or entry_price)
+            entry_hi  = float(pick.get("entry_hi") or entry_price)
+            entry_mid = (entry_lo + entry_hi) / 2 if pick.get("entry_lo") else entry_price
+            sl  = float(pick["stop_loss"])
+            t1  = float(pick["target_1"])
+            t2  = float(pick["target_2"]) if pick.get("target_2") else None
+            direction = pick["direction"]
+            if entry_price <= 0:
+                continue
+
+            pick_policy = pick.get("exit_policy", "static")
+            cost_pct = round_trip_cost_pct(direction)
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                sim = simulate_raw(
+                    entry_lo, entry_hi, entry_mid, sl, t1, direction, as_of, df,
+                    t2=t2, exit_policy=pick_policy, cost_pct=cost_pct,
+                )
+
+            if not sim.get("triggered"):
+                continue  # entry never filled -- nothing to measure yet
+
+            fwd10_gross = sim.get("fwd_10d_pct")
+            if fwd10_gross is None:
+                continue  # not enough forward bars yet -- retry on a future run
+
+            nifty_fwd_10d = _index_fwd_return(nifty_df, sim.get("entry_date"), 10)
+
+            fwd5_gross  = sim.get("fwd_5d_pct")
+            fwd20_gross = sim.get("fwd_20d_pct")
+
+            pick["fwd_5d"]  = round(fwd5_gross - cost_pct, 2) if fwd5_gross is not None else None
+            pick["fwd_10d"] = round(fwd10_gross - cost_pct, 2)
+            pick["fwd_20d"] = round(fwd20_gross - cost_pct, 2) if fwd20_gross is not None else None
+            pick["nifty_fwd_10d"] = nifty_fwd_10d
+            pick["abnormal_10d"] = (
+                round(pick["fwd_10d"] - nifty_fwd_10d, 2) if nifty_fwd_10d is not None else None
+            )
+
+            if "reversal_oversold_v2" in (pick.get("active_signals") or []):
+                stress_fwd_10d = round(fwd10_gross - 2 * cost_pct, 2)
+                pick["abnormal_10d_stress"] = (
+                    round(stress_fwd_10d - nifty_fwd_10d, 2) if nifty_fwd_10d is not None else None
+                )
+            else:
+                pick["abnormal_10d_stress"] = None
+
+            pick["realized_return_pct"] = sim["return_pct"] if sim["outcome"] != "open" else None
+
+            updated += 1
+        except Exception:
+            continue
+
+    if updated:
+        _save_perf(perf)
+        print(f"[performance] computed live alpha for {updated} pick(s)")
 
     return perf
 

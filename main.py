@@ -59,7 +59,7 @@ from src.data.results import fetch_results_calendar
 from src.data.volume import fetch_volume_gainers
 from src.scorer import score_candidates
 from src.agent import synthesize_watchlist
-from src.performance import performance_summary, record_picks, loss_streak_state
+from src.performance import performance_summary, record_picks, loss_streak_state, evaluate_live_alpha
 from src.risk import size_position, portfolio_summary, drawdown_state
 from src.telegram_alert import send_telegram_alert
 from src.portfolio import (
@@ -664,6 +664,15 @@ def main() -> int:
         print(f"[main] performance: {perf}")
     except Exception as exc:
         print(f"[main] performance tracking error (non-fatal): {exc}")
+
+    # 7b-2. Live-proof alpha (Live-Proof Round Phase 3): fixed-horizon forward
+    # return vs NIFTY for every pick old enough to have 10+ trading days of
+    # forward data. Separate try/except -- a failure here must never block
+    # the outcome-tracking above, which is the more time-sensitive of the two.
+    try:
+        evaluate_live_alpha()
+    except Exception as exc:
+        print(f"[main] live-alpha evaluation error (non-fatal): {exc}")
 
     # 7c. Automated gate status (Phase 4): the honest "has anything here earned
     # real money yet" line, instead of eyeballing performance.json daily.
