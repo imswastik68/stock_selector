@@ -72,10 +72,16 @@ def _save_perf(data: dict) -> None:
     _PERF_FILE.write_text(json.dumps(data, indent=2, default=str))
 
 
-def record_picks(watchlist_data: dict) -> None:
+def record_picks(watchlist_data: dict, nifty_at_emission: float | None = None) -> None:
     """
     Record today's buy/sell picks into performance.json.
     Call this after save_output() each EOD run.
+
+    nifty_at_emission: NIFTY close on the scan day (main.py threads
+    market_wide_ctx["nifty_structure"]["current_price"]). Stored per-pick so
+    evaluate_prior_picks can later compute abnormal return vs NIFTY over the
+    same window (Live-Proof Round Phase 3) without re-fetching history that
+    predates when tracking started.
     """
     scan_date = watchlist_data.get("scan_date", date.today().isoformat())
     perf = _load_perf()
@@ -116,6 +122,12 @@ def record_picks(watchlist_data: dict) -> None:
                     "eval_method": "next_day_zone_v2",
                     "big_mover":  entry.get("big_mover", False),
                     "instrument": entry.get("instrument"),
+                    # Live-Proof Round (Phase 2) -- write-once proof inputs, never
+                    # mutated after recording (only "outcome"/"outcome_date" and the
+                    # Phase-3 alpha fields below are updated post-emission):
+                    "active_signals":     entry.get("active_signals", []),
+                    "regime":             watchlist_data.get("nifty_context"),
+                    "nifty_at_emission":  nifty_at_emission,
                 }
 
     if picks:

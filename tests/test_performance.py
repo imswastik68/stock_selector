@@ -195,6 +195,77 @@ def test_legacy_pick_no_zone_falls_back_to_point_entry(tmp_path):
     assert pick["outcome"] == "t1_hit"  # not sl_hit from the scan-day low=80
 
 
+# ── Live-Proof Round Phase 2: proof inputs captured at emission ─────────────
+
+def test_record_picks_captures_active_signals_regime_and_nifty(tmp_path):
+    perf_file = tmp_path / "performance.json"
+    watchlist_data = {
+        "scan_date": "2026-07-06",
+        "nifty_context": "uptrend",
+        "buy_watchlist": [{
+            "ticker": "SIG.NS", "today_close": 100.0, "stop_loss": "₹90", "target_1": "₹120",
+            "active_signals": ["reversal_oversold_v2", "near_52w_high"],
+        }],
+        "sell_watchlist": [],
+    }
+    with mock.patch.object(p, "_PERF_FILE", perf_file):
+        p.record_picks(watchlist_data, nifty_at_emission=24500.5)
+        loaded = json.loads(perf_file.read_text())
+
+    pick = loaded["2026-07-06"]["SIG.NS"]
+    assert pick["active_signals"] == ["reversal_oversold_v2", "near_52w_high"]
+    assert pick["regime"] == "uptrend"
+    assert pick["nifty_at_emission"] == 24500.5
+
+
+def test_record_picks_defaults_when_signals_or_nifty_missing(tmp_path):
+    """A pick with no active_signals key and no nifty_at_emission arg must not
+    crash -- defaults to an empty list / None, not a KeyError."""
+    perf_file = tmp_path / "performance.json"
+    watchlist_data = {
+        "scan_date": "2026-07-06",
+        "buy_watchlist": [{"ticker": "BARE.NS", "today_close": 100.0, "stop_loss": "₹90", "target_1": "₹120"}],
+        "sell_watchlist": [],
+    }
+    with mock.patch.object(p, "_PERF_FILE", perf_file):
+        p.record_picks(watchlist_data)  # nifty_at_emission omitted
+        loaded = json.loads(perf_file.read_text())
+
+    pick = loaded["2026-07-06"]["BARE.NS"]
+    assert pick["active_signals"] == []
+    assert pick["regime"] is None
+    assert pick["nifty_at_emission"] is None
+
+
+def test_record_picks_same_day_rerun_does_not_overwrite_proof_fields(tmp_path):
+    """The existing daily idempotency guard (scan_date already in perf -> return)
+    already protects write-once fields, but pin it explicitly for the new
+    Phase-2 fields specifically -- a second call with DIFFERENT signals/nifty
+    must not silently rewrite the first day's frozen record."""
+    perf_file = tmp_path / "performance.json"
+    watchlist_data_1 = {
+        "scan_date": "2026-07-06", "nifty_context": "uptrend",
+        "buy_watchlist": [{"ticker": "FROZEN.NS", "today_close": 100.0, "stop_loss": "₹90",
+                            "target_1": "₹120", "active_signals": ["reversal_oversold_v2"]}],
+        "sell_watchlist": [],
+    }
+    watchlist_data_2 = {
+        "scan_date": "2026-07-06", "nifty_context": "downtrend",  # would-be overwrite
+        "buy_watchlist": [{"ticker": "FROZEN.NS", "today_close": 100.0, "stop_loss": "₹90",
+                            "target_1": "₹120", "active_signals": ["pead_positive_surprise"]}],
+        "sell_watchlist": [],
+    }
+    with mock.patch.object(p, "_PERF_FILE", perf_file):
+        p.record_picks(watchlist_data_1, nifty_at_emission=24000.0)
+        p.record_picks(watchlist_data_2, nifty_at_emission=25000.0)
+        loaded = json.loads(perf_file.read_text())
+
+    pick = loaded["2026-07-06"]["FROZEN.NS"]
+    assert pick["active_signals"] == ["reversal_oversold_v2"]
+    assert pick["regime"] == "uptrend"
+    assert pick["nifty_at_emission"] == 24000.0
+
+
 def test_decided_outcome_never_reevaluated(tmp_path):
     perf_file = tmp_path / "performance.json"
     day0 = date.today() - timedelta(days=5)

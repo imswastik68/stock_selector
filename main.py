@@ -657,7 +657,8 @@ def main() -> int:
 
     # 7b. Performance tracking: record today's picks + evaluate prior
     try:
-        record_picks(watchlist_data)
+        nifty_at_emission = market_wide_ctx.get("nifty_structure", {}).get("current_price") or None
+        record_picks(watchlist_data, nifty_at_emission=nifty_at_emission)
         perf = performance_summary(lookback_days=30)
         watchlist_data["performance"] = perf
         print(f"[main] performance: {perf}")

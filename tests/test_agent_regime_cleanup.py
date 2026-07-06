@@ -65,3 +65,23 @@ def test_downtrend_sell_actual_52w_breakout_nets_to_zero():
     leave a positive bullish leftover (the old bug: +5 scorer, only -3
     static cleanup = +2 leftover reward on a short)."""
     assert _net_score("actual_52w_breakout", "sell", "downtrend") == 0
+
+
+# ── Live-Proof Round Phase 2: active_signals flows onto the entry ───────────
+
+def test_build_entries_carries_active_signals_onto_buy_entry():
+    """The entry dict src.performance.record_picks reads from must carry the
+    full active_signals list, not just the top-3 labeled subset (top_signals)."""
+    from src.agent import _build_entries
+
+    candidates = [{
+        "ticker": "PROOF.NS", "score": 6, "active_signals": ["near_52w_high", "reversal_oversold_v2"],
+        "volume_ratio": 1.5, "today_close": 100.0,
+    }]
+    market_context = {
+        "technicals": {"PROOF.NS": {"wyckoff_phase": "MARKUP", "direction": "buy"}},
+    }
+    buy_list, sell_list, phase_b_list = _build_entries(candidates, market_context, "ranging")
+
+    assert len(buy_list) == 1
+    assert buy_list[0]["active_signals"] == ["near_52w_high", "reversal_oversold_v2"]

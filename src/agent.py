@@ -342,6 +342,11 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             "macd_signal": tech.get("macd_signal", "none"),
             "candlestick_patterns": tech.get("candlestick_patterns", []),
             "top_signals": signals,
+            # Full raw signal-key list (not just the top-3 labeled subset above) --
+            # src.performance.record_picks persists this so the live-proof gate
+            # (src.gates.live_alpha_gate) can attribute forward returns per signal,
+            # not just in aggregate.
+            "active_signals": active_signals,
             "timeframe": c.get("timeframe", "1-2d"),
             "risk": risk,
             "promoter_pct": c.get("promoter_pct"),
