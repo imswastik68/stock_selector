@@ -598,7 +598,13 @@
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": true,
-      "instrument": "cash_equity"
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "weekly_trend_aligned"
+      ]
     },
     "SAKAR.NS": {
       "direction": "buy",
@@ -628,7 +634,15 @@
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
-      "instrument": "cash_equity"
+      "instrument": "cash_equity",
+      "active_signals": [
+        "fundamental_strong",
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ]
     },
     "IPCALAB.NS": {
       "direction": "buy",
@@ -643,7 +657,13 @@
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
-      "instrument": "cash_equity"
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ]
     },
     "ONELIFECAP.NS": {
       "direction": "buy",
@@ -658,7 +678,14 @@
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
-      "instrument": "cash_equity"
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ]
     },
     "OBEROIRLTY.NS": {
       "direction": "buy",
@@ -688,7 +715,14 @@
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
-      "instrument": "cash_equity"
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ]
     },
     "CHEMBONDCH.NS": {
       "direction": "buy",
@@ -718,7 +752,15 @@
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
-      "instrument": "cash_equity"
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned",
+        "sector_in_momentum"
+      ]
     },
     "AURUM.NS": {
       "direction": "buy",
@@ -733,7 +775,14 @@
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
-      "instrument": "cash_equity"
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ]
     }
   }
 }
