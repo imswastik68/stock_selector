@@ -672,7 +672,22 @@ def collect_options_events(weeks: int, skip_download: bool) -> tuple[dict[str, l
 
     sorted_days = sorted(day_maps.keys())
     out: dict[str, list[tuple[date, str]]] = {
+        # Buy-side signals (weight 0, tested 2026-07: both NO-SHIP).
         "options_pcr_fear": [], "options_long_buildup": [], "options_short_covering": [],
+        # Added 2026-07-22. These three carry LIVE NON-ZERO weights
+        # (options_pcr_greed -1, options_long_unwinding -1 in DISQUALIFIER_WEIGHTS;
+        # options_short_buildup +1 in BEARISH_EVENT_WEIGHTS) yet had never been
+        # tested -- they were unreachable while the option-chain fetch was broken,
+        # so nobody noticed. Rebuilding the fetch on the bhavcopy re-activates
+        # them (17% of the 210-name liquid F&O universe would fire pcr_greed on
+        # 2026-07-22 alone), which makes validating them a prerequisite, not a
+        # nice-to-have.
+        #
+        # All three are evaluated BUY-side, like the harness's other
+        # disqualifiers (see pead_negative_surprise): a penalty is justified by a
+        # NEGATIVE ret_lift -- the signal marking names that go on to
+        # underperform. A positive lift would mean the live penalty is backwards.
+        "options_pcr_greed": [], "options_long_unwinding": [], "options_short_buildup": [],
     }
     for i, d in enumerate(sorted_days):
         if i == 0:
@@ -681,18 +696,25 @@ def collect_options_events(weeks: int, skip_download: bool) -> tuple[dict[str, l
         prev_map = day_maps[sorted_days[i - 1]]
         for ticker, cur in today_map.items():
             call_oi, put_oi = cur["call_oi"], cur["put_oi"]
-            if call_oi < _MIN_CALL_OI:   # same liquidity gate as _parse_option_chain
+            if call_oi < _MIN_CALL_OI:   # same liquidity gate as the live fetcher
                 continue
             pcr = put_oi / call_oi if call_oi > 0 else None
             prev = prev_map.get(ticker)
             price_up = prev is not None and prev["ul_price"] > 0 and cur["ul_price"] > prev["ul_price"]
+            price_dn = prev is not None and prev["ul_price"] > 0 and cur["ul_price"] < prev["ul_price"]
             oi_up = cur["net_oi_chg"] > 0
             if pcr is not None and pcr > 1.5:
                 out["options_pcr_fear"].append((d, ticker))
+            if pcr is not None and pcr < 0.5:
+                out["options_pcr_greed"].append((d, ticker))
             if price_up and oi_up:
                 out["options_long_buildup"].append((d, ticker))
             if price_up and not oi_up:
                 out["options_short_covering"].append((d, ticker))
+            if price_dn and oi_up:
+                out["options_short_buildup"].append((d, ticker))
+            if price_dn and not oi_up:
+                out["options_long_unwinding"].append((d, ticker))
     return out, None
 
 

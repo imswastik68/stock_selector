@@ -358,15 +358,28 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
                 "Short signal — not F&O-tradeable" if fo_gated else
                 _watch_reason(direction, adjusted_score, score, nifty_trend, headwind_penalty)
             )
-            phase_b_list.append({
+            watch_entry = {
                 "ticker": ticker,
                 "phase": phase,
+                # Same key the actionable entries use, so one formatter reads both.
+                "wyckoff_phase": phase,
                 "score": score,
                 "rsi": tech.get("rsi", "N/A"),
                 "today_close": c.get("today_close"),
                 "alert_trigger": signals[:3],
                 "watch_reason": watch_reason,
-            })
+                # Carried so the F&O section can include watch-grade names: on a
+                # typical day nearly every derivatives-eligible candidate lands
+                # here rather than in buy/sell (11 of 11 F&O names on 2026-07-22,
+                # bar one), and a section that only ever drew from actionable
+                # entries was empty almost every day.
+                "fo_eligible": ticker in fo_set,
+                "options_pcr": c.get("options_pcr"),
+                "atr_pct": atr_pct if atr_pct == atr_pct else None,  # NaN-safe
+                "actionable": False,
+            }
+            phase_b_list.append(watch_entry)
+            all_entries.append(watch_entry)
             continue
 
         levels = {
@@ -411,6 +424,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             # future rather than cash equity. Tagged on EVERY entry so the main
             # lists can mark them too, not just the F&O section.
             "fo_eligible": ticker in fo_set,
+            "actionable": True,   # cleared the phase/threshold gate; carries levels
             "narrative": "",  # filled in by LLM below
             **levels,
             **pivots,
@@ -452,12 +466,21 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
     # F&O SWING list: derivatives-eligible setups the trader can express as an
     # option or future. Excludes anything already surfaced above -- those carry
     # an fo_eligible tag in place -- so this section adds names, not repeats.
+    #
+    # Draws from watch-grade entries as well as actionable ones. That is not a
+    # quality compromise, it's the only way the section is ever populated:
+    # F&O-eligible candidates are overwhelmingly sub-threshold (on 2026-07-22,
+    # 10 of the 11 that qualified were watch-grade, and the one actionable name
+    # was already in the buy list), so an actionable-only rule produced an empty
+    # section on a day with 11 tradeable candidates. Actionable names sort first
+    # and carry entry/stop/target; watch-grade ones render without levels, which
+    # is what distinguishes them in the alert.
     shown = {e["ticker"] for e in combined} | {e["ticker"] for e in phase_b_list}
     fo_list = [
         e for e in all_entries
         if e["ticker"] not in shown and e.get("fo_eligible")
     ]
-    fo_list.sort(key=lambda e: -e.get("score", 0))
+    fo_list.sort(key=lambda e: (not e.get("actionable", False), -e.get("score", 0)))
 
     return buy_list, sell_list, phase_b_list, fo_list[:MAX_FO_WATCHLIST]
 

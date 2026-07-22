@@ -116,8 +116,28 @@ DISQUALIFIER_WEIGHTS = {
     "macd_bearish_cross": -1,      # histogram / zero-line crossed down in last 3-5 bars
     "bullish_candle": -1,          # bullish candle at entry predicts underperformance (−0.43 lift)
     "bearish_candle": -1,          # shooting_star / bearish_engulfing / bearish_marubozu on last bar
-    "options_pcr_greed": -1,       # PCR < 0.5: extreme complacency (min OI required)
-    "options_long_unwinding": -1,  # price down + OI down = longs exiting (min OI required)
+    "options_pcr_greed": -1,       # PCR < 0.5: extreme complacency (min OI required).
+                                    # VALIDATED 2026-07-22 (scripts/backtest_events.py --source options,
+                                    # 156w F&O bhavcopy): n=21,697, buy-side ret_lift -0.361 with train
+                                    # (-0.343) and holdout (-0.401) BOTH negative and STRENGTHENING --
+                                    # a real, sign-consistent disqualifier. Magnitude follows the repo's
+                                    # round(3 x |ret_lift|) convention: round(3 x 0.361) = 1, which is
+                                    # what was already live. Unchanged, now on evidence rather than
+                                    # assumption. (Stored holdout_consistent reads False only because
+                                    # the harness checks POSITIVE-direction consistency -- same hand
+                                    # reconciliation as pead_negative_surprise below.)
+    "options_long_unwinding": 0,   # ZEROED 2026-07-22 -- was -1, and the penalty pointed the WRONG WAY.
+                                    # Same 156w run: n=17,827, buy-side ret_lift +0.193 (wr_lift +2.2pp)
+                                    # -- names firing "price down + OI down" went on to slightly
+                                    # OUTPERFORM, the opposite of what a -1 asserts. Not flipped positive
+                                    # either: train (-0.019) -> holdout (+0.686) is a sign flip, so the
+                                    # effect is unstable, not a reliable buy signal. 0 is the only weight
+                                    # the evidence supports.
+                                    #
+                                    # This sat wrong for months because the live option-chain fetch was
+                                    # broken (see src/data/options.py) -- the signal could never fire, so
+                                    # nothing surfaced it. Rebuilding the fetch on the bhavcopy would have
+                                    # switched a backwards penalty back on.
     "pead_negative_surprise": -2,  # PROMOTED (Alpha Round Phase 2/5, reconfirmed SOTA Round Phase 3b): a
                                     # results filing whose reaction-day close move is <=-3%
                                     # (src.data.bse_announcements.classify_pead_reaction). 260-week rerun:

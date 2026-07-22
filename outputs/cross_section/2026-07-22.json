@@ -1,0 +1,756 @@
+{
+  "scan_date": "2026-07-22",
+  "n": 125,
+  "rows": [
+    {
+      "ticker": "MBAPL.NS",
+      "score": 1,
+      "close": 143.75,
+      "qualified": false
+    },
+    {
+      "ticker": "MMFL.NS",
+      "score": 3,
+      "close": 555.75,
+      "qualified": true
+    },
+    {
+      "ticker": "JGCHEM.NS",
+      "score": -2,
+      "close": 493.3500061035156,
+      "qualified": false
+    },
+    {
+      "ticker": "BEPL.NS",
+      "score": 0,
+      "close": 123.44000244140625,
+      "qualified": false
+    },
+    {
+      "ticker": "ICICIBANK.NS",
+      "score": 4,
+      "close": 1463.1,
+      "qualified": true
+    },
+    {
+      "ticker": "SIKA.NS",
+      "score": 3,
+      "close": 1202.1,
+      "qualified": true
+    },
+    {
+      "ticker": "RALLIS.NS",
+      "score": -6,
+      "close": 228.6199951171875,
+      "qualified": false
+    },
+    {
+      "ticker": "ADOR.NS",
+      "score": 4,
+      "close": 1507.199951171875,
+      "qualified": true
+    },
+    {
+      "ticker": "LOTUSDEV.NS",
+      "score": -2,
+      "close": 140.99000549316406,
+      "qualified": false
+    },
+    {
+      "ticker": "SHYAMMETL.NS",
+      "score": 3,
+      "close": 1062.65,
+      "qualified": true
+    },
+    {
+      "ticker": "CTE.NS",
+      "score": -6,
+      "close": 30.799999237060547,
+      "qualified": false
+    },
+    {
+      "ticker": "MORARJEE.NS",
+      "score": 0,
+      "close": 12.399999618530273,
+      "qualified": false
+    },
+    {
+      "ticker": "FLAIR.NS",
+      "score": -1,
+      "close": 248.7,
+      "qualified": false
+    },
+    {
+      "ticker": "ARENTERP.NS",
+      "score": -10,
+      "close": 34.7400016784668,
+      "qualified": false
+    },
+    {
+      "ticker": "SHARDUL.NS",
+      "score": 2,
+      "close": 53.88,
+      "qualified": true
+    },
+    {
+      "ticker": "M&MFIN.NS",
+      "score": -2,
+      "close": 349.8500061035156,
+      "qualified": false
+    },
+    {
+      "ticker": "TATAELXSI.NS",
+      "score": -2,
+      "close": 3461.6,
+      "qualified": false
+    },
+    {
+      "ticker": "BECTORFOOD.NS",
+      "score": -2,
+      "close": 211.3000030517578,
+      "qualified": false
+    },
+    {
+      "ticker": "GHCLTEXTIL.NS",
+      "score": 4,
+      "close": 117.25,
+      "qualified": true
+    },
+    {
+      "ticker": "KARURVYSYA.NS",
+      "score": 4,
+      "close": 340.29998779296875,
+      "qualified": true
+    },
+    {
+      "ticker": "TEAMLEASE.NS",
+      "score": -7,
+      "close": 1325.4000244140625,
+      "qualified": false
+    },
+    {
+      "ticker": "TVSMOTOR.NS",
+      "score": 1,
+      "close": 3792.0,
+      "qualified": false
+    },
+    {
+      "ticker": "GULPOLY.NS",
+      "score": -4,
+      "close": 182.55999755859375,
+      "qualified": false
+    },
+    {
+      "ticker": "INDUSINDBK.NS",
+      "score": 3,
+      "close": 1063.45,
+      "qualified": true
+    },
+    {
+      "ticker": "SDBL.NS",
+      "score": -6,
+      "close": 72.44000244140625,
+      "qualified": false
+    },
+    {
+      "ticker": "TRIVENI.NS",
+      "score": 3,
+      "close": 471.5,
+      "qualified": true
+    },
+    {
+      "ticker": "BANDHANBNK.NS",
+      "score": 4,
+      "close": 208.83,
+      "qualified": true
+    },
+    {
+      "ticker": "MAHLOG.NS",
+      "score": -3,
+      "close": 391.1499938964844,
+      "qualified": false
+    },
+    {
+      "ticker": "PRAVEG.NS",
+      "score": -3,
+      "close": 297.9100036621094,
+      "qualified": false
+    },
+    {
+      "ticker": "SKYGOLD.NS",
+      "score": 3,
+      "close": 655.8,
+      "qualified": true
+    },
+    {
+      "ticker": "WANBURY.NS",
+      "score": 3,
+      "close": 338.4,
+      "qualified": true
+    },
+    {
+      "ticker": "NHPC.NS",
+      "score": -3,
+      "close": 80.30999755859375,
+      "qualified": false
+    },
+    {
+      "ticker": "MODIS.NS",
+      "score": -4,
+      "close": 367.04998779296875,
+      "qualified": false
+    },
+    {
+      "ticker": "TATVA.NS",
+      "score": 0,
+      "close": 1685.0,
+      "qualified": false
+    },
+    {
+      "ticker": "GALLANTT.NS",
+      "score": -3,
+      "close": 591.0,
+      "qualified": false
+    },
+    {
+      "ticker": "PNGJL.NS",
+      "score": -3,
+      "close": 590.0999755859375,
+      "qualified": false
+    },
+    {
+      "ticker": "STYRENIX.NS",
+      "score": -2,
+      "close": 2452.89990234375,
+      "qualified": false
+    },
+    {
+      "ticker": "SPECTRUM.NS",
+      "score": 3,
+      "close": 2132.5,
+      "qualified": true
+    },
+    {
+      "ticker": "AJANTPHARM.NS",
+      "score": 0,
+      "close": 3575.3,
+      "qualified": false
+    },
+    {
+      "ticker": "AVADHSUGAR.NS",
+      "score": 6,
+      "close": 552.2,
+      "qualified": true
+    },
+    {
+      "ticker": "CANHLIFE.NS",
+      "score": 4,
+      "close": 154.61000061035156,
+      "qualified": true
+    },
+    {
+      "ticker": "WESTLIFE.NS",
+      "score": -5,
+      "close": 450.1000061035156,
+      "qualified": false
+    },
+    {
+      "ticker": "TVSHLTD.NS",
+      "score": -2,
+      "close": 14031.0,
+      "qualified": false
+    },
+    {
+      "ticker": "MANALIPETC.NS",
+      "score": -4,
+      "close": 65.77999877929688,
+      "qualified": false
+    },
+    {
+      "ticker": "ACE.NS",
+      "score": -2,
+      "close": 1035.5,
+      "qualified": false
+    },
+    {
+      "ticker": "GAUDIUMIVF.NS",
+      "score": 5,
+      "close": 148.02,
+      "qualified": true
+    },
+    {
+      "ticker": "ASHIANA.NS",
+      "score": -1,
+      "close": 395.29998779296875,
+      "qualified": false
+    },
+    {
+      "ticker": "AYE.NS",
+      "score": 4,
+      "close": 189.1300048828125,
+      "qualified": true
+    },
+    {
+      "ticker": "MCCHRLS-B.NS",
+      "score": -2,
+      "close": 693.9500122070312,
+      "qualified": false
+    },
+    {
+      "ticker": "MEDPLUS.NS",
+      "score": -2,
+      "close": 801.2999877929688,
+      "qualified": false
+    },
+    {
+      "ticker": "SONAL.NS",
+      "score": -10,
+      "close": 89.0,
+      "qualified": false
+    },
+    {
+      "ticker": "RAJRATAN.NS",
+      "score": -1,
+      "close": 509.8999938964844,
+      "qualified": false
+    },
+    {
+      "ticker": "FEDDERSHOL.NS",
+      "score": 4,
+      "close": 51.86,
+      "qualified": true
+    },
+    {
+      "ticker": "PDMJEPAPER.NS",
+      "score": -6,
+      "close": 86.56999969482422,
+      "qualified": false
+    },
+    {
+      "ticker": "WAKEFIT.NS",
+      "score": -2,
+      "close": 127.76000213623047,
+      "qualified": false
+    },
+    {
+      "ticker": "DCMSRIND.NS",
+      "score": -6,
+      "close": 42.40999984741211,
+      "qualified": false
+    },
+    {
+      "ticker": "INVPRECQ.NS",
+      "score": 4,
+      "close": 886.8,
+      "qualified": true
+    },
+    {
+      "ticker": "SHRIRAMFIN.NS",
+      "score": 3,
+      "close": 1061.5,
+      "qualified": true
+    },
+    {
+      "ticker": "JPPOWER.NS",
+      "score": -2,
+      "close": 17.75,
+      "qualified": false
+    },
+    {
+      "ticker": "GABRIEL.NS",
+      "score": 4,
+      "close": 1488.5,
+      "qualified": true
+    },
+    {
+      "ticker": "RAIN.NS",
+      "score": 3,
+      "close": 223.4,
+      "qualified": true
+    },
+    {
+      "ticker": "KCPSUGIND.NS",
+      "score": -6,
+      "close": 25.809999465942383,
+      "qualified": false
+    },
+    {
+      "ticker": "ADANIENSOL.NS",
+      "score": 2,
+      "close": 1741.6,
+      "qualified": true
+    },
+    {
+      "ticker": "DIACABS.NS",
+      "score": 4,
+      "close": 269.07000732421875,
+      "qualified": true
+    },
+    {
+      "ticker": "KIRLOSENG.NS",
+      "score": 3,
+      "close": 2221.7,
+      "qualified": true
+    },
+    {
+      "ticker": "J&KBANK.NS",
+      "score": 3,
+      "close": 186.93,
+      "qualified": true
+    },
+    {
+      "ticker": "SINDHUTRAD.NS",
+      "score": -3,
+      "close": 25.200000762939453,
+      "qualified": false
+    },
+    {
+      "ticker": "HECPROJECT.NS",
+      "score": -7,
+      "close": 115.5999984741211,
+      "qualified": false
+    },
+    {
+      "ticker": "ARVINDFASN.NS",
+      "score": -3,
+      "close": 471.04998779296875,
+      "qualified": false
+    },
+    {
+      "ticker": "DAVANGERE.NS",
+      "score": -5,
+      "close": 3.380000114440918,
+      "qualified": false
+    },
+    {
+      "ticker": "ASAHISONG.NS",
+      "score": -6,
+      "close": 270.8999938964844,
+      "qualified": false
+    },
+    {
+      "ticker": "SIKKO.NS",
+      "score": -7,
+      "close": 4.769999980926514,
+      "qualified": false
+    },
+    {
+      "ticker": "TGBHOTELS.NS",
+      "score": -7,
+      "close": 8.550000190734863,
+      "qualified": false
+    },
+    {
+      "ticker": "VRLLOG.NS",
+      "score": -4,
+      "close": 243.60000610351562,
+      "qualified": false
+    },
+    {
+      "ticker": "JSWSTEEL.NS",
+      "score": 4,
+      "close": 1257.0,
+      "qualified": true
+    },
+    {
+      "ticker": "CEATLTD.NS",
+      "score": 3,
+      "close": 3408.0,
+      "qualified": true
+    },
+    {
+      "ticker": "EXIDEIND.NS",
+      "score": 3,
+      "close": 443.45,
+      "qualified": true
+    },
+    {
+      "ticker": "SOBHA.NS",
+      "score": -2,
+      "close": 1456.300048828125,
+      "qualified": false
+    },
+    {
+      "ticker": "MOL.NS",
+      "score": -4,
+      "close": 50.72999954223633,
+      "qualified": false
+    },
+    {
+      "ticker": "GANDHAR.NS",
+      "score": 3,
+      "close": 227.17,
+      "qualified": true
+    },
+    {
+      "ticker": "KALPATARU.NS",
+      "score": -4,
+      "close": 276.3500061035156,
+      "qualified": false
+    },
+    {
+      "ticker": "INDIACEM.NS",
+      "score": -2,
+      "close": 405.20001220703125,
+      "qualified": false
+    },
+    {
+      "ticker": "ASAL.NS",
+      "score": -4,
+      "close": 551.5499877929688,
+      "qualified": false
+    },
+    {
+      "ticker": "SONACOMS.NS",
+      "score": 5,
+      "close": 732.75,
+      "qualified": true
+    },
+    {
+      "ticker": "ABMINTLLTD.NS",
+      "score": -6,
+      "close": 42.81999969482422,
+      "qualified": false
+    },
+    {
+      "ticker": "INDIAMART.NS",
+      "score": 2,
+      "close": 1918.0,
+      "qualified": true
+    },
+    {
+      "ticker": "MPSLTD.NS",
+      "score": -5,
+      "close": 2061.60009765625,
+      "qualified": false
+    },
+    {
+      "ticker": "IMPEXFERRO.NS",
+      "score": -6,
+      "close": 2.390000104904175,
+      "qualified": false
+    },
+    {
+      "ticker": "E2E.NS",
+      "score": 3,
+      "close": 446.4,
+      "qualified": true
+    },
+    {
+      "ticker": "TRIDENT.NS",
+      "score": -1,
+      "close": 25.309999465942383,
+      "qualified": false
+    },
+    {
+      "ticker": "MANAPPURAM.NS",
+      "score": 2,
+      "close": 351.75,
+      "qualified": true
+    },
+    {
+      "ticker": "JINDWORLD.NS",
+      "score": -2,
+      "close": 37.63999938964844,
+      "qualified": false
+    },
+    {
+      "ticker": "KSHINTL.NS",
+      "score": 3,
+      "close": 905.35,
+      "qualified": true
+    },
+    {
+      "ticker": "SHALPAINTS.NS",
+      "score": -6,
+      "close": 58.779998779296875,
+      "qualified": false
+    },
+    {
+      "ticker": "AKCAPIT.NS",
+      "score": 3,
+      "close": 1790.4,
+      "qualified": true
+    },
+    {
+      "ticker": "ICEMAKE.NS",
+      "score": -4,
+      "close": 837.3499755859375,
+      "qualified": false
+    },
+    {
+      "ticker": "TIRUPATIFL.NS",
+      "score": 3,
+      "close": 69.96,
+      "qualified": true
+    },
+    {
+      "ticker": "KTKBANK.NS",
+      "score": 4,
+      "close": 281.3,
+      "qualified": true
+    },
+    {
+      "ticker": "STALLION.NS",
+      "score": -2,
+      "close": 245.32000732421875,
+      "qualified": false
+    },
+    {
+      "ticker": "KEEPLEARN.NS",
+      "score": -6,
+      "close": 1.840000033378601,
+      "qualified": false
+    },
+    {
+      "ticker": "SMARTWORKS.NS",
+      "score": -4,
+      "close": 486.04998779296875,
+      "qualified": false
+    },
+    {
+      "ticker": "PAYTM.NS",
+      "score": -3,
+      "close": 1300.5,
+      "qualified": false
+    },
+    {
+      "ticker": "ASHIKA.NS",
+      "score": 3,
+      "close": 394.4,
+      "qualified": true
+    },
+    {
+      "ticker": "TINNARUBR.NS",
+      "score": 0,
+      "close": 1148.9000244140625,
+      "qualified": false
+    },
+    {
+      "ticker": "KAMAHOLD.NS",
+      "score": 2,
+      "close": 2720.60009765625,
+      "qualified": true
+    },
+    {
+      "ticker": "CYIENTDLM.NS",
+      "score": 4,
+      "close": 596.0499877929688,
+      "qualified": true
+    },
+    {
+      "ticker": "TARAPUR.NS",
+      "score": 1,
+      "close": 17.09,
+      "qualified": false
+    },
+    {
+      "ticker": "BAJAJ-AUTO.NS",
+      "score": 3,
+      "close": 10403.5,
+      "qualified": true
+    },
+    {
+      "ticker": "JSFB.NS",
+      "score": 4,
+      "close": 561.5999755859375,
+      "qualified": true
+    },
+    {
+      "ticker": "CHENNPETRO.NS",
+      "score": 3,
+      "close": 1258.1,
+      "qualified": true
+    },
+    {
+      "ticker": "VISHNU.NS",
+      "score": 4,
+      "close": 640.4500122070312,
+      "qualified": true
+    },
+    {
+      "ticker": "SUPERHOUSE.NS",
+      "score": -7,
+      "close": 170.44000244140625,
+      "qualified": false
+    },
+    {
+      "ticker": "IOB.NS",
+      "score": -2,
+      "close": 35.25,
+      "qualified": false
+    },
+    {
+      "ticker": "NURECA.NS",
+      "score": -4,
+      "close": 282.4599914550781,
+      "qualified": false
+    },
+    {
+      "ticker": "SOUTHBANK.NS",
+      "score": 4,
+      "close": 47.28,
+      "qualified": true
+    },
+    {
+      "ticker": "HUHTAMAKI.NS",
+      "score": 1,
+      "close": 264.19000244140625,
+      "qualified": false
+    },
+    {
+      "ticker": "PONNIERODE.NS",
+      "score": -7,
+      "close": 315.8999938964844,
+      "qualified": false
+    },
+    {
+      "ticker": "BLUESTONE.NS",
+      "score": 1,
+      "close": 728.6500244140625,
+      "qualified": false
+    },
+    {
+      "ticker": "MAJESAUT.NS",
+      "score": 4,
+      "close": 421.2,
+      "qualified": true
+    },
+    {
+      "ticker": "VSSL.NS",
+      "score": 3,
+      "close": 308.8,
+      "qualified": true
+    },
+    {
+      "ticker": "COMSYN.NS",
+      "score": -6,
+      "close": 188.47999572753906,
+      "qualified": false
+    },
+    {
+      "ticker": "KIRLPNU.NS",
+      "score": -6,
+      "close": 1616.0999755859375,
+      "qualified": false
+    },
+    {
+      "ticker": "HSCL.NS",
+      "score": 6,
+      "close": 800.9,
+      "qualified": true
+    },
+    {
+      "ticker": "WINSOME.NS",
+      "score": -6,
+      "close": 2.25,
+      "qualified": false
+    },
+    {
+      "ticker": "PIDILITIND.NS",
+      "score": 2,
+      "close": 1591.3,
+      "qualified": true
+    }
+  ]
+}

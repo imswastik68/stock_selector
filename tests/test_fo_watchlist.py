@@ -41,6 +41,55 @@ def _cands(n: int) -> list[dict]:
              "options_pcr": 0.9, "today_close": 100.0} for i in range(n)]
 
 
+def _ctx_watch_grade(n: int, fo: set[str], n_actionable: int = 5) -> dict:
+    """The REAL shape of a scan: a few actionable MARKUP names at the top, and
+    everything else watch-grade (direction='watch'). On 2026-07-22, 10 of the 11
+    F&O-eligible qualifying candidates were watch-grade."""
+    tech = {}
+    for i in range(n):
+        if i < n_actionable:
+            tech[f"T{i}.NS"] = {"wyckoff_phase": "MARKUP", "direction": "buy",
+                                "today_close": 100.0, "rsi": 60}
+        else:
+            tech[f"T{i}.NS"] = {"wyckoff_phase": "ACCUMULATION_B", "direction": "watch",
+                                "today_close": 100.0, "rsi": 50}
+    return {
+        "technicals": tech,
+        "atr_pct": {f"T{i}.NS": 2.0 for i in range(n)},
+        "beta":    {f"T{i}.NS": 1.0 for i in range(n)},
+        "fo_eligible": fo,
+    }
+
+
+def test_watch_grade_fo_names_still_populate_the_section():
+    """Regression for the bug that shipped an empty F&O section on a day with 11
+    tradeable candidates.
+
+    Watch-grade candidates hit an early `continue` in _build_entries and used to
+    never reach all_entries, which the F&O list draws from. Since F&O-eligible
+    names are overwhelmingly sub-threshold, that made the section empty on
+    essentially every real day -- while passing synthetic tests that gave every
+    candidate a MARKUP phase.
+    """
+    fo = {"T6.NS", "T7.NS", "T8.NS", "T9.NS"}
+    _, _, _, fo_list = _build_entries(_cands(25), _ctx_watch_grade(25, fo), "uptrend")
+
+    assert fo_list, "F&O section empty despite watch-grade F&O candidates existing"
+    assert all(e["ticker"] in fo for e in fo_list)
+
+
+def test_actionable_fo_names_sort_above_watch_grade_ones():
+    """An entry carrying real levels is more useful than one that doesn't."""
+    # T5 is actionable AND F&O; T8/T9 are watch-grade F&O.
+    fo = {"T5.NS", "T8.NS", "T9.NS"}
+    _, _, _, fo_list = _build_entries(
+        _cands(25), _ctx_watch_grade(25, fo, n_actionable=6), "uptrend")
+
+    assert fo_list
+    flags = [e.get("actionable", False) for e in fo_list]
+    assert flags == sorted(flags, reverse=True)
+
+
 def test_fo_names_below_the_top20_cut_still_surface():
     """The regression that matters: F&O names ranked 20+ used to be dropped
     before entries were even built, leaving the section permanently empty."""

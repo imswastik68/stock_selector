@@ -1,0 +1,9 @@
+{
+  "per_day": [],
+  "n_days": 0,
+  "mean_ic": null,
+  "t_stat": null,
+  "verdict": "INSUFFICIENT",
+  "horizon_days": 10,
+  "note": "no cross-section is old enough to have a forward return yet"
+}

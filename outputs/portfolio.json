@@ -1,6 +1,6 @@
 {
-  "cash": 274050.58999999997,
-  "equity": 1008999.64,
+  "cash": 86016.73999999996,
+  "equity": 1003755.04,
   "realized_pnl": 0.0,
   "holdings": {
     "GAUDIUMIVF.NS": {
@@ -14,8 +14,8 @@
       "direction": "buy",
       "opened": "2026-07-22",
       "exit_policy": "time_10d",
-      "last_price": 158.7,
-      "unrealized_pnl": 18027.83
+      "last_price": 155.0,
+      "unrealized_pnl": 11782.24
     },
     "KTKBANK.NS": {
       "qty": 438,
@@ -28,8 +28,8 @@
       "direction": "buy",
       "opened": "2026-07-22",
       "exit_policy": "time_10d",
-      "last_price": 274.75,
-      "unrealized_pnl": -2868.9
+      "last_price": 278.25,
+      "unrealized_pnl": -1335.9
     },
     "SHYAMMETL.NS": {
       "qty": 104,
@@ -42,8 +42,8 @@
       "direction": "buy",
       "opened": "2026-07-22",
       "exit_policy": "time_10d",
-      "last_price": 1031.75,
-      "unrealized_pnl": -3213.6
+      "last_price": 1038.05,
+      "unrealized_pnl": -2558.39
     },
     "AVADHSUGAR.NS": {
       "qty": 212,
@@ -56,8 +56,8 @@
       "direction": "buy",
       "opened": "2026-07-22",
       "exit_policy": "time_10d",
-      "last_price": 545.0,
-      "unrealized_pnl": -1526.4
+      "last_price": 546.0,
+      "unrealized_pnl": -1314.4
     },
     "SONACOMS.NS": {
       "qty": 171,
@@ -70,15 +70,43 @@
       "direction": "buy",
       "opened": "2026-07-22",
       "exit_policy": "time_10d",
-      "last_price": 724.45,
-      "unrealized_pnl": -1419.3
+      "last_price": 730.85,
+      "unrealized_pnl": -324.9
+    },
+    "HSCL.NS": {
+      "qty": 114,
+      "entry": 800.9,
+      "entry_lo": 800.9,
+      "entry_hi": 800.9,
+      "sl": 713.61,
+      "t1": 872.08,
+      "t2": 935.47,
+      "direction": "buy",
+      "opened": "2026-07-22",
+      "exit_policy": "time_10d",
+      "last_price": 777.0,
+      "unrealized_pnl": -2724.6
+    },
+    "GHCLTEXTIL.NS": {
+      "qty": 825,
+      "entry": 117.25,
+      "entry_lo": 117.25,
+      "entry_hi": 117.25,
+      "sl": 108.17,
+      "t1": 131.57,
+      "t2": 140.92,
+      "direction": "buy",
+      "opened": "2026-07-22",
+      "exit_policy": "time_10d",
+      "last_price": 117.53,
+      "unrealized_pnl": 231.0
     }
   },
   "closed": [],
   "equity_history": [
     {
       "date": "2026-07-22",
-      "equity": 1008999.64
+      "equity": 1003755.04
     }
   ]
 }
