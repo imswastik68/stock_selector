@@ -1,112 +1,213 @@
 {
-  "cash": 86016.73999999996,
-  "equity": 1003755.04,
-  "realized_pnl": 0.0,
+  "cash": 2707.869520000004,
+  "equity": 101883.37,
+  "realized_pnl": 178.42,
   "holdings": {
-    "GAUDIUMIVF.NS": {
-      "qty": 1688,
-      "entry": 148.02,
-      "entry_lo": 148.02,
-      "entry_hi": 148.02,
-      "sl": 144.64,
-      "t1": 179.8,
-      "t2": 193.86,
+    "PIRAMALFIN.NS": {
+      "qty": 6,
+      "entry": 2017.2,
+      "entry_lo": 2017.2,
+      "entry_hi": 2017.2,
+      "sl": 1873.07,
+      "t1": 2190.15,
+      "t2": 2316.98,
       "direction": "buy",
-      "opened": "2026-07-22",
-      "exit_policy": "time_10d",
-      "last_price": 155.0,
-      "unrealized_pnl": 11782.24
+      "opened": "2026-06-16",
+      "exit_policy": "static",
+      "last_price": 1999.9,
+      "unrealized_pnl": -103.8
     },
-    "KTKBANK.NS": {
-      "qty": 438,
-      "entry": 281.3,
-      "entry_lo": 281.3,
-      "entry_hi": 281.3,
-      "sl": 258.51,
-      "t1": 299.11,
-      "t2": 315.36,
+    "BHARATFORG.NS": {
+      "qty": 8,
+      "entry": 2020.5,
+      "entry_lo": 2020.5,
+      "entry_hi": 2020.5,
+      "sl": 1900.44,
+      "t1": 2170.59,
+      "t2": 2278.64,
       "direction": "buy",
-      "opened": "2026-07-22",
-      "exit_policy": "time_10d",
-      "last_price": 278.25,
-      "unrealized_pnl": -1335.9
+      "opened": "2026-06-17",
+      "exit_policy": "static",
+      "last_price": 2008.5,
+      "unrealized_pnl": -96.0
     },
-    "SHYAMMETL.NS": {
-      "qty": 104,
-      "entry": 1062.65,
-      "entry_lo": 1062.65,
-      "entry_hi": 1062.65,
-      "sl": 966.61,
-      "t1": 1129.47,
-      "t2": 1194.61,
+    "KPIL.NS": {
+      "qty": 11,
+      "entry": 1365.699951171875,
+      "entry_lo": 1365.699951171875,
+      "entry_hi": 1365.699951171875,
+      "sl": 1278.38,
+      "t1": 1505.68,
+      "t2": 1596.6,
       "direction": "buy",
-      "opened": "2026-07-22",
-      "exit_policy": "time_10d",
-      "last_price": 1038.05,
-      "unrealized_pnl": -2558.39
+      "opened": "2026-06-17",
+      "exit_policy": "static",
+      "last_price": 1367.8,
+      "unrealized_pnl": 23.1
     },
-    "AVADHSUGAR.NS": {
-      "qty": 212,
-      "entry": 552.2,
-      "entry_lo": 552.2,
-      "entry_hi": 552.2,
-      "sl": 505.06,
-      "t1": 604.91,
-      "t2": 644.84,
+    "NYKAA.NS": {
+      "qty": 88,
+      "entry": 280.95,
+      "entry_lo": 280.95,
+      "entry_hi": 280.95,
+      "sl": 281.1,
+      "t1": 323.61,
+      "t2": 340.61,
       "direction": "buy",
-      "opened": "2026-07-22",
-      "exit_policy": "time_10d",
-      "last_price": 546.0,
-      "unrealized_pnl": -1314.4
+      "opened": "2026-06-18",
+      "exit_policy": "static",
+      "last_price": 302.3,
+      "unrealized_pnl": 1878.8
     },
-    "SONACOMS.NS": {
-      "qty": 171,
-      "entry": 732.75,
-      "entry_lo": 732.75,
-      "entry_hi": 732.75,
-      "sl": 689.07,
-      "t1": 777.52,
-      "t2": 812.91,
+    "POLYCAB.NS": {
+      "qty": 2,
+      "entry": 9926.5,
+      "entry_lo": 9926.5,
+      "entry_hi": 9926.5,
+      "sl": 9526.73,
+      "t1": 10591.15,
+      "t2": 11016.92,
       "direction": "buy",
-      "opened": "2026-07-22",
-      "exit_policy": "time_10d",
-      "last_price": 730.85,
-      "unrealized_pnl": -324.9
+      "opened": "2026-06-18",
+      "exit_policy": "static",
+      "last_price": 10048.0,
+      "unrealized_pnl": 243.0
     },
-    "HSCL.NS": {
-      "qty": 114,
-      "entry": 800.9,
-      "entry_lo": 800.9,
-      "entry_hi": 800.9,
-      "sl": 713.61,
-      "t1": 872.08,
-      "t2": 935.47,
+    "SETL.NS": {
+      "qty": 25,
+      "entry": 296.55,
+      "entry_lo": 296.55,
+      "entry_hi": 296.55,
+      "sl": 256.65,
+      "t1": 332.53,
+      "t2": 362.88,
       "direction": "buy",
-      "opened": "2026-07-22",
+      "opened": "2026-07-16",
       "exit_policy": "time_10d",
-      "last_price": 777.0,
-      "unrealized_pnl": -2724.6
+      "last_price": 291.1,
+      "unrealized_pnl": -136.25
     },
-    "GHCLTEXTIL.NS": {
-      "qty": 825,
-      "entry": 117.25,
-      "entry_lo": 117.25,
-      "entry_hi": 117.25,
-      "sl": 108.17,
-      "t1": 131.57,
-      "t2": 140.92,
+    "WABAG.NS": {
+      "qty": 1,
+      "entry": 2190.3,
+      "entry_lo": 2190.3,
+      "entry_hi": 2190.3,
+      "sl": 1791.13,
+      "t1": 2268.3,
+      "t2": 2459.17,
       "direction": "buy",
-      "opened": "2026-07-22",
+      "opened": "2026-07-17",
       "exit_policy": "time_10d",
-      "last_price": 117.53,
-      "unrealized_pnl": 231.0
+      "last_price": 2086.4,
+      "unrealized_pnl": -103.9
     }
   },
-  "closed": [],
+  "closed": [
+    {
+      "ticker": "SHREEJISPG.NS",
+      "qty": 23,
+      "entry": 483.1,
+      "exit_price": 528.39,
+      "direction": "buy",
+      "opened": "2026-06-15",
+      "closed": "2026-07-06",
+      "pnl": 1008.34,
+      "return_pct": 9.07,
+      "cost_pct": 0.3,
+      "outcome": "t1_hit"
+    },
+    {
+      "ticker": "VIPULLTD.NS",
+      "qty": 536,
+      "entry": 15.46,
+      "exit_price": 17.08,
+      "direction": "buy",
+      "opened": "2026-07-06",
+      "closed": "2026-07-13",
+      "pnl": 843.46,
+      "return_pct": 10.18,
+      "cost_pct": 0.3,
+      "outcome": "t1_hit"
+    },
+    {
+      "ticker": "MEGASTAR.NS",
+      "qty": 24,
+      "entry": 374.3,
+      "exit_price": 333.22,
+      "direction": "buy",
+      "opened": "2026-07-13",
+      "closed": "2026-07-16",
+      "pnl": -1012.87,
+      "return_pct": -11.28,
+      "cost_pct": 0.3,
+      "outcome": "sl_hit"
+    },
+    {
+      "ticker": "EBGNG.NS",
+      "qty": 6,
+      "entry": 674.85,
+      "exit_price": 566.79,
+      "direction": "buy",
+      "opened": "2026-07-09",
+      "closed": "2026-07-17",
+      "pnl": -660.51,
+      "return_pct": -16.31,
+      "cost_pct": 0.3,
+      "outcome": "sl_hit"
+    }
+  ],
   "equity_history": [
     {
+      "date": "2026-07-06",
+      "equity": 102551.44
+    },
+    {
+      "date": "2026-07-07",
+      "equity": 102932.0
+    },
+    {
+      "date": "2026-07-08",
+      "equity": 103082.08
+    },
+    {
+      "date": "2026-07-09",
+      "equity": 103137.48
+    },
+    {
+      "date": "2026-07-10",
+      "equity": 103168.08
+    },
+    {
+      "date": "2026-07-13",
+      "equity": 103370.3
+    },
+    {
+      "date": "2026-07-14",
+      "equity": 103067.0
+    },
+    {
+      "date": "2026-07-15",
+      "equity": 102998.6
+    },
+    {
+      "date": "2026-07-16",
+      "equity": 101946.78
+    },
+    {
+      "date": "2026-07-17",
+      "equity": 101576.47
+    },
+    {
+      "date": "2026-07-20",
+      "equity": 101615.37
+    },
+    {
+      "date": "2026-07-21",
+      "equity": 101883.37
+    },
+    {
       "date": "2026-07-22",
-      "equity": 1003755.04
+      "equity": 101883.37
     }
   ]
 }
