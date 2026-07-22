@@ -426,9 +426,16 @@ def score_candidates(
     pead_signals: dict[str, str] | None = None,
     reversal_signals: list[dict] | None = None,
     promoter_open_mkt_signals: list[dict] | None = None,
+    collect_all: list[dict] | None = None,
 ) -> list[dict]:
     """
     Score every unique ticker across all data sources and return qualifying candidates.
+
+    collect_all: optional out-parameter. When a list is passed, it is filled with
+                 {ticker, score, close, qualified} for EVERY scored ticker --
+                 including those cut by MIN_SCORE/MIN_SIGNALS. Used by
+                 src/cross_section.py to measure rank IC; the return value is
+                 unchanged either way, so existing callers need no update.
 
     market_regime:       "low_vol" | "normal" | "high_vol" — high_vol applies -1 to all scores.
     breadth_label:       "strong" | "neutral" | "weak" — weak applies -1 (stacks with high_vol).
@@ -516,6 +523,22 @@ def score_candidates(
 
         active = _active_signals(signals)
         disqs = _disqualifiers(signals)
+
+        # Full cross-section capture, BEFORE the MIN_SCORE/MIN_SIGNALS cut.
+        # Measuring whether `score` actually ranks forward returns (rank IC)
+        # requires the whole scored cross-section, not just the handful that
+        # qualify -- correlating only the survivors is range-restricted and
+        # attenuates the very thing we're trying to measure. See
+        # src/cross_section.py.
+        if collect_all is not None:
+            _cs_close = (vol or brk or bkd or rev or {}).get("today_close")
+            if _cs_close:
+                collect_all.append({
+                    "ticker": ticker,
+                    "score": score,
+                    "close": _cs_close,
+                    "qualified": not (score < MIN_SCORE or len(active) < MIN_SIGNALS),
+                })
 
         if score < MIN_SCORE or len(active) < MIN_SIGNALS:
             continue

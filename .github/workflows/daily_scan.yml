@@ -134,7 +134,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add outputs/performance.json outputs/portfolio.json outputs/live_proof.json
+          git add outputs/performance.json outputs/portfolio.json outputs/live_proof.json \
+                  outputs/cross_section outputs/score_ic.json
           if ! git diff --cached --quiet; then
             git commit -m "live-proof: $(date +%F) [skip ci]"
             # --autostash: see the archive step above -- other tracked files are

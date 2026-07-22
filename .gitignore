@@ -19,6 +19,11 @@ outputs/*
 !outputs/performance.json
 !outputs/portfolio.json
 !outputs/live_proof.json
+# Same reasoning for the scored cross-sections + their rank-IC summary: they are
+# an accumulating measurement record (one file per scan day) that cannot be
+# reconstructed after the fact -- the scores are only knowable at emission time.
+!outputs/cross_section/
+!outputs/score_ic.json
 cache/
 
 # Python

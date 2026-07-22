@@ -60,6 +60,7 @@ from src.data.volume import fetch_volume_gainers
 from src.scorer import score_candidates
 from src.agent import synthesize_watchlist
 from src.performance import performance_summary, record_picks, loss_streak_state, evaluate_live_alpha
+from src.cross_section import record_cross_section, compute_score_ic
 from src.risk import size_position, portfolio_summary, drawdown_state
 from src.telegram_alert import send_telegram_alert
 from src.portfolio import (
@@ -419,11 +420,14 @@ def main() -> int:
     breadth_label = market_wide_ctx.get("breadth", {}).get("breadth_label", "neutral")
     nifty_trend   = market_wide_ctx.get("nifty_structure", {}).get("trend", "ranging")
     print(f"[main] nifty_regime={nifty_regime}  breadth={breadth_label}  trend={nifty_trend}")
+    # Filled by whichever scoring pass runs last; see the re-score below.
+    all_scored: list[dict] = []
     candidates = score_candidates(
         bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts,
         delivery_signals=delivery_signals,
         fo_ban_current=fo_ban_current,
         market_regime=nifty_regime,
+        collect_all=all_scored,
         announcements=announcements,
         hot_sector_tickers=hot_sector_tickers,
         breadth_label=breadth_label,
@@ -537,6 +541,10 @@ def main() -> int:
     }
     if tech_signals:
         print(f"[main] re-scoring with technical signals for {len(tech_signals)} candidates...")
+        # Final scoring pass -- this is the cross-section the watchlist is cut
+        # from, so it's the one worth recording for rank IC. Reset first so a
+        # re-score never double-appends onto an earlier pass's rows.
+        all_scored.clear()
         candidates = score_candidates(
             bulk_deals, volume_gainers, fo_ban_removed, results_calendar, breakouts,
             promoter_signals=promoter_signals,
@@ -555,6 +563,7 @@ def main() -> int:
             nifty_trend=nifty_trend,
             fundamental_signals=fundamental_signals,
             breakdowns=breakdowns,
+            collect_all=all_scored,
         )
 
     # 6. LLM synthesis (Wyckoff + SMC + VSA)
@@ -655,6 +664,15 @@ def main() -> int:
     # 7. Save
     save_output(watchlist_data)
 
+    # 7a-2. Persist the FULL scored cross-section (not just the emitted names)
+    # so rank IC -- whether `score` orders forward returns at all -- becomes
+    # measurable. Instrumentation only: nothing here changes what is picked.
+    try:
+        record_cross_section(watchlist_data.get("scan_date", date.today().isoformat()),
+                             all_scored)
+    except Exception as exc:
+        print(f"[main] cross-section recording error (non-fatal): {exc}")
+
     # 7b. Performance tracking: record today's picks + evaluate prior
     try:
         nifty_at_emission = market_wide_ctx.get("nifty_structure", {}).get("current_price") or None
@@ -693,6 +711,19 @@ def main() -> int:
         print("\n".join(live_proof["lines"]))
     except Exception as exc:
         print(f"[main] live-proof report error (non-fatal): {exc}")
+
+    # 7e. Rank IC: does `score` order forward returns across the whole scored
+    # cross-section? Win rate can't answer that (a rising tape flatters a coin
+    # flip); rank IC can. EOD-only -- it re-reads matured cross-sections and
+    # costs an OHLCV fetch, pointless to repeat intraday.
+    try:
+        if scan_mode == "eod":
+            from src.cross_section import ic_report_line
+            ic_result = compute_score_ic()
+            watchlist_data["score_ic"] = ic_result
+            print(ic_report_line(ic_result))
+    except Exception as exc:
+        print(f"[main] score-IC error (non-fatal): {exc}")
 
     # 8. Telegram alert
     send_telegram_alert(watchlist_data)
