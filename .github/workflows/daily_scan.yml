@@ -110,7 +110,11 @@ jobs:
           git add data/event_archive/
           if ! git diff --cached --quiet; then
             git commit -m "archive: $(date +%F) [skip ci]"
-            git pull --rebase origin "${GITHUB_REF_NAME}"
+            # --autostash: the scan also dirties the git-tracked outputs/*.json
+            # whitelist (performance/portfolio/live_proof), which this step does
+            # NOT stage. Without it, rebase aborts with "cannot pull with rebase:
+            # You have unstaged changes" (exit 128) and the archive never pushes.
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           else
             echo "No archive changes to commit"
@@ -133,7 +137,9 @@ jobs:
           git add outputs/performance.json outputs/portfolio.json outputs/live_proof.json
           if ! git diff --cached --quiet; then
             git commit -m "live-proof: $(date +%F) [skip ci]"
-            git pull --rebase origin "${GITHUB_REF_NAME}"
+            # --autostash: see the archive step above -- other tracked files are
+            # left dirty by the scan and would otherwise abort the rebase.
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           else
             echo "No live-proof changes to commit"
