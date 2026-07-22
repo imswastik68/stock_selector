@@ -1,8 +1,84 @@
 {
-  "cash": 1000000.0,
-  "equity": 1000000.0,
+  "cash": 274050.58999999997,
+  "equity": 1008999.64,
   "realized_pnl": 0.0,
-  "holdings": {},
+  "holdings": {
+    "GAUDIUMIVF.NS": {
+      "qty": 1688,
+      "entry": 148.02,
+      "entry_lo": 148.02,
+      "entry_hi": 148.02,
+      "sl": 144.64,
+      "t1": 179.8,
+      "t2": 193.86,
+      "direction": "buy",
+      "opened": "2026-07-22",
+      "exit_policy": "time_10d",
+      "last_price": 158.7,
+      "unrealized_pnl": 18027.83
+    },
+    "KTKBANK.NS": {
+      "qty": 438,
+      "entry": 281.3,
+      "entry_lo": 281.3,
+      "entry_hi": 281.3,
+      "sl": 258.51,
+      "t1": 299.11,
+      "t2": 315.36,
+      "direction": "buy",
+      "opened": "2026-07-22",
+      "exit_policy": "time_10d",
+      "last_price": 274.75,
+      "unrealized_pnl": -2868.9
+    },
+    "SHYAMMETL.NS": {
+      "qty": 104,
+      "entry": 1062.65,
+      "entry_lo": 1062.65,
+      "entry_hi": 1062.65,
+      "sl": 966.61,
+      "t1": 1129.47,
+      "t2": 1194.61,
+      "direction": "buy",
+      "opened": "2026-07-22",
+      "exit_policy": "time_10d",
+      "last_price": 1031.75,
+      "unrealized_pnl": -3213.6
+    },
+    "AVADHSUGAR.NS": {
+      "qty": 212,
+      "entry": 552.2,
+      "entry_lo": 552.2,
+      "entry_hi": 552.2,
+      "sl": 505.06,
+      "t1": 604.91,
+      "t2": 644.84,
+      "direction": "buy",
+      "opened": "2026-07-22",
+      "exit_policy": "time_10d",
+      "last_price": 545.0,
+      "unrealized_pnl": -1526.4
+    },
+    "SONACOMS.NS": {
+      "qty": 171,
+      "entry": 732.75,
+      "entry_lo": 732.75,
+      "entry_hi": 732.75,
+      "sl": 689.07,
+      "t1": 777.52,
+      "t2": 812.91,
+      "direction": "buy",
+      "opened": "2026-07-22",
+      "exit_policy": "time_10d",
+      "last_price": 724.45,
+      "unrealized_pnl": -1419.3
+    }
+  },
   "closed": [],
-  "equity_history": []
+  "equity_history": [
+    {
+      "date": "2026-07-22",
+      "equity": 1008999.64
+    }
+  ]
 }

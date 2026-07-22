@@ -477,6 +477,11 @@ def _llm_call(user_msg: str, backend: str, in_ci: bool) -> str | None:
     try:
         from openai import OpenAI
     except ImportError:
+        # Was a bare silent `return None`: narratives just vanished from every
+        # alert with nothing logged, on any machine where `pip install -r
+        # requirements.txt` hadn't been re-run. Say so instead.
+        print("[agent] openai package not installed — narratives skipped "
+              "(pip install -r requirements.txt)")
         return None
 
     for name, base, model, key in _caller_chain(backend, in_ci):

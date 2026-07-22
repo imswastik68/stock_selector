@@ -19,12 +19,14 @@ Usage:
 from __future__ import annotations
 
 import json
+import time
 import warnings
 from datetime import date, timedelta
 from pathlib import Path
 
 _CACHE_FILE = Path(__file__).parent.parent.parent / "outputs" / "fundamentals_cache.json"
 _CACHE_TTL_DAYS = 7
+_FETCH_DELAY_SECONDS = 1.2  # spacing between .info calls; see the fetch loop
 
 
 def _load_cache() -> dict:
@@ -115,7 +117,14 @@ def fetch_fundamental_signals(tickers: list[str]) -> dict[str, dict]:
 
     if to_fetch:
         print(f"[fundamentals] fetching .info for {len(to_fetch)} tickers ...")
-        for t in to_fetch:
+        n_failed = 0
+        for i, t in enumerate(to_fetch):
+            # yfinance throttles .info hard (HTTP 429 "Too Many Requests") when
+            # called in a tight loop -- a bare 20-ticker loop reliably fails ALL
+            # 20. Space the calls out; _FETCH_DELAY_SECONDS x 20 is only ~24s
+            # against a scan that already takes minutes.
+            if i:
+                time.sleep(_FETCH_DELAY_SECONDS)
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
@@ -128,11 +137,19 @@ def fetch_fundamental_signals(tickers: list[str]) -> dict[str, dict]:
                 de_str  = f" D/E={sig['de_ratio']:.1f}" if sig['de_ratio'] is not None else ""
                 print(f"[fundamentals] {t:<20} {label}{roe_str}{de_str}")
             except Exception as exc:
+                n_failed += 1
                 print(f"[fundamentals] {t}: error ({exc}) — neutral")
+                # Neutral for THIS run only -- deliberately NOT written to cache.
+                # Caching a fetch failure would stamp it with today's date and
+                # the 7-day TTL would then serve "no fundamental data" for a week
+                # without ever retrying, silently disabling fundamental_strong /
+                # fundamental_weak on exactly the tickers that failed. A failure
+                # is an absence of data, not a measurement of it.
                 results[t] = {"fundamental_strong": False, "fundamental_weak": False,
                               "roe": None, "de_ratio": None, "eps_growth": None, "profit_margins": None}
-                cache[t] = {**results[t], "fetched_date": today}
 
+        if n_failed:
+            print(f"[fundamentals] {n_failed}/{len(to_fetch)} failed — not cached, will retry next run")
         _save_cache(cache)
 
     return results
