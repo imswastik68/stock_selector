@@ -42,6 +42,25 @@ _OC_EQUITIES = "https://www.nseindia.com/api/option-chain-equities?symbol={symbo
 
 _MIN_CALL_OI = 5000  # ignore options signals on illiquid chains (SME / thinly-traded stocks)
 
+# DORMANT since 2026-07. NSE now blocks this API from scripted clients: the
+# homepage cookie handshake returns 403 and option-chain-equities returns a bare
+# "{}" -- verified by hand against RELIANCE/INFY/SBIN, the three most liquid F&O
+# names in India, so it is NOT the "non-F&O" case the log line used to claim. The
+# 2026-07-22 scan reported "20 tickers, 0 with options data" for exactly this
+# reason. From GitHub Actions runner IPs it is blocked harder still.
+#
+# Kept dormant rather than deleted: the parsing/PCR logic below is fine and would
+# work again behind a data source that isn't blocked (a paid feed, or a broker
+# API). Set to True -- or wire a new source into _fetch_one -- to revive it.
+#
+# Scoring impact of leaving this off is nil: every options signal that scores
+# POSITIVE is weight 0 (PENDING_VALIDATION, never backtested) -- see
+# SHORT_TERM_WEIGHTS in src/scorer.py. The only non-zero weights it could produce
+# are the options_pcr_greed / options_long_unwinding disqualifiers (-1 each),
+# which are equally unvalidated. So a dead fetch was costing scan time and
+# printing a misleading reason while changing no score.
+OPTIONS_FETCH_LIVE = False
+
 _HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -192,9 +211,17 @@ def fetch_options_signals(
     Returns     : {ticker: signal_dict}
 
     Only F&O-eligible stocks have options chains. Non-F&O tickers silently return _EMPTY.
+
+    DORMANT (2026-07): see OPTIONS_FETCH_LIVE. Returns empty signals without
+    touching the network unless explicitly re-enabled.
     """
     if not tickers:
         return {}
+
+    if not OPTIONS_FETCH_LIVE:
+        print(f"[options] DISABLED — NSE blocks the option-chain API "
+              f"({len(tickers)} tickers skipped, no signals). See OPTIONS_FETCH_LIVE.")
+        return {t: dict(_EMPTY) for t in tickers}
 
     prev_closes = prev_closes or {}
     session = _make_session()

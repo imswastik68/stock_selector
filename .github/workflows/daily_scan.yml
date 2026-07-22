@@ -134,8 +134,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add outputs/performance.json outputs/portfolio.json outputs/live_proof.json \
-                  outputs/cross_section outputs/score_ic.json
+          # `-A outputs/` rather than naming each file: git add ERRORS OUT on a
+          # pathspec that matches nothing ("fatal: pathspec ... did not match"),
+          # so naming outputs/cross_section or outputs/score_ic.json explicitly
+          # would kill this step with exit 128 on any run where they don't exist
+          # yet -- the same failure mode as the missing --autostash above, and it
+          # would take performance.json down with it. -A stages exactly the
+          # non-ignored files under outputs/ (the .gitignore whitelist) and is a
+          # no-op when they're absent.
+          git add -A outputs/
           if ! git diff --cached --quiet; then
             git commit -m "live-proof: $(date +%F) [skip ci]"
             # --autostash: see the archive step above -- other tracked files are
