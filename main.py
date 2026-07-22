@@ -58,7 +58,7 @@ from src.data.fundamentals import fetch_fundamental_signals
 from src.data.results import fetch_results_calendar
 from src.data.volume import fetch_volume_gainers
 from src.scorer import score_candidates
-from src.agent import synthesize_watchlist
+from src.agent import synthesize_watchlist, FO_ENRICH_EXTRA
 from src.performance import performance_summary, record_picks, loss_streak_state, evaluate_live_alpha
 from src.cross_section import record_cross_section, compute_score_ic
 from src.risk import size_position, portfolio_summary, drawdown_state
@@ -442,7 +442,17 @@ def main() -> int:
     #    Done AFTER scoring so we only call APIs for qualified stocks, not the whole universe
     sast_signals: dict[str, bool] = {}
     if candidates:
+        # Top 20 by score, PLUS the best F&O-eligible names even if they fall
+        # outside it. Only ~15% of qualifying candidates are F&O-listed, so a
+        # flat top-20 cut regularly left the F&O watchlist with nothing to build
+        # from -- and an F&O pick with no technicals/levels isn't tradeable.
         top_tickers = [c["ticker"] for c in candidates[:20]]
+        _fo_extra = [c["ticker"] for c in candidates[20:]
+                     if c["ticker"] in fo_eligible][:FO_ENRICH_EXTRA]
+        if _fo_extra:
+            print(f"[main] +{len(_fo_extra)} F&O candidate(s) pulled into enrichment "
+                  f"from outside the top 20")
+            top_tickers += _fo_extra
         print(f"[main] fetching options data for {len(top_tickers)} candidates...")
         # Build prev_closes from volume data AND breakouts so candidates that appear
         # only in bulk deals / breakouts (not volume gainers) still get a price reference

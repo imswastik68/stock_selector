@@ -81,7 +81,7 @@ def test_build_entries_carries_active_signals_onto_buy_entry():
     market_context = {
         "technicals": {"PROOF.NS": {"wyckoff_phase": "MARKUP", "direction": "buy"}},
     }
-    buy_list, sell_list, phase_b_list = _build_entries(candidates, market_context, "ranging")
+    buy_list, sell_list, phase_b_list, _ = _build_entries(candidates, market_context, "ranging")
 
     assert len(buy_list) == 1
     assert buy_list[0]["active_signals"] == ["near_52w_high", "reversal_oversold_v2"]

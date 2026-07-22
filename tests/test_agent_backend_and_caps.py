@@ -49,7 +49,7 @@ def test_build_entries_truncates_actionable_list_to_max_actionable():
         "beta":    {f"T{i}.NS": 1.0 for i in range(n)},
     }
 
-    buy_list, sell_list, _ = agent._build_entries(candidates, market_context, "uptrend")
+    buy_list, sell_list, _, _ = agent._build_entries(candidates, market_context, "uptrend")
 
     assert len(buy_list) + len(sell_list) == agent.MAX_ACTIONABLE == 5
     # Highest-scoring names survive the cut, in descending score order.
@@ -71,7 +71,7 @@ def test_build_entries_truncates_watch_list_to_max_phase_b():
         "beta":    {f"W{i}.NS": 1.0 for i in range(n)},
     }
 
-    _, _, phase_b = agent._build_entries(candidates, market_context, "uptrend")
+    _, _, phase_b, _ = agent._build_entries(candidates, market_context, "uptrend")
 
     assert len(phase_b) == agent.MAX_PHASE_B == 3
 

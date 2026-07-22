@@ -375,6 +375,61 @@ def _format_pead_entry(entry: dict, rank: int) -> str:
     return "\n".join(lines)
 
 
+def _format_fo_entry(entry: dict, rank: int) -> str:
+    """
+    F&O SWING entry: a derivatives-eligible setup, rendered with the positioning
+    context that matters when expressing it as an option or future rather than
+    cash -- PCR and open-interest direction alongside the usual levels.
+
+    PCR/OI are shown as CONTEXT ONLY. Every options signal is weight 0 in
+    src/scorer.py (PENDING_VALIDATION -- never backtested), so none of this moved
+    the score that ranked this name; it is here for the trader's judgement, not
+    as a claim of edge. See src/data/options.py.
+    """
+    ticker = entry.get("ticker", "?")
+    phase  = entry.get("wyckoff_phase", "?")
+    score  = entry.get("score")
+    price  = entry.get("today_close")
+    pcr    = entry.get("options_pcr")
+    atr    = entry.get("atr_pct")
+
+    phase_icon = WYCKOFF_EMOJI.get(phase, "📊")
+    price_str  = f"  {_code(_fmt_price(price))}" if price is not None else ""
+
+    lines = [
+        f"{_b(f'{rank}. {ticker}')}{price_str}",
+        f"  {phase_icon} {_b(_fmt_phase(phase))}",
+    ]
+
+    meta = [f"Score: {_code(score)}" if score is not None else ""]
+    if pcr is not None:
+        # >1 = put-heavy (fear/support), <1 = call-heavy (complacency).
+        lean = "put-heavy" if pcr > 1 else "call-heavy"
+        meta.append(f"PCR: {_code(pcr)} ({lean})")
+    if atr:
+        meta.append(f"ATR: {_code(f'{atr}%')}")
+    meta_line = " | ".join(x for x in meta if x)
+    if meta_line:
+        lines.append(f"  {meta_line}")
+
+    oi_tags = [label for key, label in (
+        ("options_long_buildup",   "LONG BUILDUP"),
+        ("options_short_buildup",  "SHORT BUILDUP"),
+        ("options_short_covering", "SHORT COVERING"),
+        ("options_long_unwinding", "LONG UNWINDING"),
+    ) if key in (entry.get("active_signals") or [])]
+    if oi_tags:
+        lines.append(f"  OI: {_i(', '.join(oi_tags))}")
+
+    entry_zone = entry.get("entry_zone")
+    sl, t1 = entry.get("stop_loss"), entry.get("target_1")
+    if entry_zone and sl and t1:
+        lines.append(f"  Entry {_code(entry_zone)} | SL {_code(_fmt_price(sl))} "
+                     f"| T1 {_code(_fmt_price(t1))}")
+
+    return "\n".join(lines) + "\n"
+
+
 def _format_phase_b_entry(entry: dict, rank: int) -> str:
     ticker       = entry.get("ticker", "?")
     phase        = entry.get("phase", "?")
@@ -647,13 +702,14 @@ def _build_message(watchlist_data: dict) -> str:
         sell_list    = watchlist_data.get("sell_watchlist", [])
         phase_b_list = watchlist_data.get("phase_b_watchlist", [])
         pead_list    = watchlist_data.get("pead_watchlist", [])
+        fo_list      = watchlist_data.get("fo_watchlist", [])
         nifty_ctx    = watchlist_data.get("nifty_context", "ranging").upper()
         total        = watchlist_data.get("total_screened", 0)
         warnings     = watchlist_data.get("data_quality_warnings", [])
 
         time_str = f" | {_e(scan_time)}" if scan_time else ""
 
-        if not buy_list and not sell_list and not phase_b_list and not pead_list:
+        if not buy_list and not sell_list and not phase_b_list and not pead_list and not fo_list:
             base = (
                 f"<b>NSE/BSE Stock Scanner — {_e(scan_date)}{time_str}</b>\n\n"
                 f"No qualifying candidates today ({total} screened). "
@@ -758,6 +814,12 @@ def _build_message(watchlist_data: dict) -> str:
         if phase_b_list:
             sections.append(f"\n👀 <b>WATCH LIST ({len(phase_b_list)} stocks)</b>\n")
             sections.extend(_format_phase_b_entry(e, i + 1) for i, e in enumerate(phase_b_list))
+
+        if fo_list:
+            sections.append(f"\n⚡ <b>F&amp;O SWING ({len(fo_list)} stocks)</b>\n")
+            sections.append(_i("Options/futures tradeable. PCR &amp; OI shown as "
+                               "context — unvalidated, they do not affect score.\n"))
+            sections.extend(_format_fo_entry(e, i + 1) for i, e in enumerate(fo_list))
 
         if pead_list:
             sections.append(f"\n👁 <b>PEAD WATCH ({len(pead_list)} stocks)</b>\n")

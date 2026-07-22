@@ -130,6 +130,19 @@ SHORT_PIPELINE_LIVE = False
 MAX_ACTIONABLE = 5
 MAX_PHASE_B    = 3
 
+# F&O SWING watchlist: derivatives-eligible setups, so the pick can actually be
+# expressed as an option or a future. Only ~15% of all picks historically landed
+# in the F&O universe (11 of 71 across 2026-05/07; four scan days had ZERO), so
+# without a dedicated section a derivatives trader gets nothing most days.
+#
+# Drawn from candidates NOT already in the buy/sell lists -- those are shown
+# there already, tagged -- so this section adds names rather than repeating them.
+MAX_FO_WATCHLIST = 3
+
+# How many F&O-eligible candidates to pull into the enrichment pool from OUTSIDE
+# the top-20-by-score cut, so the F&O section has technicals/levels to build from.
+FO_ENRICH_EXTRA = 8
+
 # BIG MOVER tier — Phase 0 mining found no atr/score/signal combination that clears
 # the 1.5x-holdout-lift ship bar; RE-CONFIRMED by Phase 5 on the 156-week backtest
 # (best candidate atr>=5+score>=6: holdout P(big)=40.2%, decisively above the 30.4%
@@ -214,7 +227,7 @@ def _is_expiry_proximity(today: date) -> bool:
 
 # ── build deterministic watchlist entries ────────────────────────────────────
 
-def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: str) -> tuple[list, list, list]:
+def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: str) -> tuple[list, list, list, list]:
     """
     Build buy/sell/phase_b entries from deterministic signals only.
     Returns (buy_list, sell_list, phase_b_list) — no LLM involved.
@@ -227,8 +240,19 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
     fo_set:     set  = market_context.get("fo_eligible") or set()
 
     buy_list, sell_list, phase_b_list = [], [], []
+    # Every entry built this pass, regardless of which list it lands in -- the
+    # F&O section draws from here so a derivatives-eligible setup outside the
+    # top-N cut can still surface.
+    all_entries: list[dict] = []
 
-    for c in candidates[:20]:
+    # Top 20 by score, PLUS any F&O-eligible candidate below that cut. Only ~15%
+    # of candidates are derivatives-listed and they are not concentrated at the
+    # top, so a flat [:20] left the F&O section empty on most days -- the very
+    # problem it exists to solve. main.py mirrors this when choosing which
+    # tickers to enrich, so these carry real technicals rather than blanks.
+    _pool = candidates[:20] + [c for c in candidates[20:]
+                               if c["ticker"] in fo_set][:FO_ENRICH_EXTRA]
+    for c in _pool:
         ticker = c["ticker"]
         tech   = technicals.get(ticker, {})
         beta   = beta_data.get(ticker, float("nan"))
@@ -383,10 +407,15 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             "rs_quality":  tech.get("rs_quality"),
             "expiry_suppressed": expiry_suppressed,
             "instrument": "stock_future" if direction == "sell" else "cash_equity",
+            # Derivatives-eligible: the setup can be expressed as an option or a
+            # future rather than cash equity. Tagged on EVERY entry so the main
+            # lists can mark them too, not just the F&O section.
+            "fo_eligible": ticker in fo_set,
             "narrative": "",  # filled in by LLM below
             **levels,
             **pivots,
         }
+        all_entries.append(base)
 
         if direction == "buy" and phase in _BUY_PHASES:
             base["expected_move_pct"] = round((atr_pct or 2) * 4, 1)
@@ -418,7 +447,19 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
 
     # Sort watch list by raw score so the strongest setups appear first
     phase_b_list.sort(key=lambda e: e.get("score", 0), reverse=True)
-    return buy_list, sell_list, phase_b_list[:MAX_PHASE_B]
+    phase_b_list = phase_b_list[:MAX_PHASE_B]
+
+    # F&O SWING list: derivatives-eligible setups the trader can express as an
+    # option or future. Excludes anything already surfaced above -- those carry
+    # an fo_eligible tag in place -- so this section adds names, not repeats.
+    shown = {e["ticker"] for e in combined} | {e["ticker"] for e in phase_b_list}
+    fo_list = [
+        e for e in all_entries
+        if e["ticker"] not in shown and e.get("fo_eligible")
+    ]
+    fo_list.sort(key=lambda e: -e.get("score", 0))
+
+    return buy_list, sell_list, phase_b_list, fo_list[:MAX_FO_WATCHLIST]
 
 
 # ── LLM narrative request ─────────────────────────────────────────────────────
@@ -532,14 +573,16 @@ def synthesize_watchlist(
             "buy_watchlist": [],
             "sell_watchlist": [],
             "phase_b_watchlist": [],
+            "fo_watchlist": [],
             "data_quality_warnings": ["No market context available"],
         }
 
     # Step 1: Build all entries deterministically (no LLM)
-    buy_list, sell_list, phase_b_list = _build_entries(candidates, market_context, nifty_trend)
+    buy_list, sell_list, phase_b_list, fo_list = _build_entries(candidates, market_context, nifty_trend)
 
     actionable = buy_list + sell_list
-    print(f"[agent] deterministic: {len(buy_list)} buys, {len(sell_list)} sells, {len(phase_b_list)} phase-B")
+    print(f"[agent] deterministic: {len(buy_list)} buys, {len(sell_list)} sells, "
+          f"{len(phase_b_list)} phase-B, {len(fo_list)} F&O-swing")
 
     # Step 2: Ask LLM for one narrative sentence per actionable stock (optional enrichment)
     if actionable:
@@ -569,6 +612,7 @@ def synthesize_watchlist(
         "buy_watchlist": buy_list,
         "sell_watchlist": sell_list,
         "phase_b_watchlist": phase_b_list,
+        "fo_watchlist": fo_list,
         "fii_dii": fii_dii,
         "gift_nifty": gift_nifty,
         "data_quality_warnings": [],

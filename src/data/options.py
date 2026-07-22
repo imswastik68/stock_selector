@@ -24,13 +24,18 @@ homepage first. Fails gracefully: all signals default to False on any error.
 
 from __future__ import annotations
 
+import io
 import json
 import time
 import warnings
+import zipfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import date, timedelta
 from pathlib import Path
 
 import requests
+
+from src.cache import load_today, save_today
 
 _OUTPUTS_DIR   = Path(__file__).parent.parent.parent / "outputs"
 _PCR_CACHE_FILE = _OUTPUTS_DIR / "pcr_cache.json"
@@ -42,24 +47,28 @@ _OC_EQUITIES = "https://www.nseindia.com/api/option-chain-equities?symbol={symbo
 
 _MIN_CALL_OI = 5000  # ignore options signals on illiquid chains (SME / thinly-traded stocks)
 
-# DORMANT since 2026-07. NSE now blocks this API from scripted clients: the
-# homepage cookie handshake returns 403 and option-chain-equities returns a bare
-# "{}" -- verified by hand against RELIANCE/INFY/SBIN, the three most liquid F&O
-# names in India, so it is NOT the "non-F&O" case the log line used to claim. The
-# 2026-07-22 scan reported "20 tickers, 0 with options data" for exactly this
-# reason. From GitHub Actions runner IPs it is blocked harder still.
+# DATA SOURCE (rewritten 2026-07): NSE's EOD F&O bhavcopy, not the live API.
 #
-# Kept dormant rather than deleted: the parsing/PCR logic below is fine and would
-# work again behind a data source that isn't blocked (a paid feed, or a broker
-# API). Set to True -- or wire a new source into _fetch_one -- to revive it.
+# The live API (api/option-chain-equities) is blocked for scripted clients --
+# the cookie handshake 403s and the endpoint returns a bare "{}", verified
+# against RELIANCE/INFY/SBIN, the three most liquid F&O names in India. That is
+# why the old fetch reported "0 with options data" for every ticker while
+# blaming "non-F&O".
 #
-# Scoring impact of leaving this off is nil: every options signal that scores
-# POSITIVE is weight 0 (PENDING_VALIDATION, never backtested) -- see
-# SHORT_TERM_WEIGHTS in src/scorer.py. The only non-zero weights it could produce
-# are the options_pcr_greed / options_long_unwinding disqualifiers (-1 each),
-# which are equally unvalidated. So a dead fetch was costing scan time and
-# printing a misleading reason while changing no score.
-OPTIONS_FETCH_LIVE = False
+# The ARCHIVE path is not blocked and is the authoritative settlement record --
+# the same nsearchives.nseindia.com host src/data/delivery.py already reads
+# successfully. One ~1.2 MB zip per trading day carries every contract: 38,175
+# rows / 215 underlyings on 2026-07-21 (32,393 stock options, 5,142 index
+# options, 625 stock futures) with strike, expiry, OI, OI change, volume,
+# settlement and underlying price.
+#
+# EOD rather than intraday. For swing horizons (5-10 days) that is the right
+# resolution -- and it is what finally makes these signals BACKTESTABLE, since
+# the same archive exists historically. They stay at weight 0 until
+# scripts/backtest_events.py returns a SHIP verdict, like every other signal here.
+_FO_BHAV_URL = ("https://nsearchives.nseindia.com/content/fo/"
+                "BhavCopy_NSE_FO_0_0_0_{date}_F_0000.csv.zip")
+_FO_BHAV_LOOKBACK_DAYS = 6  # walk back past weekends/holidays to the last published file
 
 _HEADERS = {
     "User-Agent": (
@@ -111,18 +120,103 @@ def _percentile(values: list[float], p: float) -> float:
 
 
 def _make_session() -> requests.Session:
-    """Create an NSE-cookie-initialised session."""
+    """Plain NSE-headered session. The archive host needs no cookie handshake."""
     s = requests.Session()
     s.headers.update(_HEADERS)
-    try:
-        s.get(_NSE_HOME, timeout=10)
-        time.sleep(0.3)
-        # Second hit to consolidate cookies (NSE often requires this)
-        s.get("https://www.nseindia.com/market-data/equity-derivatives-watch", timeout=10)
-        time.sleep(0.3)
-    except Exception:
-        pass
     return s
+
+
+def fetch_fo_bhavcopy(as_of: date | None = None):
+    """
+    Download and parse the most recent published F&O bhavcopy as a DataFrame.
+
+    Walks back up to _FO_BHAV_LOOKBACK_DAYS (weekends/holidays have no file, and
+    the current day's is not published until after the close). Cached per
+    calendar day -- the file is ~1.2 MB and never changes once published.
+    Returns None if nothing could be fetched.
+    """
+    import pandas as pd
+
+    cached = load_today("fo_bhavcopy")
+    if cached is not None:
+        return cached
+
+    session = _make_session()
+    start = as_of or date.today()
+    for back in range(0, _FO_BHAV_LOOKBACK_DAYS + 1):
+        d = start - timedelta(days=back)
+        url = _FO_BHAV_URL.format(date=d.strftime("%Y%m%d"))
+        try:
+            resp = session.get(url, timeout=30)
+            if resp.status_code != 200 or len(resp.content) < 1000:
+                continue
+            with zipfile.ZipFile(io.BytesIO(resp.content)) as z:
+                df = pd.read_csv(z.open(z.namelist()[0]))
+            df.columns = [c.strip() for c in df.columns]
+            print(f"[options] F&O bhavcopy {d}: {len(df)} contracts, "
+                  f"{df['TckrSymb'].nunique()} underlyings")
+            save_today("fo_bhavcopy", df)
+            return df
+        except Exception as exc:
+            print(f"[options] bhavcopy {d} failed: {type(exc).__name__} {exc}")
+            continue
+
+    print(f"[options] no F&O bhavcopy found in the last {_FO_BHAV_LOOKBACK_DAYS} days")
+    return None
+
+
+def _signals_from_bhavcopy(df, symbol: str, prev_close: float | None) -> dict:
+    """
+    Derive the same signal dict the option-chain parser produced, from this
+    symbol's rows in the F&O bhavcopy.
+
+    PCR and OI-change use the NEAREST expiry only. That's where swing-relevant
+    positioning sits; summing every expiry mixes a 3-month-out strike nobody is
+    trading into the same number as the front month.
+    """
+    opts = df[(df["TckrSymb"] == symbol) & (df["FinInstrmTp"] == "STO")]
+    if opts.empty:
+        return dict(_EMPTY)
+
+    # Nearest expiry present for this symbol.
+    expiries = sorted(opts["XpryDt"].dropna().unique())
+    if not expiries:
+        return dict(_EMPTY)
+    front = opts[opts["XpryDt"] == expiries[0]]
+
+    calls = front[front["OptnTp"] == "CE"]
+    puts  = front[front["OptnTp"] == "PE"]
+
+    total_call_oi = float(calls["OpnIntrst"].sum())
+    total_put_oi  = float(puts["OpnIntrst"].sum())
+    total_call_chg = float(calls["ChngInOpnIntrst"].sum())
+    total_put_chg  = float(puts["ChngInOpnIntrst"].sum())
+
+    pcr = round(total_put_oi / total_call_oi, 3) if total_call_oi > 0 else None
+
+    # Underlying price today, straight from the settlement record.
+    ul_series = front["UndrlygPric"].dropna()
+    ul = float(ul_series.iloc[0]) if not ul_series.empty else 0.0
+
+    price_up = bool(prev_close and prev_close > 0 and ul > prev_close)
+    price_dn = bool(prev_close and prev_close > 0 and ul < prev_close)
+    oi_up = (total_call_chg + total_put_chg) > 0
+
+    liquid = total_call_oi >= _MIN_CALL_OI
+
+    return {
+        "pcr": pcr,
+        # Cold-start fixed thresholds; fetch_options_signals overrides these with
+        # percentile-based ones once enough history accumulates.
+        "pcr_fear":  bool(liquid and pcr is not None and pcr > 1.5),
+        "pcr_greed": bool(liquid and pcr is not None and pcr < 0.5),
+        "long_buildup":   bool(liquid and price_up and oi_up),
+        "short_covering": bool(liquid and price_up and not oi_up),
+        "short_buildup":  bool(liquid and price_dn and oi_up),
+        "long_unwinding": bool(liquid and price_dn and not oi_up),
+        "total_put_oi": total_put_oi,
+        "total_call_oi": total_call_oi,
+    }
 
 
 def _parse_option_chain(data: dict, prev_close: float | None) -> dict:
@@ -212,29 +306,28 @@ def fetch_options_signals(
 
     Only F&O-eligible stocks have options chains. Non-F&O tickers silently return _EMPTY.
 
-    DORMANT (2026-07): see OPTIONS_FETCH_LIVE. Returns empty signals without
-    touching the network unless explicitly re-enabled.
+    Sourced from the EOD F&O bhavcopy (see _FO_BHAV_URL) -- ONE download per
+    day for the whole market, then a local lookup per ticker, rather than the
+    old per-ticker API calls.
     """
     if not tickers:
         return {}
 
-    if not OPTIONS_FETCH_LIVE:
-        print(f"[options] DISABLED — NSE blocks the option-chain API "
-              f"({len(tickers)} tickers skipped, no signals). See OPTIONS_FETCH_LIVE.")
-        return {t: dict(_EMPTY) for t in tickers}
-
     prev_closes = prev_closes or {}
-    session = _make_session()
     results: dict[str, dict] = {}
 
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {
-            pool.submit(_fetch_one, t, session, prev_closes.get(t)): t
-            for t in tickers
-        }
-        for fut in as_completed(futures):
-            ticker, sig = fut.result()
-            results[ticker] = sig
+    df = fetch_fo_bhavcopy()
+    if df is None:
+        print(f"[options] no bhavcopy available — {len(tickers)} tickers get empty signals")
+        return {t: dict(_EMPTY) for t in tickers}
+
+    for t in tickers:
+        symbol = t.replace(".NS", "").replace("[PENNY]", "")
+        try:
+            results[t] = _signals_from_bhavcopy(df, symbol, prev_closes.get(t))
+        except Exception as exc:
+            print(f"[options] {t}: {type(exc).__name__} {exc}")
+            results[t] = dict(_EMPTY)
 
     # Percentile-based PCR signals: update rolling history, override fixed-threshold flags
     cache = _load_pcr_cache()
@@ -262,5 +355,5 @@ def fetch_options_signals(
 
     no_data = sum(1 for v in results.values() if v["pcr"] is None)
     print(f"[options] {len(tickers)} tickers, {len(tickers) - no_data} with options data, "
-          f"{no_data} no data (non-F&O or fetch error)")
+          f"{no_data} not F&O-listed")
     return results
