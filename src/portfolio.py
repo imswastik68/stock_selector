@@ -50,7 +50,7 @@ from src.trade_sim import WINNER_POLICY, simulate_trade
 from src.costs import round_trip_cost_pct
 
 _STATE_FILE = Path(__file__).parent.parent / "outputs" / "portfolio.json"
-_INITIAL_CAPITAL = 100_000.0  # default; overridden by RISK_CAPITAL env if set
+_INITIAL_CAPITAL = 1_000_000.0  # default; overridden by RISK_CAPITAL env if set
 _MAX_EQUITY_HISTORY = 400  # ~1.5y of daily snapshots -- plenty for drawdown_state's peak-tracking
 
 

@@ -6,8 +6,10 @@ Architecture:
   - Wyckoff phase classified by rule-based Python — never LLM
   - LLM role: write one factual sentence of narrative per stock only
 
-Backend selection via INFERENCE_BACKEND env var:
-  groq   (default) — Groq cloud, free tier, llama-3.3-70b-versatile
+Backend selection via INFERENCE_BACKEND env var — names the PRIMARY; the others
+stay as ordered fallbacks (see _caller_chain):
+  gemini (default) — Gemini cloud, free tier, gemini-3.5-flash
+  groq              — Groq cloud, free tier, llama-3.3-70b-versatile
   ollama            — local Ollama, qwen3:8b, no internet needed
 """
 
@@ -24,6 +26,15 @@ from src.scorer import BEARISH_EVENT_WEIGHTS, REGIME_WEIGHTS
 
 _GROQ_BASE  = "https://api.groq.com/openai/v1"
 _GROQ_MODEL = "llama-3.3-70b-versatile"
+
+# Gemini free tier via its OpenAI-compatible endpoint: better narrative prose than
+# llama-3.3-70b at zero cost (free tier: ~10 req/min, 250K tokens/min, 1,500
+# req/day). A scan makes ONE batched narrative call, so even 3 scans/day sits at
+# ~0.2% of the daily quota -- no rate-limit throttle needed here (unlike the
+# per-article loop in the stock-news-alerts project). Narrative-only: this choice
+# cannot affect which stocks get picked. Same pattern as that project's classifier.
+_GEMINI_BASE  = "https://generativelanguage.googleapis.com/v1beta/openai/"
+_GEMINI_MODEL = "gemini-3.5-flash"
 
 _OLLAMA_BASE  = "http://localhost:11434/v1"
 _OLLAMA_MODEL = "qwen3:8b"
@@ -102,6 +113,22 @@ SELL_ENTRY_THRESHOLD_ELSE = 4
 # re-run scripts/mine_big_movers.py's downtrend_short_edge check once more data
 # accumulates or the market regime shifts out of the current correction.
 SHORT_PIPELINE_LIVE = False
+
+# Daily alert volume. Was 10 actionable + 8 watch = up to 18 names to hand-check.
+# Cut to 5 + 3 for a reviewable list.
+#
+# HONEST CAVEAT: this is an ERGONOMIC cut, not a quality upgrade. Both lists are
+# truncated by `score`, and score is not currently known to rank -- against the 19
+# matured live picks (outputs/performance.json) score vs abnormal_10d correlates
+# r = -0.009, i.e. the top-scoring name did not outperform the bottom-scoring one.
+# Taking the top 5 therefore yields fewer names of the SAME expected quality, not
+# better names. It is still the right default: the picks on any given day share
+# near-identical signal sets (one factor bet repeated N times -- see the 2026-06-04
+# / 06-05 watchlists, where all 10 buys fired the same 52w-breakout + volume + RS
+# cluster and fell together), so names 6-10 added concentration, not diversification.
+# Revisit the truncation rule -- not just the count -- if score is ever shown to rank.
+MAX_ACTIONABLE = 5
+MAX_PHASE_B    = 3
 
 # BIG MOVER tier — Phase 0 mining found no atr/score/signal combination that clears
 # the 1.5x-holdout-lift ship bar; RE-CONFIRMED by Phase 5 on the 156-week backtest
@@ -368,8 +395,8 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             base["expected_drop_pct"] = round((atr_pct or 2) * 4, 1)
             sell_list.append(base)
 
-    # Sort by score descending, cap combined at 10
-    combined = sorted(buy_list + sell_list, key=lambda e: e["score"], reverse=True)[:10]
+    # Sort by score descending, cap combined at MAX_ACTIONABLE
+    combined = sorted(buy_list + sell_list, key=lambda e: e["score"], reverse=True)[:MAX_ACTIONABLE]
 
     # BIG MOVER flag: ATR-only informational tag, up to BIG_MOVER_MAX_PER_DAY/day,
     # in score order. See BIG_MOVER_GATE comment — no target/exit override.
@@ -389,9 +416,9 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
     buy_list.sort(key=lambda e: (not e["big_mover"], -e["score"]))
     sell_list.sort(key=lambda e: (not e["big_mover"], -e["score"]))
 
-    # Sort watch list by raw score so the strongest setups appear first, cap at 8
+    # Sort watch list by raw score so the strongest setups appear first
     phase_b_list.sort(key=lambda e: e.get("score", 0), reverse=True)
-    return buy_list, sell_list, phase_b_list[:8]
+    return buy_list, sell_list, phase_b_list[:MAX_PHASE_B]
 
 
 # ── LLM narrative request ─────────────────────────────────────────────────────
@@ -433,24 +460,28 @@ def _extract_narratives(raw: str) -> dict[str, str]:
     return {}
 
 
+def _caller_chain(backend: str, in_ci: bool) -> list[tuple[str, str, str, str]]:
+    """Backends in call order: `backend` leads, the rest follow as fallbacks.
+    Ollama is local-only — dropped in CI, where there's no Ollama to reach."""
+    registry = {
+        "gemini": ("gemini", _GEMINI_BASE, _GEMINI_MODEL, os.environ.get("GEMINI_API_KEY", "")),
+        "groq":   ("groq",   _GROQ_BASE,   _GROQ_MODEL,   os.environ.get("GROQ_API_KEY", "")),
+        "ollama": ("ollama", _OLLAMA_BASE, _OLLAMA_MODEL, "ollama"),
+    }
+    order = [backend] + [b for b in registry if b != backend]
+    return [registry[b] for b in order
+            if b in registry and not (b == "ollama" and in_ci)]
+
+
 def _llm_call(user_msg: str, backend: str, in_ci: bool) -> str | None:
     try:
         from openai import OpenAI
     except ImportError:
         return None
 
-    callers = []
-    if backend == "groq":
-        callers = [("groq", _GROQ_BASE, _GROQ_MODEL, os.environ.get("GROQ_API_KEY", ""))]
-        if not in_ci:
-            callers.append(("ollama", _OLLAMA_BASE, _OLLAMA_MODEL, "ollama"))
-    else:
-        callers = [("ollama", _OLLAMA_BASE, _OLLAMA_MODEL, "ollama")]
-        if not in_ci:
-            callers.append(("groq", _GROQ_BASE, _GROQ_MODEL, os.environ.get("GROQ_API_KEY", "")))
-
-    for name, base, model, key in callers:
-        if name == "groq" and not key:
+    for name, base, model, key in _caller_chain(backend, in_ci):
+        # Cloud backends need a key; a missing one just means "try the next".
+        if name != "ollama" and not key:
             continue
         try:
             print(f"[agent] calling {name} ({model}) for narratives...")
@@ -508,7 +539,7 @@ def synthesize_watchlist(
     # Step 2: Ask LLM for one narrative sentence per actionable stock (optional enrichment)
     if actionable:
         narrative_req = _build_narrative_request(actionable, scan_date.isoformat())
-        backend = os.environ.get("INFERENCE_BACKEND", "groq").lower()
+        backend = os.environ.get("INFERENCE_BACKEND", "gemini").lower()
         in_ci = os.environ.get("GITHUB_ACTIONS") == "true"
         raw = _llm_call(narrative_req, backend, in_ci)
         if raw:

@@ -1,14 +1,14 @@
 """
 Advisory position sizing and portfolio risk summary.
 
-Default: capital ₹1,00,000, risk 1% per trade (₹1,000).
+Default: capital ₹10,00,000, risk 1% per trade (₹10,000).
 Env overrides: RISK_CAPITAL, RISK_PER_TRADE_PCT,
                RISK_MAX_POSITION_PCT, RISK_MAX_PORTFOLIO_PCT, RISK_MAX_POSITIONS
 
 Example (entry ₹250, SL ₹238):
-  risk/share = ₹12 → shares = floor(1000/12) = 83
-  notional   = 83 × ₹250 = ₹20,750  (20.8% of capital, under 25% cap)
-  risk_amount= 83 × ₹12  = ₹996     (≈ 1.0% of capital)
+  risk/share = ₹12 → shares = floor(10000/12) = 833
+  notional   = 833 × ₹250 = ₹2,08,250  (20.8% of capital, under 25% cap)
+  risk_amount= 833 × ₹12  = ₹9,996     (≈ 1.0% of capital)
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ import math
 import os
 
 RISK_CONFIG = {
-    "capital":            float(os.environ.get("RISK_CAPITAL",            "100000")),
+    "capital":            float(os.environ.get("RISK_CAPITAL",            "1000000")),
     "risk_per_trade_pct": float(os.environ.get("RISK_PER_TRADE_PCT",      "0.01")),
     "max_position_pct":   float(os.environ.get("RISK_MAX_POSITION_PCT",   "0.25")),
     "max_portfolio_pct":  float(os.environ.get("RISK_MAX_PORTFOLIO_PCT",  "0.06")),

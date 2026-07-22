@@ -71,7 +71,9 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          INFERENCE_BACKEND: groq
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          INFERENCE_BACKEND: gemini
+          RISK_CAPITAL: "1000000"
 
       # Monthly momentum book (Phase 2). scripts/factor_scan.py reuses
       # scripts/factor_backtest.py's cache/backtest_ohlcv/ CSVs, which main.py
