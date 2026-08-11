@@ -24,6 +24,14 @@ outputs/*
 # reconstructed after the fact -- the scores are only knowable at emission time.
 !outputs/cross_section/
 !outputs/score_ic.json
+# The factor ship-verdict record. Regenerated monthly by factor_scan.py, but the
+# DAILY gate render (src/gates.momentum_gate) reads it too -- and in CI, where it
+# was gitignored, that read always missed and printed "no factor_backtest.json
+# found" instead of the real NO-SHIP verdict. Worse, the auto-promote-to-LIVE
+# path (factor_scan.py's docstring) could never fire in the daily render with no
+# file to read. Committed so the daily gate sees the true verdict; the monthly
+# job's `git add -A outputs/` keeps it fresh.
+!outputs/factor_backtest.json
 cache/
 
 # Python

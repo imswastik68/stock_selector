@@ -1,0 +1,998 @@
+{
+  "meta": {
+    "universe_n": 500,
+    "rebalance_days": 21,
+    "top_n": 20,
+    "top_n_swept": [
+      15,
+      20,
+      30
+    ],
+    "min_turnover_cr": 10.0,
+    "date_range": [
+      "2008-10-21",
+      "2026-06-17"
+    ],
+    "survivorship_bias_warning": "universe = current NIFTY500 constituents only; delisted/dropped names absent; absolute returns biased high (strategy and benchmark alike)"
+  },
+  "n_sweep": {
+    "mom_12_1": {
+      "15": {
+        "total_return_pct": 12393.78,
+        "cagr_pct": 32.48,
+        "sharpe": 1.247,
+        "max_drawdown_pct": -36.56,
+        "n_periods": 206
+      },
+      "20": {
+        "total_return_pct": 11331.97,
+        "cagr_pct": 31.79,
+        "sharpe": 1.259,
+        "max_drawdown_pct": -32.76,
+        "n_periods": 206
+      },
+      "30": {
+        "total_return_pct": 10576.13,
+        "cagr_pct": 31.27,
+        "sharpe": 1.307,
+        "max_drawdown_pct": -31.52,
+        "n_periods": 206
+      }
+    },
+    "hi_52w": {
+      "15": {
+        "total_return_pct": 1487.9,
+        "cagr_pct": 17.48,
+        "sharpe": 0.976,
+        "max_drawdown_pct": -33.38,
+        "n_periods": 206
+      },
+      "20": {
+        "total_return_pct": 1698.3,
+        "cagr_pct": 18.33,
+        "sharpe": 1.016,
+        "max_drawdown_pct": -31.07,
+        "n_periods": 206
+      },
+      "30": {
+        "total_return_pct": 2735.13,
+        "cagr_pct": 21.51,
+        "sharpe": 1.127,
+        "max_drawdown_pct": -24.43,
+        "n_periods": 206
+      }
+    },
+    "low_vol": {
+      "15": {
+        "total_return_pct": 2548.03,
+        "cagr_pct": 21.03,
+        "sharpe": 1.301,
+        "max_drawdown_pct": -25.28,
+        "n_periods": 206
+      },
+      "20": {
+        "total_return_pct": 2019.03,
+        "cagr_pct": 19.47,
+        "sharpe": 1.209,
+        "max_drawdown_pct": -26.76,
+        "n_periods": 206
+      },
+      "30": {
+        "total_return_pct": 1577.27,
+        "cagr_pct": 17.85,
+        "sharpe": 1.075,
+        "max_drawdown_pct": -25.62,
+        "n_periods": 206
+      }
+    },
+    "rs_quality": {
+      "15": {
+        "total_return_pct": 2300.55,
+        "cagr_pct": 20.34,
+        "sharpe": 0.883,
+        "max_drawdown_pct": -52.82,
+        "n_periods": 206
+      },
+      "20": {
+        "total_return_pct": 2346.1,
+        "cagr_pct": 20.47,
+        "sharpe": 0.9,
+        "max_drawdown_pct": -49.8,
+        "n_periods": 206
+      },
+      "30": {
+        "total_return_pct": 2374.37,
+        "cagr_pct": 20.55,
+        "sharpe": 0.905,
+        "max_drawdown_pct": -48.94,
+        "n_periods": 206
+      }
+    },
+    "composite": {
+      "15": {
+        "total_return_pct": 3721.44,
+        "cagr_pct": 23.64,
+        "sharpe": 1.149,
+        "max_drawdown_pct": -30.65,
+        "n_periods": 206
+      },
+      "20": {
+        "total_return_pct": 4035.61,
+        "cagr_pct": 24.21,
+        "sharpe": 1.226,
+        "max_drawdown_pct": -30.62,
+        "n_periods": 206
+      },
+      "30": {
+        "total_return_pct": 4174.36,
+        "cagr_pct": 24.45,
+        "sharpe": 1.247,
+        "max_drawdown_pct": -26.92,
+        "n_periods": 206
+      }
+    },
+    "mom_gated": {
+      "15": {
+        "total_return_pct": 3165.99,
+        "cagr_pct": 22.52,
+        "sharpe": 1.046,
+        "max_drawdown_pct": -31.55,
+        "n_periods": 206
+      },
+      "20": {
+        "total_return_pct": 2825.92,
+        "cagr_pct": 21.73,
+        "sharpe": 1.061,
+        "max_drawdown_pct": -31.9,
+        "n_periods": 206
+      },
+      "30": {
+        "total_return_pct": 2331.11,
+        "cagr_pct": 20.43,
+        "sharpe": 1.082,
+        "max_drawdown_pct": -26.4,
+        "n_periods": 206
+      }
+    }
+  },
+  "benchmark": {
+    "metrics": {
+      "total_return_pct": 644.56,
+      "cagr_pct": 12.41,
+      "sharpe": 0.714,
+      "max_drawdown_pct": -32.25,
+      "n_periods": 206
+    },
+    "train_metrics": {
+      "total_return_pct": 436.9,
+      "cagr_pct": 14.09,
+      "sharpe": 0.746,
+      "max_drawdown_pct": -32.25,
+      "n_periods": 153
+    },
+    "holdout_metrics": {
+      "total_return_pct": 33.4,
+      "cagr_pct": 6.88,
+      "sharpe": 0.58,
+      "max_drawdown_pct": -13.09,
+      "n_periods": 52
+    }
+  },
+  "strategies": {
+    "mom_12_1": {
+      "metrics": {
+        "total_return_pct": 11331.97,
+        "cagr_pct": 31.79,
+        "sharpe": 1.259,
+        "max_drawdown_pct": -32.76,
+        "n_periods": 206
+      },
+      "avg_turnover_pct": 28.3,
+      "train_metrics": {
+        "total_return_pct": 3739.9,
+        "cagr_pct": 33.13,
+        "sharpe": 1.371,
+        "max_drawdown_pct": -32.44,
+        "n_periods": 153
+      },
+      "holdout_metrics": {
+        "total_return_pct": 178.55,
+        "cagr_pct": 26.67,
+        "sharpe": 0.979,
+        "max_drawdown_pct": -32.76,
+        "n_periods": 52
+      },
+      "ic_holdout": {
+        "mean_ic": 0.0346,
+        "t_stat": 1.86,
+        "n": 52
+      },
+      "decile_spread_holdout": {
+        "mean_spread_pct": 1.359,
+        "n": 52
+      },
+      "regime_split": {
+        "uptrend": {
+          "n": 125,
+          "mean_return_pct": 2.922
+        },
+        "ranging": {
+          "n": 50,
+          "mean_return_pct": 1.142
+        },
+        "downtrend": {
+          "n": 31,
+          "mean_return_pct": 3.092
+        }
+      },
+      "ship_gate": {
+        "ships": false,
+        "alpha_pct": 19.79,
+        "reasons": [
+          "IC 0.0346 (t=1.86) below bar (need >= 0.03, t >= 2.0)"
+        ]
+      },
+      "ship_gate_multi_split": {
+        "ships": false,
+        "per_split": [
+          {
+            "split": "2018-01-01",
+            "holdout_n": 100,
+            "ic_mean": 0.0469,
+            "ic_t": 2.61,
+            "ic_informational_only": false,
+            "ic_pass": true,
+            "decile_spread_pct": 1.808,
+            "decile_ok": true,
+            "strategy_sharpe": 1.215,
+            "bench_sharpe": 0.69,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2020-01-01",
+            "holdout_n": 77,
+            "ic_mean": 0.0381,
+            "ic_t": 1.95,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 1.598,
+            "decile_ok": true,
+            "strategy_sharpe": 1.307,
+            "bench_sharpe": 0.696,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2022-01-01",
+            "holdout_n": 53,
+            "ic_mean": 0.0346,
+            "ic_t": 1.86,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 1.359,
+            "decile_ok": true,
+            "strategy_sharpe": 0.979,
+            "bench_sharpe": 0.58,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2024-01-01",
+            "holdout_n": 29,
+            "ic_mean": 0.0114,
+            "ic_t": 0.45,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 0.753,
+            "decile_ok": true,
+            "strategy_sharpe": 0.464,
+            "bench_sharpe": 0.53,
+            "sharpe_ok": "False"
+          },
+          {
+            "split": "2026-01-01",
+            "holdout_n": 6,
+            "ic_mean": 0.0978,
+            "ic_t": 2.28,
+            "ic_informational_only": true,
+            "ic_pass": true,
+            "decile_spread_pct": 2.594,
+            "decile_ok": true,
+            "strategy_sharpe": 0.894,
+            "bench_sharpe": -1.133,
+            "sharpe_ok": "True"
+          }
+        ],
+        "reasons": [
+          "IC bar (>= 0.03, t >= 2.0) passes in only 1/4 eligible splits (need a majority)",
+          "holdout Sharpe does not beat Nifty in every split"
+        ],
+        "n_ic_eligible_splits": 4,
+        "n_ic_pass": 1
+      }
+    },
+    "hi_52w": {
+      "metrics": {
+        "total_return_pct": 1698.3,
+        "cagr_pct": 18.33,
+        "sharpe": 1.016,
+        "max_drawdown_pct": -31.07,
+        "n_periods": 206
+      },
+      "avg_turnover_pct": 64.8,
+      "train_metrics": {
+        "total_return_pct": 849.27,
+        "cagr_pct": 19.3,
+        "sharpe": 1.043,
+        "max_drawdown_pct": -31.07,
+        "n_periods": 153
+      },
+      "holdout_metrics": {
+        "total_return_pct": 98.34,
+        "cagr_pct": 17.12,
+        "sharpe": 1.033,
+        "max_drawdown_pct": -21.79,
+        "n_periods": 52
+      },
+      "ic_holdout": {
+        "mean_ic": 0.0257,
+        "t_stat": 1.3,
+        "n": 52
+      },
+      "decile_spread_holdout": {
+        "mean_spread_pct": -0.031,
+        "n": 52
+      },
+      "regime_split": {
+        "uptrend": {
+          "n": 125,
+          "mean_return_pct": 1.575
+        },
+        "ranging": {
+          "n": 50,
+          "mean_return_pct": 1.011
+        },
+        "downtrend": {
+          "n": 31,
+          "mean_return_pct": 1.894
+        }
+      },
+      "ship_gate": {
+        "ships": false,
+        "alpha_pct": 10.24,
+        "reasons": [
+          "IC 0.0257 (t=1.3) below bar (need >= 0.03, t >= 2.0)",
+          "decile spread -0.031% is not positive"
+        ]
+      },
+      "ship_gate_multi_split": {
+        "ships": false,
+        "per_split": [
+          {
+            "split": "2018-01-01",
+            "holdout_n": 100,
+            "ic_mean": 0.0342,
+            "ic_t": 1.69,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 0.405,
+            "decile_ok": true,
+            "strategy_sharpe": 0.954,
+            "bench_sharpe": 0.69,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2020-01-01",
+            "holdout_n": 77,
+            "ic_mean": 0.0217,
+            "ic_t": 0.98,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 0.005,
+            "decile_ok": true,
+            "strategy_sharpe": 1.138,
+            "bench_sharpe": 0.696,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2022-01-01",
+            "holdout_n": 53,
+            "ic_mean": 0.0257,
+            "ic_t": 1.3,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": -0.031,
+            "decile_ok": false,
+            "strategy_sharpe": 1.033,
+            "bench_sharpe": 0.58,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2024-01-01",
+            "holdout_n": 29,
+            "ic_mean": 0.0229,
+            "ic_t": 0.67,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": -0.457,
+            "decile_ok": false,
+            "strategy_sharpe": 0.312,
+            "bench_sharpe": 0.53,
+            "sharpe_ok": "False"
+          },
+          {
+            "split": "2026-01-01",
+            "holdout_n": 6,
+            "ic_mean": 0.0427,
+            "ic_t": 0.48,
+            "ic_informational_only": true,
+            "ic_pass": false,
+            "decile_spread_pct": -0.085,
+            "decile_ok": false,
+            "strategy_sharpe": -0.195,
+            "bench_sharpe": -1.133,
+            "sharpe_ok": "True"
+          }
+        ],
+        "reasons": [
+          "IC bar (>= 0.03, t >= 2.0) passes in only 0/4 eligible splits (need a majority)",
+          "decile spread is not positive in every split",
+          "holdout Sharpe does not beat Nifty in every split"
+        ],
+        "n_ic_eligible_splits": 4,
+        "n_ic_pass": 0
+      }
+    },
+    "low_vol": {
+      "metrics": {
+        "total_return_pct": 2019.03,
+        "cagr_pct": 19.47,
+        "sharpe": 1.209,
+        "max_drawdown_pct": -26.76,
+        "n_periods": 206
+      },
+      "avg_turnover_pct": 32.3,
+      "train_metrics": {
+        "total_return_pct": 1089.31,
+        "cagr_pct": 21.43,
+        "sharpe": 1.258,
+        "max_drawdown_pct": -26.76,
+        "n_periods": 153
+      },
+      "holdout_metrics": {
+        "total_return_pct": 82.23,
+        "cagr_pct": 14.85,
+        "sharpe": 1.132,
+        "max_drawdown_pct": -16.96,
+        "n_periods": 52
+      },
+      "ic_holdout": {
+        "mean_ic": 0.0,
+        "t_stat": 0.0,
+        "n": 52
+      },
+      "decile_spread_holdout": {
+        "mean_spread_pct": -1.305,
+        "n": 52
+      },
+      "regime_split": {
+        "uptrend": {
+          "n": 125,
+          "mean_return_pct": 1.331
+        },
+        "ranging": {
+          "n": 50,
+          "mean_return_pct": 1.199
+        },
+        "downtrend": {
+          "n": 31,
+          "mean_return_pct": 2.822
+        }
+      },
+      "ship_gate": {
+        "ships": false,
+        "alpha_pct": 7.97,
+        "reasons": [
+          "IC 0.0 (t=0.0) below bar (need >= 0.03, t >= 2.0)",
+          "decile spread -1.305% is not positive"
+        ]
+      },
+      "ship_gate_multi_split": {
+        "ships": false,
+        "per_split": [
+          {
+            "split": "2018-01-01",
+            "holdout_n": 100,
+            "ic_mean": 0.0165,
+            "ic_t": 0.87,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": -0.946,
+            "decile_ok": false,
+            "strategy_sharpe": 0.936,
+            "bench_sharpe": 0.69,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2020-01-01",
+            "holdout_n": 77,
+            "ic_mean": -0.0055,
+            "ic_t": -0.26,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": -1.809,
+            "decile_ok": false,
+            "strategy_sharpe": 1.03,
+            "bench_sharpe": 0.696,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2022-01-01",
+            "holdout_n": 53,
+            "ic_mean": 0.0,
+            "ic_t": 0.0,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": -1.305,
+            "decile_ok": false,
+            "strategy_sharpe": 1.132,
+            "bench_sharpe": 0.58,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2024-01-01",
+            "holdout_n": 29,
+            "ic_mean": 0.0365,
+            "ic_t": 1.02,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": -0.211,
+            "decile_ok": false,
+            "strategy_sharpe": 0.706,
+            "bench_sharpe": 0.53,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2026-01-01",
+            "holdout_n": 6,
+            "ic_mean": -0.0758,
+            "ic_t": -0.93,
+            "ic_informational_only": true,
+            "ic_pass": false,
+            "decile_spread_pct": -2.45,
+            "decile_ok": false,
+            "strategy_sharpe": -0.55,
+            "bench_sharpe": -1.133,
+            "sharpe_ok": "True"
+          }
+        ],
+        "reasons": [
+          "IC bar (>= 0.03, t >= 2.0) passes in only 0/4 eligible splits (need a majority)",
+          "decile spread is not positive in every split"
+        ],
+        "n_ic_eligible_splits": 4,
+        "n_ic_pass": 0
+      }
+    },
+    "rs_quality": {
+      "metrics": {
+        "total_return_pct": 2346.1,
+        "cagr_pct": 20.47,
+        "sharpe": 0.9,
+        "max_drawdown_pct": -49.8,
+        "n_periods": 206
+      },
+      "avg_turnover_pct": 86.4,
+      "train_metrics": {
+        "total_return_pct": 567.68,
+        "cagr_pct": 16.06,
+        "sharpe": 0.718,
+        "max_drawdown_pct": -49.8,
+        "n_periods": 153
+      },
+      "holdout_metrics": {
+        "total_return_pct": 278.17,
+        "cagr_pct": 35.93,
+        "sharpe": 1.703,
+        "max_drawdown_pct": -22.52,
+        "n_periods": 52
+      },
+      "ic_holdout": {
+        "mean_ic": 0.0063,
+        "t_stat": 0.38,
+        "n": 52
+      },
+      "decile_spread_holdout": {
+        "mean_spread_pct": 1.039,
+        "n": 52
+      },
+      "regime_split": {
+        "uptrend": {
+          "n": 125,
+          "mean_return_pct": 1.836
+        },
+        "ranging": {
+          "n": 50,
+          "mean_return_pct": 1.4
+        },
+        "downtrend": {
+          "n": 31,
+          "mean_return_pct": 1.826
+        }
+      },
+      "ship_gate": {
+        "ships": false,
+        "alpha_pct": 29.05,
+        "reasons": [
+          "IC 0.0063 (t=0.38) below bar (need >= 0.03, t >= 2.0)"
+        ]
+      },
+      "ship_gate_multi_split": {
+        "ships": false,
+        "per_split": [
+          {
+            "split": "2018-01-01",
+            "holdout_n": 100,
+            "ic_mean": -0.0101,
+            "ic_t": -0.8,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 0.372,
+            "decile_ok": true,
+            "strategy_sharpe": 1.065,
+            "bench_sharpe": 0.69,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2020-01-01",
+            "holdout_n": 77,
+            "ic_mean": 0.0016,
+            "ic_t": 0.11,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 0.894,
+            "decile_ok": true,
+            "strategy_sharpe": 1.475,
+            "bench_sharpe": 0.696,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2022-01-01",
+            "holdout_n": 53,
+            "ic_mean": 0.0063,
+            "ic_t": 0.38,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 1.039,
+            "decile_ok": true,
+            "strategy_sharpe": 1.703,
+            "bench_sharpe": 0.58,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2024-01-01",
+            "holdout_n": 29,
+            "ic_mean": -0.0027,
+            "ic_t": -0.1,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 0.227,
+            "decile_ok": true,
+            "strategy_sharpe": 0.937,
+            "bench_sharpe": 0.53,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2026-01-01",
+            "holdout_n": 6,
+            "ic_mean": -0.0138,
+            "ic_t": -0.19,
+            "ic_informational_only": true,
+            "ic_pass": false,
+            "decile_spread_pct": 0.186,
+            "decile_ok": true,
+            "strategy_sharpe": 2.617,
+            "bench_sharpe": -1.133,
+            "sharpe_ok": "True"
+          }
+        ],
+        "reasons": [
+          "IC bar (>= 0.03, t >= 2.0) passes in only 0/4 eligible splits (need a majority)"
+        ],
+        "n_ic_eligible_splits": 4,
+        "n_ic_pass": 0
+      }
+    },
+    "composite": {
+      "metrics": {
+        "total_return_pct": 4035.61,
+        "cagr_pct": 24.21,
+        "sharpe": 1.226,
+        "max_drawdown_pct": -30.62,
+        "n_periods": 206
+      },
+      "avg_turnover_pct": 61.2,
+      "train_metrics": {
+        "total_return_pct": 1558.85,
+        "cagr_pct": 24.64,
+        "sharpe": 1.262,
+        "max_drawdown_pct": -30.62,
+        "n_periods": 153
+      },
+      "holdout_metrics": {
+        "total_return_pct": 156.91,
+        "cagr_pct": 24.33,
+        "sharpe": 1.22,
+        "max_drawdown_pct": -24.76,
+        "n_periods": 52
+      },
+      "ic_holdout": {
+        "mean_ic": 0.0313,
+        "t_stat": 1.51,
+        "n": 52
+      },
+      "decile_spread_holdout": {
+        "mean_spread_pct": 0.388,
+        "n": 52
+      },
+      "regime_split": {
+        "uptrend": {
+          "n": 125,
+          "mean_return_pct": 2.144
+        },
+        "ranging": {
+          "n": 50,
+          "mean_return_pct": 1.07
+        },
+        "downtrend": {
+          "n": 31,
+          "mean_return_pct": 2.369
+        }
+      },
+      "ship_gate": {
+        "ships": false,
+        "alpha_pct": 17.45,
+        "reasons": [
+          "IC 0.0313 (t=1.51) below bar (need >= 0.03, t >= 2.0)"
+        ]
+      },
+      "ship_gate_multi_split": {
+        "ships": false,
+        "per_split": [
+          {
+            "split": "2018-01-01",
+            "holdout_n": 100,
+            "ic_mean": 0.034,
+            "ic_t": 1.67,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 0.743,
+            "decile_ok": true,
+            "strategy_sharpe": 1.15,
+            "bench_sharpe": 0.69,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2020-01-01",
+            "holdout_n": 77,
+            "ic_mean": 0.0234,
+            "ic_t": 1.06,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 0.416,
+            "decile_ok": true,
+            "strategy_sharpe": 1.329,
+            "bench_sharpe": 0.696,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2022-01-01",
+            "holdout_n": 53,
+            "ic_mean": 0.0313,
+            "ic_t": 1.51,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 0.388,
+            "decile_ok": true,
+            "strategy_sharpe": 1.22,
+            "bench_sharpe": 0.58,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2024-01-01",
+            "holdout_n": 29,
+            "ic_mean": 0.0278,
+            "ic_t": 0.81,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": -0.092,
+            "decile_ok": false,
+            "strategy_sharpe": 0.483,
+            "bench_sharpe": 0.53,
+            "sharpe_ok": "False"
+          },
+          {
+            "split": "2026-01-01",
+            "holdout_n": 6,
+            "ic_mean": 0.0305,
+            "ic_t": 0.3,
+            "ic_informational_only": true,
+            "ic_pass": false,
+            "decile_spread_pct": -0.257,
+            "decile_ok": false,
+            "strategy_sharpe": -0.192,
+            "bench_sharpe": -1.133,
+            "sharpe_ok": "True"
+          }
+        ],
+        "reasons": [
+          "IC bar (>= 0.03, t >= 2.0) passes in only 0/4 eligible splits (need a majority)",
+          "decile spread is not positive in every split",
+          "holdout Sharpe does not beat Nifty in every split"
+        ],
+        "n_ic_eligible_splits": 4,
+        "n_ic_pass": 0
+      }
+    },
+    "mom_gated": {
+      "metrics": {
+        "total_return_pct": 2825.92,
+        "cagr_pct": 21.73,
+        "sharpe": 1.061,
+        "max_drawdown_pct": -31.9,
+        "n_periods": 206
+      },
+      "avg_turnover_pct": 27.2,
+      "pct_periods_in_cash": 26.1,
+      "train_metrics": {
+        "total_return_pct": 1531.16,
+        "cagr_pct": 24.48,
+        "sharpe": 1.253,
+        "max_drawdown_pct": -23.61,
+        "n_periods": 153
+      },
+      "holdout_metrics": {
+        "total_return_pct": 67.83,
+        "cagr_pct": 12.69,
+        "sharpe": 0.61,
+        "max_drawdown_pct": -30.63,
+        "n_periods": 52
+      },
+      "ic_holdout": {
+        "mean_ic": 0.0346,
+        "t_stat": 1.86,
+        "n": 52
+      },
+      "decile_spread_holdout": {
+        "mean_spread_pct": 1.359,
+        "n": 52
+      },
+      "regime_split": {
+        "uptrend": {
+          "n": 125,
+          "mean_return_pct": 2.812
+        },
+        "ranging": {
+          "n": 50,
+          "mean_return_pct": 0.248
+        },
+        "downtrend": {
+          "n": 31,
+          "mean_return_pct": 0.397
+        }
+      },
+      "ship_gate": {
+        "ships": false,
+        "alpha_pct": 5.81,
+        "reasons": [
+          "IC 0.0346 (t=1.86) below bar (need >= 0.03, t >= 2.0)"
+        ]
+      },
+      "ship_gate_multi_split": {
+        "ships": false,
+        "per_split": [
+          {
+            "split": "2018-01-01",
+            "holdout_n": 100,
+            "ic_mean": 0.0469,
+            "ic_t": 2.61,
+            "ic_informational_only": false,
+            "ic_pass": true,
+            "decile_spread_pct": 1.808,
+            "decile_ok": true,
+            "strategy_sharpe": 1.045,
+            "bench_sharpe": 0.69,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2020-01-01",
+            "holdout_n": 77,
+            "ic_mean": 0.0381,
+            "ic_t": 1.95,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 1.598,
+            "decile_ok": true,
+            "strategy_sharpe": 1.2,
+            "bench_sharpe": 0.696,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2022-01-01",
+            "holdout_n": 53,
+            "ic_mean": 0.0346,
+            "ic_t": 1.86,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 1.359,
+            "decile_ok": true,
+            "strategy_sharpe": 0.61,
+            "bench_sharpe": 0.58,
+            "sharpe_ok": "True"
+          },
+          {
+            "split": "2024-01-01",
+            "holdout_n": 29,
+            "ic_mean": 0.0114,
+            "ic_t": 0.45,
+            "ic_informational_only": false,
+            "ic_pass": false,
+            "decile_spread_pct": 0.753,
+            "decile_ok": true,
+            "strategy_sharpe": 0.043,
+            "bench_sharpe": 0.53,
+            "sharpe_ok": "False"
+          },
+          {
+            "split": "2026-01-01",
+            "holdout_n": 6,
+            "ic_mean": 0.0978,
+            "ic_t": 2.28,
+            "ic_informational_only": true,
+            "ic_pass": true,
+            "decile_spread_pct": 2.594,
+            "decile_ok": true,
+            "strategy_sharpe": -1.833,
+            "bench_sharpe": -1.133,
+            "sharpe_ok": "False"
+          }
+        ],
+        "reasons": [
+          "IC bar (>= 0.03, t >= 2.0) passes in only 1/4 eligible splits (need a majority)",
+          "holdout Sharpe does not beat Nifty in every split"
+        ],
+        "n_ic_eligible_splits": 4,
+        "n_ic_pass": 1
+      }
+    }
+  },
+  "hedge": {
+    "target_factor": "composite",
+    "variants": {
+      "0.0": {
+        "total_return_pct": 156.91,
+        "cagr_pct": 24.33,
+        "sharpe": 1.22,
+        "max_drawdown_pct": -24.76,
+        "n_periods": 52
+      },
+      "0.25": {
+        "total_return_pct": 122.32,
+        "cagr_pct": 20.25,
+        "sharpe": 1.094,
+        "max_drawdown_pct": -22.25,
+        "n_periods": 52
+      },
+      "0.5": {
+        "total_return_pct": 91.06,
+        "cagr_pct": 16.11,
+        "sharpe": 0.91,
+        "max_drawdown_pct": -21.29,
+        "n_periods": 52
+      }
+    },
+    "verdict": {
+      "best_hedge_fraction": 0.0,
+      "ships": false,
+      "reason": "no hedge fraction improves risk-adjusted return OOS vs unhedged \u2014 hedge does NOT ship"
+    }
+  }
+}
