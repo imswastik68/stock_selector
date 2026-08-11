@@ -50,6 +50,7 @@ SIGNAL_LABELS = {
     "options_long_buildup":    "OI long buildup",
     "options_short_buildup":   "OI short buildup",
     "options_pcr_greed":       "PCR extreme greed",
+    "rsi_overbought":          "RSI overbought (>80)",
     "options_short_covering":  "OI short covering",
     "options_long_unwinding":  "OI long unwinding",
     "promoter_buying":         "promoter buying",

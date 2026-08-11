@@ -497,6 +497,14 @@ def enrich_with_technicals(
 
     # RSI divergence — must be computed before rsi_agrees
     rsi_momentum    = bool(50 <= rsi <= 75)
+    # Overbought: RSI > 80 predicts mean reversion. Backtested 2026-08 on 202,905
+    # buy trades (cache/backtest_ohlcv): the RSI>80 cohort's 10-day forward return
+    # is +0.20% vs +1.12% for the rest (Welch t=-5.13, n=7,716), and as a -1 score
+    # penalty it is sign-consistent across a 70/30 chronological holdout (train
+    # +0.00133 t=4.51, holdout +0.00036 t=1.13). The threshold is deliberately 80,
+    # not 75: penalising the 75-80 band improved train IC but FAILED holdout
+    # (overfit), so only the >80 tier ships. See DISQUALIFIER_WEIGHTS.
+    rsi_overbought  = bool(rsi > 80)
     rsi_div         = compute_rsi_divergence(close_series)
     rsi_bearish_div = rsi_div == "bearish_divergence"
     rsi_bullish_div = rsi_div == "bullish_divergence"
@@ -562,6 +570,7 @@ def enrich_with_technicals(
         "wyckoff_confidence": wyckoff_confidence,
         "candlestick_patterns": candles,
         "rsi_momentum":      rsi_momentum,
+        "rsi_overbought":    rsi_overbought,
         "rsi_bearish_div":   rsi_bearish_div,
         "rsi_bullish_div":   rsi_bullish_div,
         "macd_bearish_cross": macd_bearish_cross,

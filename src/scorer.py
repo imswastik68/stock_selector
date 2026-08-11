@@ -116,6 +116,15 @@ DISQUALIFIER_WEIGHTS = {
     "macd_bearish_cross": -1,      # histogram / zero-line crossed down in last 3-5 bars
     "bullish_candle": -1,          # bullish candle at entry predicts underperformance (−0.43 lift)
     "bearish_candle": -1,          # shooting_star / bearish_engulfing / bearish_marubozu on last bar
+    "rsi_overbought": -1,          # RSI > 80: overextended, reverts. VALIDATED 2026-08 on 202,905 buy
+                                    # trades (cache/backtest_ohlcv, 278 days): RSI>80 cohort 10-day fwd
+                                    # return +0.20% vs +1.12% for the rest (Welch t=-5.13, n=7,716). As a
+                                    # -1 score penalty, sign-consistent across a 70/30 chronological
+                                    # holdout (train diff +0.00133 t=4.51, holdout +0.00036 t=1.13) --
+                                    # the repo's ship convention. The 75-80 band was deliberately NOT
+                                    # penalised: it improved train IC but FAILED holdout (overfit), and
+                                    # the graduated -1/-2/-3 variant failed holdout too (t=-0.85). Only
+                                    # the >80 tier at -1 survives out-of-sample. See src/technicals.py.
     "options_pcr_greed": -1,       # PCR < 0.5: extreme complacency (min OI required).
                                     # VALIDATED 2026-07-22 (scripts/backtest_events.py --source options,
                                     # 156w F&O bhavcopy): n=21,697, buy-side ret_lift -0.361 with train
@@ -314,6 +323,7 @@ def _build_signal_map(
     # Technical signals (pass 3 only — after enrich_candidate_context)
     if technical_data:
         signals["rsi_momentum"]        = technical_data.get("rsi_momentum", False)
+        signals["rsi_overbought"]      = technical_data.get("rsi_overbought", False)
         signals["rs_vs_nifty"]         = technical_data.get("rs_vs_nifty", False)
         signals["rsi_bearish_div"]     = technical_data.get("rsi_bearish_div", False)
         signals["rsi_bullish_div"]     = technical_data.get("rsi_bullish_div", False)
