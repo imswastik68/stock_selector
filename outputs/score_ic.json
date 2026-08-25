@@ -1,9 +1,65 @@
 {
-  "per_day": [],
-  "n_days": 0,
-  "mean_ic": null,
-  "t_stat": null,
-  "verdict": "INSUFFICIENT",
+  "per_day": [
+    {
+      "date": "2026-07-22",
+      "n_names": 117,
+      "ic": -0.2273
+    },
+    {
+      "date": "2026-07-23",
+      "n_names": 255,
+      "ic": -0.113
+    },
+    {
+      "date": "2026-07-24",
+      "n_names": 218,
+      "ic": -0.0799
+    },
+    {
+      "date": "2026-07-27",
+      "n_names": 240,
+      "ic": 0.0617
+    },
+    {
+      "date": "2026-07-28",
+      "n_names": 217,
+      "ic": 0.1136
+    },
+    {
+      "date": "2026-07-29",
+      "n_names": 268,
+      "ic": 0.0369
+    },
+    {
+      "date": "2026-07-30",
+      "n_names": 239,
+      "ic": 0.0345
+    },
+    {
+      "date": "2026-07-31",
+      "n_names": 244,
+      "ic": 0.0947
+    },
+    {
+      "date": "2026-08-03",
+      "n_names": 244,
+      "ic": 0.1014
+    },
+    {
+      "date": "2026-08-04",
+      "n_names": 244,
+      "ic": 0.0939
+    },
+    {
+      "date": "2026-08-05",
+      "n_names": 337,
+      "ic": 0.109
+    }
+  ],
+  "n_days": 11,
+  "min_days": 30,
   "horizon_days": 10,
-  "note": "no cross-section is old enough to have a forward return yet"
+  "mean_ic": 0.0205,
+  "t_stat": 0.61,
+  "verdict": "INSUFFICIENT"
 }

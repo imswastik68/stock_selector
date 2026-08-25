@@ -2978,7 +2978,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 23957.5
+      "nifty_at_emission": 23957.5,
+      "fwd_5d": 6.03,
+      "fwd_10d": 18.43,
+      "fwd_20d": 11.44,
+      "nifty_fwd_10d": 2.5,
+      "abnormal_10d": 15.93,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 14.98
     },
     "INVPRECQ.NS": {
       "direction": "buy",
@@ -3024,7 +3031,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 23957.5
+      "nifty_at_emission": 23957.5,
+      "fwd_5d": 6.18,
+      "fwd_10d": -2.95,
+      "fwd_20d": 5.54,
+      "nifty_fwd_10d": 2.5,
+      "abnormal_10d": -5.45,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -8.64
     },
     "SSWL.NS": {
       "direction": "buy",
@@ -3034,8 +3048,8 @@
       "stop_loss": 272.67,
       "target_1": 333.19,
       "target_2": 357.4,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-11",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3048,7 +3062,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 23957.5
+      "nifty_at_emission": 23957.5,
+      "fwd_5d": 6.76,
+      "fwd_10d": 8.03,
+      "fwd_20d": -1.03,
+      "nifty_fwd_10d": 2.5,
+      "abnormal_10d": 5.53,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 6.61
     },
     "MMP.NS": {
       "direction": "buy",
@@ -3071,7 +3092,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 23957.5
+      "nifty_at_emission": 23957.5,
+      "fwd_5d": 3.32,
+      "fwd_10d": 20.55,
+      "fwd_20d": 36.75,
+      "nifty_fwd_10d": 2.5,
+      "abnormal_10d": 18.05,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 11.84
     }
   },
   "2026-07-28": {
@@ -3083,8 +3111,8 @@
       "stop_loss": 597.03,
       "target_1": 786.95,
       "target_2": 862.92,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-12",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": true,
@@ -3096,7 +3124,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24004.75
+      "nifty_at_emission": 24004.75,
+      "fwd_5d": 4.59,
+      "fwd_10d": -2.2,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.91,
+      "abnormal_10d": -3.11,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -3.5
     },
     "DIACABS.NS": {
       "direction": "buy",
@@ -3120,7 +3155,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24004.75
+      "nifty_at_emission": 24004.75,
+      "fwd_5d": 0.76,
+      "fwd_10d": 15.32,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.91,
+      "abnormal_10d": 14.41,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 15.13
     },
     "SJS.NS": {
       "direction": "buy",
@@ -3145,7 +3187,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24004.75
+      "nifty_at_emission": 24004.75,
+      "fwd_5d": 2.1,
+      "fwd_10d": 0.85,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.91,
+      "abnormal_10d": -0.06,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 7.66
     },
     "KRISHANA.NS": {
       "direction": "buy",
@@ -3169,7 +3218,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24004.75
+      "nifty_at_emission": 24004.75,
+      "fwd_5d": 10.57,
+      "fwd_10d": 13.74,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.91,
+      "abnormal_10d": 12.83,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 14.12
     },
     "SPORTKING.NS": {
       "direction": "buy",
@@ -3193,7 +3249,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24004.75
+      "nifty_at_emission": 24004.75,
+      "fwd_5d": 1.55,
+      "fwd_10d": -2.81,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.91,
+      "abnormal_10d": -3.72,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -8.99
     }
   },
   "2026-07-29": {
@@ -3205,8 +3268,8 @@
       "stop_loss": 1770.25,
       "target_1": 2044.63,
       "target_2": 2154.39,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "t1_hit",
+      "outcome_date": "2026-08-10",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3220,7 +3283,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24226.35
+      "nifty_at_emission": 24226.35,
+      "fwd_5d": 3.9,
+      "fwd_10d": 6.59,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.49,
+      "abnormal_10d": 6.1,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 8.46
     },
     "KTKBANK.NS": {
       "direction": "buy",
@@ -3243,7 +3313,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24226.35
+      "nifty_at_emission": 24226.35,
+      "fwd_5d": 6.95,
+      "fwd_10d": 11.98,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.49,
+      "abnormal_10d": 11.49,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 8.55
     },
     "UJJIVANSFB.NS": {
       "direction": "buy",
@@ -3253,8 +3330,8 @@
       "stop_loss": 64.44,
       "target_1": 78.19,
       "target_2": 83.69,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-13",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3268,7 +3345,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24226.35
+      "nifty_at_emission": 24226.35,
+      "fwd_5d": -0.8,
+      "fwd_10d": 3.19,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.49,
+      "abnormal_10d": 2.7,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 1.49
     },
     "PIDILITIND.NS": {
       "direction": "buy",
@@ -3278,8 +3362,8 @@
       "stop_loss": 1546.17,
       "target_1": 1708.99,
       "target_2": 1774.12,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-13",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3294,7 +3378,14 @@
         "consolidation_breakout"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24226.35
+      "nifty_at_emission": 24226.35,
+      "fwd_5d": 2.0,
+      "fwd_10d": 4.24,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.49,
+      "abnormal_10d": 3.75,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 3.91
     },
     "RADICO.NS": {
       "direction": "buy",
@@ -3304,8 +3395,8 @@
       "stop_loss": 4156.25,
       "target_1": 4703.12,
       "target_2": 4921.88,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-13",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3319,7 +3410,14 @@
         "consolidation_breakout"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24226.35
+      "nifty_at_emission": 24226.35,
+      "fwd_5d": 3.7,
+      "fwd_10d": 3.31,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.49,
+      "abnormal_10d": 2.82,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 6.56
     }
   },
   "2026-07-30": {
@@ -3332,7 +3430,7 @@
       "target_1": 73.68,
       "target_2": 81.6,
       "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome_date": "2026-08-25",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": true,
@@ -3354,8 +3452,8 @@
       "stop_loss": 1697.84,
       "target_1": 1921.99,
       "target_2": 2011.65,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-14",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3370,7 +3468,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24274.6
+      "nifty_at_emission": 24274.6,
+      "fwd_5d": 2.08,
+      "fwd_10d": 3.29,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.05,
+      "abnormal_10d": 3.24,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -0.31
     },
     "TVSMOTOR.NS": {
       "direction": "buy",
@@ -3380,8 +3485,8 @@
       "stop_loss": 3963.15,
       "target_1": 4464.02,
       "target_2": 4664.37,
-      "outcome": "open",
-      "outcome_date": "2026-08-06",
+      "outcome": "t1_hit",
+      "outcome_date": "2026-08-10",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3396,7 +3501,14 @@
         "sector_in_momentum"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24274.6
+      "nifty_at_emission": 24274.6,
+      "fwd_5d": 4.78,
+      "fwd_10d": 3.99,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.05,
+      "abnormal_10d": 3.94,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 6.92
     },
     "TITAN.NS": {
       "direction": "buy",
@@ -3406,8 +3518,8 @@
       "stop_loss": 4689.28,
       "target_1": 5065.83,
       "target_2": 5216.44,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "t1_hit",
+      "outcome_date": "2026-08-10",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3422,7 +3534,14 @@
         "consolidation_breakout"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24274.6
+      "nifty_at_emission": 24274.6,
+      "fwd_5d": 2.97,
+      "fwd_10d": 4.32,
+      "fwd_20d": null,
+      "nifty_fwd_10d": 0.05,
+      "abnormal_10d": 4.27,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 4.37
     },
     "INVPRECQ.NS": {
       "direction": "buy",
@@ -3470,7 +3589,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24383.6
+      "nifty_at_emission": 24383.6,
+      "fwd_5d": 10.35,
+      "fwd_10d": 11.79,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.65,
+      "abnormal_10d": 13.44,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 10.8
     },
     "DIVISLAB.NS": {
       "direction": "buy",
@@ -3496,7 +3622,14 @@
         "sector_in_momentum"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24383.6
+      "nifty_at_emission": 24383.6,
+      "fwd_5d": 1.34,
+      "fwd_10d": 3.82,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.65,
+      "abnormal_10d": 5.47,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 4.95
     },
     "LALPATHLAB.NS": {
       "direction": "buy",
@@ -3506,8 +3639,8 @@
       "stop_loss": 1783.57,
       "target_1": 2087.64,
       "target_2": 2209.27,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-17",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3519,7 +3652,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24383.6
+      "nifty_at_emission": 24383.6,
+      "fwd_5d": 1.09,
+      "fwd_10d": 0.28,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.65,
+      "abnormal_10d": 1.93,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -1.76
     },
     "CRAFTSMAN.NS": {
       "direction": "buy",
@@ -3529,8 +3669,8 @@
       "stop_loss": 9235.67,
       "target_1": 10830.24,
       "target_2": 11468.07,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-17",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3544,7 +3684,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24383.6
+      "nifty_at_emission": 24383.6,
+      "fwd_5d": 5.87,
+      "fwd_10d": 3.52,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.65,
+      "abnormal_10d": 5.17,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 5.84
     },
     "TVSMOTOR.NS": {
       "direction": "buy",
@@ -3554,8 +3701,8 @@
       "stop_loss": 4104.09,
       "target_1": 4626.62,
       "target_2": 4835.63,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-17",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3569,7 +3716,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24383.6
+      "nifty_at_emission": 24383.6,
+      "fwd_5d": 2.66,
+      "fwd_10d": -0.44,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.65,
+      "abnormal_10d": 1.21,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 1.39
     }
   },
   "2026-08-03": {
@@ -3581,8 +3735,8 @@
       "stop_loss": 95.86,
       "target_1": 123.49,
       "target_2": 134.54,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-18",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": true,
@@ -3595,7 +3749,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24589.65
+      "nifty_at_emission": 24589.65,
+      "fwd_5d": -4.83,
+      "fwd_10d": 2.54,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.33,
+      "abnormal_10d": 3.87,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 4.13
     },
     "ATALREAL.NS": {
       "direction": "buy",
@@ -3605,8 +3766,8 @@
       "stop_loss": 30.93,
       "target_1": 37.13,
       "target_2": 39.6,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-18",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3620,7 +3781,14 @@
         "promoter_buying"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24589.65
+      "nifty_at_emission": 24589.65,
+      "fwd_5d": 3.17,
+      "fwd_10d": 7.0,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.33,
+      "abnormal_10d": 8.33,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 1.26
     },
     "DIVISLAB.NS": {
       "direction": "buy",
@@ -3630,8 +3798,8 @@
       "stop_loss": 8089.84,
       "target_1": 9041.5,
       "target_2": 9422.16,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-18",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3647,7 +3815,14 @@
         "sector_in_momentum"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24589.65
+      "nifty_at_emission": 24589.65,
+      "fwd_5d": -2.31,
+      "fwd_10d": -0.17,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.33,
+      "abnormal_10d": 1.16,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 1.09
     },
     "ASIANENE.NS": {
       "direction": "buy",
@@ -3657,8 +3832,8 @@
       "stop_loss": 378.53,
       "target_1": 463.46,
       "target_2": 497.43,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "sl_hit",
+      "outcome_date": "2026-08-14",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3671,7 +3846,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24589.65
+      "nifty_at_emission": 24589.65,
+      "fwd_5d": -2.68,
+      "fwd_10d": 2.79,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.33,
+      "abnormal_10d": 4.12,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -8.54
     },
     "TVSMOTOR.NS": {
       "direction": "buy",
@@ -3681,8 +3863,8 @@
       "stop_loss": 4100.52,
       "target_1": 4618.97,
       "target_2": 4826.36,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-18",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3696,7 +3878,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24589.65
+      "nifty_at_emission": 24589.65,
+      "fwd_5d": 2.14,
+      "fwd_10d": 0.3,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.33,
+      "abnormal_10d": 1.63,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -0.37
     }
   },
   "2026-08-04": {
@@ -3708,8 +3897,8 @@
       "stop_loss": 31.4,
       "target_1": 37.76,
       "target_2": 40.3,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-19",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3721,7 +3910,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24569.8
+      "nifty_at_emission": 24569.8,
+      "fwd_5d": 2.88,
+      "fwd_10d": -0.33,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.91,
+      "abnormal_10d": 1.58,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -2.54
     },
     "LALPATHLAB.NS": {
       "direction": "buy",
@@ -3731,8 +3927,8 @@
       "stop_loss": 1796.83,
       "target_1": 2097.01,
       "target_2": 2217.09,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-19",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3744,7 +3940,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24569.8
+      "nifty_at_emission": 24569.8,
+      "fwd_5d": 1.42,
+      "fwd_10d": -1.11,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.91,
+      "abnormal_10d": 0.8,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -1.85
     },
     "TVSMOTOR.NS": {
       "direction": "buy",
@@ -3754,8 +3957,8 @@
       "stop_loss": 4169.55,
       "target_1": 4683.18,
       "target_2": 4888.62,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-19",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3769,7 +3972,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24569.8
+      "nifty_at_emission": 24569.8,
+      "fwd_5d": 0.27,
+      "fwd_10d": -0.72,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.91,
+      "abnormal_10d": 1.19,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -0.62
     },
     "ASIANENE.NS": {
       "direction": "buy",
@@ -3779,8 +3989,8 @@
       "stop_loss": 379.99,
       "target_1": 465.27,
       "target_2": 499.38,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "sl_hit",
+      "outcome_date": "2026-08-14",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3793,7 +4003,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24569.8
+      "nifty_at_emission": 24569.8,
+      "fwd_5d": -3.27,
+      "fwd_10d": 11.52,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.91,
+      "abnormal_10d": 13.43,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -8.54
     },
     "DIVISLAB.NS": {
       "direction": "buy",
@@ -3803,8 +4020,8 @@
       "stop_loss": 7956.42,
       "target_1": 8894.13,
       "target_2": 9269.21,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-19",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3819,7 +4036,14 @@
         "sector_in_momentum"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24569.8
+      "nifty_at_emission": 24569.8,
+      "fwd_5d": 2.66,
+      "fwd_10d": 2.78,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.91,
+      "abnormal_10d": 4.69,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 2.44
     }
   },
   "2026-08-05": {
@@ -3831,8 +4055,8 @@
       "stop_loss": 718.26,
       "target_1": 839.36,
       "target_2": 887.8,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-20",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3846,7 +4070,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24624.65
+      "nifty_at_emission": 24624.65,
+      "fwd_5d": 1.86,
+      "fwd_10d": 4.64,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -2.26,
+      "abnormal_10d": 6.9,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 4.52
     },
     "KAPSTON.NS": {
       "direction": "buy",
@@ -3856,8 +4087,8 @@
       "stop_loss": 494.27,
       "target_1": 590.72,
       "target_2": 629.3,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "t1_hit",
+      "outcome_date": "2026-08-10",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3870,7 +4101,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24624.65
+      "nifty_at_emission": 24624.65,
+      "fwd_5d": 8.21,
+      "fwd_10d": -2.07,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -2.26,
+      "abnormal_10d": 0.19,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 10.56
     },
     "GLAND.NS": {
       "direction": "buy",
@@ -3880,8 +4118,8 @@
       "stop_loss": 2385.37,
       "target_1": 2784.7,
       "target_2": 2944.43,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "t1_hit",
+      "outcome_date": "2026-08-11",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3895,7 +4133,14 @@
         "sector_in_momentum"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24624.65
+      "nifty_at_emission": 24624.65,
+      "fwd_5d": 13.3,
+      "fwd_10d": 11.34,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -2.26,
+      "abnormal_10d": 13.6,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 9.11
     },
     "IGPL.NS": {
       "direction": "buy",
@@ -3905,8 +4150,8 @@
       "stop_loss": 479.82,
       "target_1": 566.4,
       "target_2": 601.03,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "sl_hit",
+      "outcome_date": "2026-08-11",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3919,7 +4164,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24624.65
+      "nifty_at_emission": 24624.65,
+      "fwd_5d": -9.52,
+      "fwd_10d": -7.7,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -2.26,
+      "abnormal_10d": -5.44,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -8.35
     },
     "ATALREAL.NS": {
       "direction": "buy",
@@ -3929,8 +4181,8 @@
       "stop_loss": 32.13,
       "target_1": 38.21,
       "target_2": 40.64,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "sl_hit",
+      "outcome_date": "2026-08-18",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3943,7 +4195,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24624.65
+      "nifty_at_emission": 24624.65,
+      "fwd_5d": 1.96,
+      "fwd_10d": -4.29,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -2.26,
+      "abnormal_10d": -2.03,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -7.33
     }
   },
   "2026-08-06": {
@@ -3955,8 +4214,8 @@
       "stop_loss": 715.05,
       "target_1": 831.55,
       "target_2": 878.14,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "timeout",
+      "outcome_date": "2026-08-21",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3970,7 +4229,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24660.45
+      "nifty_at_emission": 24660.45,
+      "fwd_5d": 0.14,
+      "fwd_10d": 5.21,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.38,
+      "abnormal_10d": 6.59,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 4.37
     },
     "TFCILTD.NS": {
       "direction": "buy",
@@ -3980,8 +4246,8 @@
       "stop_loss": 103.05,
       "target_1": 121.82,
       "target_2": 129.33,
-      "outcome": "open",
-      "outcome_date": null,
+      "outcome": "t1_hit",
+      "outcome_date": "2026-08-17",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -3994,7 +4260,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24660.45
+      "nifty_at_emission": 24660.45,
+      "fwd_5d": 3.45,
+      "fwd_10d": 19.78,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.38,
+      "abnormal_10d": 21.16,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 9.88
     },
     "UNIVASTU.NS": {
       "direction": "buy",
@@ -4004,8 +4277,8 @@
       "stop_loss": 129.04,
       "target_1": 163.94,
       "target_2": 177.9,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "sl_hit",
+      "outcome_date": "2026-08-10",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -4019,7 +4292,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24660.45
+      "nifty_at_emission": 24660.45,
+      "fwd_5d": 6.72,
+      "fwd_10d": 20.29,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.38,
+      "abnormal_10d": 21.67,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -10.06
     },
     "3IINFOLTD.NS": {
       "direction": "buy",
@@ -4029,8 +4309,8 @@
       "stop_loss": 23.36,
       "target_1": 28.12,
       "target_2": 30.02,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "sl_hit",
+      "outcome_date": "2026-08-19",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -4043,7 +4323,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24660.45
+      "nifty_at_emission": 24660.45,
+      "fwd_5d": 6.31,
+      "fwd_10d": -12.22,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.38,
+      "abnormal_10d": -10.84,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -7.82
     },
     "RKFORGE.NS": {
       "direction": "buy",
@@ -4053,8 +4340,8 @@
       "stop_loss": 659.84,
       "target_1": 771.62,
       "target_2": 816.33,
-      "outcome": "open",
-      "outcome_date": "2026-08-07",
+      "outcome": "t1_hit",
+      "outcome_date": "2026-08-19",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -4067,7 +4354,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24660.45
+      "nifty_at_emission": 24660.45,
+      "fwd_5d": 3.78,
+      "fwd_10d": 5.5,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.38,
+      "abnormal_10d": 6.88,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 9.22
     }
   },
   "2026-08-07": {
@@ -4079,8 +4373,8 @@
       "stop_loss": 231.94,
       "target_1": 296.56,
       "target_2": 322.41,
-      "outcome": "open",
-      "outcome_date": null,
+      "outcome": "sl_hit",
+      "outcome_date": "2026-08-17",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": true,
@@ -4094,7 +4388,14 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24570.85
+      "nifty_at_emission": 24570.85,
+      "fwd_5d": -9.46,
+      "fwd_10d": -30.0,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.35,
+      "abnormal_10d": -28.65,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": -14.0
     },
     "RSL.NS": {
       "direction": "buy",
@@ -4104,8 +4405,8 @@
       "stop_loss": 142.58,
       "target_1": 169.54,
       "target_2": 180.32,
-      "outcome": "open",
-      "outcome_date": null,
+      "outcome": "t1_hit",
+      "outcome_date": "2026-08-13",
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
       "big_mover": false,
@@ -4118,7 +4419,135 @@
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24570.85
+      "nifty_at_emission": 24570.85,
+      "fwd_5d": 7.56,
+      "fwd_10d": 7.19,
+      "fwd_20d": null,
+      "nifty_fwd_10d": -1.35,
+      "abnormal_10d": 8.54,
+      "abnormal_10d_stress": null,
+      "realized_return_pct": 10.25
+    }
+  },
+  "2026-08-25": {
+    "KABRAEXTRU.NS": {
+      "direction": "buy",
+      "entry": 611.1,
+      "entry_lo": 592.68,
+      "entry_hi": 625.62,
+      "stop_loss": 543.25,
+      "target_1": 708.0,
+      "target_2": 773.89,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": true,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 24334.55
+    },
+    "PVP.NS": {
+      "direction": "buy",
+      "entry": 48.59,
+      "entry_lo": 49.92,
+      "entry_hi": 52.78,
+      "stop_loss": 45.64,
+      "target_1": 59.92,
+      "target_2": 65.63,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": true,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 24334.55
+    },
+    "MANGLMCEM.NS": {
+      "direction": "buy",
+      "entry": 1045.4,
+      "entry_lo": 1016.61,
+      "entry_hi": 1052.39,
+      "stop_loss": 962.93,
+      "target_1": 1141.85,
+      "target_2": 1213.42,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 24334.55
+    },
+    "STOVEKRAFT.NS": {
+      "direction": "buy",
+      "entry": 821.25,
+      "entry_lo": 777.97,
+      "entry_hi": 812.83,
+      "stop_loss": 725.69,
+      "target_1": 899.96,
+      "target_2": 969.67,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 24334.55
+    },
+    "SHILPAMED.NS": {
+      "direction": "buy",
+      "entry": 855.8,
+      "entry_lo": 846.41,
+      "entry_hi": 876.69,
+      "stop_loss": 801.0,
+      "target_1": 952.37,
+      "target_2": 1012.92,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 24334.55
     }
   }
 }
