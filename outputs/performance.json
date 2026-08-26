@@ -4549,5 +4549,103 @@
       "regime": "ranging",
       "nifty_at_emission": 24334.55
     }
+  },
+  "2026-08-26": {
+    "KABRAEXTRU.NS": {
+      "direction": "buy",
+      "entry": 611.1,
+      "entry_lo": 587.15,
+      "entry_hi": 618.75,
+      "stop_loss": 539.76,
+      "target_1": 697.73,
+      "target_2": 760.92,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": true,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 24343.85
+    },
+    "PVP.NS": {
+      "direction": "buy",
+      "entry": 48.59,
+      "entry_lo": 52.52,
+      "entry_hi": 55.48,
+      "stop_loss": 48.07,
+      "target_1": 62.89,
+      "target_2": 68.81,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": true,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 24343.85
+    },
+    "SHRIPISTON.NS": {
+      "direction": "buy",
+      "entry": 4600.1,
+      "entry_lo": 4531.54,
+      "entry_hi": 4688.46,
+      "stop_loss": 4296.15,
+      "target_1": 5080.77,
+      "target_2": 5394.62,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned",
+        "consolidation_breakout"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 24343.85
+    },
+    "STOVEKRAFT.NS": {
+      "direction": "buy",
+      "entry": 821.25,
+      "entry_lo": 788.67,
+      "entry_hi": 821.93,
+      "stop_loss": 738.78,
+      "target_1": 905.08,
+      "target_2": 971.59,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 24343.85
+    }
   }
 }

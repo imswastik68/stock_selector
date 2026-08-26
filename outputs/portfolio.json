@@ -1,7 +1,7 @@
 {
-  "cash": 2707.869520000004,
-  "equity": 101812.87,
-  "realized_pnl": 178.42,
+  "cash": 9441.878270000005,
+  "equity": 101336.88,
+  "realized_pnl": -501.32,
   "holdings": {
     "PIRAMALFIN.NS": {
       "qty": 6,
@@ -73,20 +73,6 @@
       "last_price": 10048.0,
       "unrealized_pnl": 243.0
     },
-    "SETL.NS": {
-      "qty": 25,
-      "entry": 296.55,
-      "entry_lo": 296.55,
-      "entry_hi": 296.55,
-      "sl": 256.65,
-      "t1": 332.53,
-      "t2": 362.88,
-      "direction": "buy",
-      "opened": "2026-07-16",
-      "exit_policy": "time_10d",
-      "last_price": 288.4,
-      "unrealized_pnl": -203.75
-    },
     "WABAG.NS": {
       "qty": 1,
       "entry": 2190.3,
@@ -154,6 +140,19 @@
       "return_pct": -16.31,
       "cost_pct": 0.3,
       "outcome": "sl_hit"
+    },
+    {
+      "ticker": "SETL.NS",
+      "qty": 25,
+      "entry": 296.55,
+      "exit_price": 270.25,
+      "direction": "buy",
+      "opened": "2026-07-16",
+      "closed": "2026-08-26",
+      "pnl": -679.74,
+      "return_pct": -9.17,
+      "cost_pct": 0.3,
+      "outcome": "timeout"
     }
   ],
   "equity_history": [
@@ -256,6 +255,10 @@
     {
       "date": "2026-08-25",
       "equity": 101812.87
+    },
+    {
+      "date": "2026-08-26",
+      "equity": 101336.88
     }
   ]
 }
