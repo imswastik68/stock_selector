@@ -3444,10 +3444,10 @@
       "regime": "ranging",
       "nifty_at_emission": 24274.6,
       "fwd_5d": 3.07,
-      "fwd_10d": -5.09,
+      "fwd_10d": -6.45,
       "fwd_20d": null,
       "nifty_fwd_10d": -0.31,
-      "abnormal_10d": -4.78,
+      "abnormal_10d": -6.14,
       "abnormal_10d_stress": null,
       "realized_return_pct": null
     },
@@ -4904,116 +4904,40 @@
       "nifty_at_emission": 24175.65
     }
   },
-  "2026-08-31": {
-    "AEROENTER.NS": {
+  "2026-09-01": {
+    "RUBICON.NS": {
       "direction": "buy",
-      "entry": 146.29,
-      "entry_lo": 134.92,
-      "entry_hi": 141.98,
-      "stop_loss": 124.33,
-      "target_1": 159.64,
-      "target_2": 173.76,
+      "entry": 1818.8,
+      "entry_lo": 1760.78,
+      "entry_hi": 1840.02,
+      "stop_loss": 1641.93,
+      "target_1": 2038.11,
+      "target_2": 2196.58,
       "outcome": "open",
       "outcome_date": null,
       "exit_policy": "time_10d",
       "eval_method": "next_day_zone_v2",
-      "big_mover": true,
+      "big_mover": false,
       "instrument": "cash_equity",
       "active_signals": [
         "actual_52w_breakout",
         "near_52w_high",
         "rsi_momentum",
         "rs_vs_nifty",
-        "weekly_trend_aligned"
-      ],
-      "regime": "ranging",
-      "nifty_at_emission": 24080.4
-    },
-    "REDINGTON.NS": {
-      "direction": "buy",
-      "entry": 366.0,
-      "entry_lo": 350.43,
-      "entry_hi": 365.07,
-      "stop_loss": 328.46,
-      "target_1": 401.68,
-      "target_2": 430.96,
-      "outcome": "open",
-      "outcome_date": null,
-      "exit_policy": "time_10d",
-      "eval_method": "next_day_zone_v2",
-      "big_mover": false,
-      "instrument": "cash_equity",
-      "active_signals": [
-        "actual_52w_breakout",
-        "near_52w_high",
-        "delivery_surge",
-        "rsi_momentum",
-        "rs_vs_nifty",
-        "weekly_trend_aligned"
-      ],
-      "regime": "ranging",
-      "nifty_at_emission": 24080.4
-    },
-    "MANAKSTEEL.NS": {
-      "direction": "buy",
-      "entry": 94.79,
-      "entry_lo": 97.51,
-      "entry_hi": 101.53,
-      "stop_loss": 91.48,
-      "target_1": 111.57,
-      "target_2": 119.61,
-      "outcome": "open",
-      "outcome_date": null,
-      "exit_policy": "time_10d",
-      "eval_method": "next_day_zone_v2",
-      "big_mover": false,
-      "instrument": "cash_equity",
-      "active_signals": [
-        "actual_52w_breakout",
-        "near_52w_high",
-        "delivery_surge",
-        "rs_quality_strong",
-        "rs_vs_nifty",
-        "weekly_trend_aligned"
-      ],
-      "regime": "ranging",
-      "nifty_at_emission": 24080.4
-    },
-    "DIVISLAB.NS": {
-      "direction": "buy",
-      "entry": 9239.0,
-      "entry_lo": 9373.51,
-      "entry_hi": 9560.49,
-      "stop_loss": 9093.05,
-      "target_1": 10027.92,
-      "target_2": 10401.87,
-      "outcome": "open",
-      "outcome_date": null,
-      "exit_policy": "time_10d",
-      "eval_method": "next_day_zone_v2",
-      "big_mover": false,
-      "instrument": "cash_equity",
-      "active_signals": [
-        "actual_52w_breakout",
-        "near_52w_high",
-        "delivery_surge",
-        "rs_quality_strong",
-        "rs_vs_nifty",
-        "options_short_covering",
         "weekly_trend_aligned",
-        "sector_in_momentum"
+        "sast_insider_buying"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24080.4
+      "nifty_at_emission": 23970.3
     },
-    "ENTERO.NS": {
+    "YATHARTH.NS": {
       "direction": "buy",
-      "entry": 1808.6,
-      "entry_lo": 1772.54,
-      "entry_hi": 1847.26,
-      "stop_loss": 1660.47,
-      "target_1": 2034.04,
-      "target_2": 2183.46,
+      "entry": 965.3,
+      "entry_lo": 949.97,
+      "entry_hi": 984.03,
+      "stop_loss": 898.88,
+      "target_1": 1069.17,
+      "target_2": 1137.29,
       "outcome": "open",
       "outcome_date": null,
       "exit_policy": "time_10d",
@@ -5023,13 +4947,84 @@
       "active_signals": [
         "actual_52w_breakout",
         "near_52w_high",
-        "delivery_surge",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 23970.3
+    },
+    "KENNAMET.NS": {
+      "direction": "buy",
+      "entry": 4325.5,
+      "entry_lo": 4455.02,
+      "entry_hi": 4665.98,
+      "stop_loss": 4138.56,
+      "target_1": 5193.41,
+      "target_2": 5615.34,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
         "rs_quality_strong",
         "rs_vs_nifty",
         "weekly_trend_aligned"
       ],
       "regime": "ranging",
-      "nifty_at_emission": 24080.4
+      "nifty_at_emission": 23970.3
+    },
+    "PVP.NS": {
+      "direction": "buy",
+      "entry": 56.48,
+      "entry_lo": 69.07,
+      "entry_hi": 72.51,
+      "stop_loss": 63.9,
+      "target_1": 81.13,
+      "target_2": 88.03,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 23970.3
+    },
+    "MAHASTEEL.NS": {
+      "direction": "buy",
+      "entry": 1235.5,
+      "entry_lo": 1366.19,
+      "entry_hi": 1425.41,
+      "stop_loss": 1277.35,
+      "target_1": 1573.47,
+      "target_2": 1691.92,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "ranging",
+      "nifty_at_emission": 23970.3
     }
   }
 }

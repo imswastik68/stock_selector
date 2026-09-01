@@ -3,10 +3,10 @@
     "actual_52w_breakout": {
       "n": 51,
       "months": 2,
-      "mean": 3.407,
+      "mean": 3.381,
       "win_pct": 74.5,
-      "t_stat": 2.86,
-      "p_value": 0.0042,
+      "t_stat": 2.83,
+      "p_value": 0.0046,
       "verdict": "INSUFFICIENT"
     },
     "consolidation_breakout": {
@@ -39,10 +39,10 @@
     "near_52w_high": {
       "n": 52,
       "months": 2,
-      "mean": 3.689,
+      "mean": 3.663,
       "win_pct": 75.0,
-      "t_stat": 3.07,
-      "p_value": 0.0021,
+      "t_stat": 3.04,
+      "p_value": 0.0024,
       "verdict": "INSUFFICIENT"
     },
     "options_long_buildup": {
@@ -93,19 +93,19 @@
     "rs_quality_strong": {
       "n": 30,
       "months": 2,
-      "mean": 3.225,
+      "mean": 3.179,
       "win_pct": 73.3,
-      "t_stat": 1.82,
-      "p_value": 0.0682,
+      "t_stat": 1.79,
+      "p_value": 0.0734,
       "verdict": "INSUFFICIENT"
     },
     "rs_vs_nifty": {
       "n": 43,
       "months": 2,
-      "mean": 3.494,
+      "mean": 3.462,
       "win_pct": 76.7,
-      "t_stat": 2.65,
-      "p_value": 0.008,
+      "t_stat": 2.62,
+      "p_value": 0.0088,
       "verdict": "INSUFFICIENT"
     },
     "rsi_bearish_div": {
@@ -148,10 +148,10 @@
   "aggregate": {
     "n": 109,
     "months": 2,
-    "mean": 0.317,
+    "mean": 0.304,
     "win_pct": 49.5,
-    "t_stat": 0.37,
-    "p_value": 0.7143,
+    "t_stat": 0.35,
+    "p_value": 0.7253,
     "verdict": "INSUFFICIENT"
   },
   "reversal_oversold_v2_stress": {
