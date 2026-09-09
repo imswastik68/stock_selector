@@ -1,12 +1,12 @@
 {
   "per_signal": {
     "actual_52w_breakout": {
-      "n": 53,
+      "n": 56,
       "months": 2,
-      "mean": 3.694,
-      "win_pct": 75.5,
-      "t_stat": 3.16,
-      "p_value": 0.0016,
+      "mean": 3.937,
+      "win_pct": 76.8,
+      "t_stat": 3.51,
+      "p_value": 0.0005,
       "verdict": "INSUFFICIENT"
     },
     "consolidation_breakout": {
@@ -37,12 +37,12 @@
       "verdict": "INSUFFICIENT"
     },
     "near_52w_high": {
-      "n": 54,
+      "n": 57,
       "months": 2,
-      "mean": 3.96,
-      "win_pct": 75.9,
-      "t_stat": 3.36,
-      "p_value": 0.0008,
+      "mean": 4.185,
+      "win_pct": 77.2,
+      "t_stat": 3.7,
+      "p_value": 0.0002,
       "verdict": "INSUFFICIENT"
     },
     "options_long_buildup": {
@@ -91,21 +91,21 @@
       "verdict": "INSUFFICIENT"
     },
     "rs_quality_strong": {
-      "n": 32,
+      "n": 33,
       "months": 2,
-      "mean": 3.711,
-      "win_pct": 75.0,
-      "t_stat": 2.18,
-      "p_value": 0.0295,
+      "mean": 4.01,
+      "win_pct": 75.8,
+      "t_stat": 2.39,
+      "p_value": 0.0169,
       "verdict": "INSUFFICIENT"
     },
     "rs_vs_nifty": {
-      "n": 45,
+      "n": 47,
       "months": 2,
-      "mean": 3.828,
-      "win_pct": 77.8,
-      "t_stat": 2.97,
-      "p_value": 0.003,
+      "mean": 4.029,
+      "win_pct": 78.7,
+      "t_stat": 3.22,
+      "p_value": 0.0013,
       "verdict": "INSUFFICIENT"
     },
     "rsi_bearish_div": {
@@ -118,10 +118,10 @@
       "verdict": "INSUFFICIENT"
     },
     "rsi_momentum": {
-      "n": 15,
+      "n": 17,
       "months": 2,
-      "mean": 5.759,
-      "win_pct": 73.3,
+      "mean": 5.736,
+      "win_pct": 76.5,
       "t_stat": null,
       "p_value": null,
       "verdict": "INSUFFICIENT"
@@ -136,22 +136,22 @@
       "verdict": "INSUFFICIENT"
     },
     "weekly_trend_aligned": {
-      "n": 53,
+      "n": 56,
       "months": 2,
-      "mean": 4.151,
-      "win_pct": 77.4,
-      "t_stat": 3.5,
-      "p_value": 0.0005,
+      "mean": 4.369,
+      "win_pct": 78.6,
+      "t_stat": 3.85,
+      "p_value": 0.0001,
       "verdict": "INSUFFICIENT"
     }
   },
   "aggregate": {
-    "n": 111,
+    "n": 114,
     "months": 2,
-    "mean": 0.51,
-    "win_pct": 50.5,
-    "t_stat": 0.59,
-    "p_value": 0.5549,
+    "mean": 0.713,
+    "win_pct": 51.8,
+    "t_stat": 0.84,
+    "p_value": 0.4022,
     "verdict": "INSUFFICIENT"
   },
   "reversal_oversold_v2_stress": {
@@ -164,23 +164,23 @@
     "verdict": "INSUFFICIENT"
   },
   "lines": [
-    "actual_52w_breakout: INSUFFICIENT (n=53/30, 2/3 months)",
+    "actual_52w_breakout: INSUFFICIENT (n=56/30, 2/3 months)",
     "consolidation_breakout: INSUFFICIENT (n=3/30, 1/3 months)",
     "delivery_surge: INSUFFICIENT (n=9/30, 2/3 months)",
     "fundamental_strong: INSUFFICIENT (n=10/30, 2/3 months)",
-    "near_52w_high: INSUFFICIENT (n=54/30, 2/3 months)",
+    "near_52w_high: INSUFFICIENT (n=57/30, 2/3 months)",
     "options_long_buildup: INSUFFICIENT (n=8/30, 2/3 months)",
     "options_short_buildup: INSUFFICIENT (n=1/30, 1/3 months)",
     "options_short_covering: INSUFFICIENT (n=2/30, 1/3 months)",
     "promoter_buying: INSUFFICIENT (n=1/30, 1/3 months)",
     "reversal_oversold_v2: INSUFFICIENT (n=1/30, 1/3 months)",
-    "rs_quality_strong: INSUFFICIENT (n=32/30, 2/3 months)",
-    "rs_vs_nifty: INSUFFICIENT (n=45/30, 2/3 months)",
+    "rs_quality_strong: INSUFFICIENT (n=33/30, 2/3 months)",
+    "rs_vs_nifty: INSUFFICIENT (n=47/30, 2/3 months)",
     "rsi_bearish_div: INSUFFICIENT (n=1/30, 1/3 months)",
-    "rsi_momentum: INSUFFICIENT (n=15/30, 2/3 months)",
+    "rsi_momentum: INSUFFICIENT (n=17/30, 2/3 months)",
     "sector_in_momentum: INSUFFICIENT (n=5/30, 2/3 months)",
-    "weekly_trend_aligned: INSUFFICIENT (n=53/30, 2/3 months)",
-    "AGGREGATE (all buys): INSUFFICIENT (n=111/100, 2/3 months)",
+    "weekly_trend_aligned: INSUFFICIENT (n=56/30, 2/3 months)",
+    "AGGREGATE (all buys): INSUFFICIENT (n=114/100, 2/3 months)",
     "reversal_oversold_v2 [2x-cost stress]: INSUFFICIENT (n=1/30, 1/3 months)"
   ]
 }
