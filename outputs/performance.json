@@ -6048,5 +6048,133 @@
       "regime": "downtrend",
       "nifty_at_emission": 23398.1
     }
+  },
+  "2026-09-14": {
+    "EBGNG.NS": {
+      "direction": "buy",
+      "entry": 677.95,
+      "entry_lo": 662.42,
+      "entry_hi": 696.88,
+      "stop_loss": 610.72,
+      "target_1": 783.05,
+      "target_2": 851.98,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": true,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "downtrend",
+      "nifty_at_emission": 23398.1
+    },
+    "NRL.NS": {
+      "direction": "buy",
+      "entry": 134.84,
+      "entry_lo": 131.24,
+      "entry_hi": 134.88,
+      "stop_loss": 125.77,
+      "target_1": 144.0,
+      "target_2": 151.3,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_bearish_div",
+        "rsi_momentum",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "downtrend",
+      "nifty_at_emission": 23398.1
+    },
+    "WELCORP.NS": {
+      "direction": "buy",
+      "entry": 2776.9,
+      "entry_lo": 2624.41,
+      "entry_hi": 2728.79,
+      "stop_loss": 2467.83,
+      "target_1": 2989.76,
+      "target_2": 3198.54,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_bearish_div",
+        "rsi_momentum",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "downtrend",
+      "nifty_at_emission": 23398.1
+    },
+    "JINDALSAW.NS": {
+      "direction": "buy",
+      "entry": 317.5,
+      "entry_lo": 306.57,
+      "entry_hi": 317.33,
+      "stop_loss": 290.43,
+      "target_1": 344.23,
+      "target_2": 365.75,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_bearish_div",
+        "rsi_momentum",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "downtrend",
+      "nifty_at_emission": 23398.1
+    },
+    "FINCABLES.NS": {
+      "direction": "buy",
+      "entry": 1418.4,
+      "entry_lo": 1390.99,
+      "entry_hi": 1457.01,
+      "stop_loss": 1291.97,
+      "target_1": 1622.05,
+      "target_2": 1754.08,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "regime": "downtrend",
+      "nifty_at_emission": 23398.1
+    }
   }
 }
