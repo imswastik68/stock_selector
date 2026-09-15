@@ -1,7 +1,7 @@
 {
-  "cash": 9441.878270000005,
-  "equity": 101336.88,
-  "realized_pnl": -501.32,
+  "cash": 11412.507370000005,
+  "equity": 101224.11,
+  "realized_pnl": -720.99,
   "holdings": {
     "PIRAMALFIN.NS": {
       "qty": 6,
@@ -72,20 +72,6 @@
       "exit_policy": "static",
       "last_price": 10048.0,
       "unrealized_pnl": 243.0
-    },
-    "WABAG.NS": {
-      "qty": 1,
-      "entry": 2190.3,
-      "entry_lo": 2190.3,
-      "entry_hi": 2190.3,
-      "sl": 1791.13,
-      "t1": 2268.3,
-      "t2": 2459.17,
-      "direction": "buy",
-      "opened": "2026-07-17",
-      "exit_policy": "time_10d",
-      "last_price": 2083.4,
-      "unrealized_pnl": -106.9
     }
   },
   "closed": [
@@ -151,6 +137,19 @@
       "closed": "2026-08-26",
       "pnl": -679.74,
       "return_pct": -9.17,
+      "cost_pct": 0.3,
+      "outcome": "timeout"
+    },
+    {
+      "ticker": "WABAG.NS",
+      "qty": 1,
+      "entry": 2190.3,
+      "exit_price": 1977.2,
+      "direction": "buy",
+      "opened": "2026-07-17",
+      "closed": "2026-09-15",
+      "pnl": -219.67,
+      "return_pct": -10.03,
       "cost_pct": 0.3,
       "outcome": "timeout"
     }
@@ -307,6 +306,10 @@
     {
       "date": "2026-09-14",
       "equity": 101336.88
+    },
+    {
+      "date": "2026-09-15",
+      "equity": 101224.11
     }
   ]
 }

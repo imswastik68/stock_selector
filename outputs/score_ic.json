@@ -69,12 +69,17 @@
       "date": "2026-08-25",
       "n_names": 328,
       "ic": -0.0716
+    },
+    {
+      "date": "2026-08-26",
+      "n_names": 328,
+      "ic": -0.0786
     }
   ],
-  "n_days": 14,
+  "n_days": 15,
   "min_days": 30,
   "horizon_days": 10,
-  "mean_ic": 0.0244,
-  "t_stat": 0.89,
+  "mean_ic": 0.0176,
+  "t_stat": 0.67,
   "verdict": "INSUFFICIENT"
 }
