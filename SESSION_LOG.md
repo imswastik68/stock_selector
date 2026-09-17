@@ -164,6 +164,20 @@ All t-stats between -1.51 and +0.87 — nothing significant. The short
 horizons were actively bad (picks fall for the first ~3 days) because of
 the stale-data bug below; re-measure once post-fix picks accumulate.
 
+## Fixed 2026-09-17: the alert advised a 1-2 day hold, the worst horizon
+`src/scorer.py` hardcoded `timeframe = "1-2d"` and **66 of 70 live buy picks
+carried it**, while `WINNER_POLICY="time_10d"` force-exits at 10 bars. The
+alert advised a hold the system never performs — and per the table above,
+1-2 days is the one horizon that loses money net of costs.
+
+`timeframe` is display-only (only `src/telegram_alert.py` reads it), so this
+mis-instructed the reader rather than breaking a trade, which is why it
+survived. Now derived from the exit policy via
+`src.trade_sim.horizon_label()`, which also backs the defaults in
+`response_parser`, `agent` and the LLM prompt schema — **four** places
+independently told the user a holding period and three were short. Pinned by
+`tests/test_timeframe_matches_exit_policy.py` (mutation-checked).
+
 ## Open lead 2026-09-17: the 10-day time stop may be cutting winners early
 On the SAME `score>=4` trades (paired, so this is not a cohort difference),
 holding 20 bars instead of 10:
