@@ -4,6 +4,8 @@ Parses and validates Claude's JSON response into the final watchlist schema.
 
 from __future__ import annotations
 
+from src.trade_sim import horizon_label
+
 import json
 import re
 
@@ -109,7 +111,7 @@ def _validate_buy_entry(entry: dict) -> dict | None:
     entry.setdefault("vsa_signal", "none")
     entry.setdefault("top_signals", [])
     entry.setdefault("expected_move_pct", 0)
-    entry.setdefault("timeframe", "3-5d")
+    entry.setdefault("timeframe", horizon_label())
     entry.setdefault("target_1", "N/A")
     entry.setdefault("target_2", "N/A")
     entry.setdefault("invalidation", "N/A")
@@ -147,7 +149,7 @@ def _validate_sell_entry(entry: dict) -> dict | None:
     entry.setdefault("vsa_signal", "none")
     entry.setdefault("top_signals", [])
     entry.setdefault("expected_drop_pct", 0)
-    entry.setdefault("timeframe", "3-5d")
+    entry.setdefault("timeframe", horizon_label())
     entry.setdefault("short_entry_zone", entry.get("stop_loss", "N/A"))
     entry.setdefault("cover_target_1", "N/A")
     entry.setdefault("cover_target_2", "N/A")

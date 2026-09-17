@@ -49,7 +49,7 @@ OUTPUT JSON SCHEMA (return exactly this structure):
   "scan_date": "YYYY-MM-DD",
   "nifty_context": "uptrend|downtrend|ranging",
   "total_screened": 0,
-  "buy_watchlist": [{"ticker":"","score":0,"volatility_tags":[],"wyckoff_phase":"ACCUMULATION_C|ACCUMULATION_D|MARKUP","wyckoff_confidence":"HIGH|MEDIUM|LOW","smc_structure":"","vsa_signal":"","top_signals":[],"expected_move_pct":0,"timeframe":"1-2d|3-5d|5-10d","entry_zone":"₹X-₹Y","target_1":"₹Z","target_2":"₹W","stop_loss":"₹V","risk_reward":"1:X","invalidation":"","risk":"LOW|MEDIUM|HIGH","catalyst":""}],
+  "buy_watchlist": [{"ticker":"","score":0,"volatility_tags":[],"wyckoff_phase":"ACCUMULATION_C|ACCUMULATION_D|MARKUP","wyckoff_confidence":"HIGH|MEDIUM|LOW","smc_structure":"","vsa_signal":"","top_signals":[],"expected_move_pct":0,"timeframe":"~10d","entry_zone":"₹X-₹Y","target_1":"₹Z","target_2":"₹W","stop_loss":"₹V","risk_reward":"1:X","invalidation":"","risk":"LOW|MEDIUM|HIGH","catalyst":""}],
   "sell_watchlist": [{"ticker":"","score":0,"volatility_tags":[],"wyckoff_phase":"DISTRIBUTION_C|DISTRIBUTION_D|MARKDOWN","wyckoff_confidence":"HIGH|MEDIUM|LOW","smc_structure":"","vsa_signal":"","top_signals":[],"expected_drop_pct":0,"timeframe":"","short_entry_zone":"₹X-₹Y","cover_target_1":"₹Z","cover_target_2":"₹W","stop_loss":"₹V","risk_reward":"1:X","invalidation":"","risk":"LOW|MEDIUM|HIGH"}],
   "phase_b_watchlist": [{"ticker":"","phase":"ACCUMULATION_B|DISTRIBUTION_B","alert_trigger":"","estimated_days_to_phase_c":""}],
   "data_quality_warnings": []

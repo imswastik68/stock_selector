@@ -39,28 +39,66 @@ dump, not a diary. Full history is in `git log`.
      the EOD scan). Edit the script if the content needs to change. -->
 _(as of 2026-09-17, auto-generated)_
 
-- **Last commit at log time:** 59bc3fa 2026-09-17.
+- **Last commit at log time:** f124026 2026-09-17.
 - **Score IC:** 16 days recorded (needs 30), mean IC 0.0303, t=1.08, verdict **INSUFFICIENT**.
 - **Momentum gate:** PAPER-ONLY -- no momentum strategy has passed the multi-split ship gate — PAPER-ONLY (outputs/factor_backtest.json)
-- **Portfolio:** equity 101224.11, cash 11412.507370000005, 5 open holdings: PIRAMALFIN.NS, BHARATFORG.NS, KPIL.NS, NYKAA.NS, POLYCAB.NS.
+- **Portfolio:** equity 1000000.0, cash 1000000.0, 0 open holdings: none.
 <!-- AUTO-GENERATED:END -->
 
 **Known unresolved (human-tracked, not auto-updated):**
-- **Portfolio ₹1L vs ₹10L mismatch — the paper book is DEAD.** Measured
-  2026-09-17: `outputs/portfolio.json` is the old ~₹1L lineage (equity
-  ~101k, cash ₹11.4k) but `RISK_CAPITAL=1000000` in CI, so
-  `src/risk.py:size_position` returns ₹125k-150k notional per pick.
-  `src/portfolio.py:open_positions` then skips every pick on
-  `state["cash"] < notional`. **Zero positions opened since 2026-07-17
-  while 57 buys were emitted in September alone.** The 5 remaining
-  holdings are from June with `exit_policy: "static"` (no time cap), so
-  they never free the capital. The live-proof book has not tracked the
-  system for two months. Needs a decision: reset the book to ₹10L, or set
-  RISK_CAPITAL to match the ~₹1L book. Do not pick one silently — ask.
+- ~~Portfolio ₹1L vs ₹10L mismatch~~ **RESOLVED 2026-09-17** — user chose
+  ₹10L. `scripts/reset_portfolio.py` archived the dead ~₹1L book to
+  `outputs/portfolio_archive/portfolio_2026-09-17.json` (5 June holdings
+  flattened at last mark into `closed` with outcome `"reset"`, 11 closed
+  trades retained) and wrote a flat ₹10,00,000 book. Sizing now fits:
+  ₹155k-248k notional per pick against ₹1M cash, and the 6% portfolio risk
+  budget caps it at ~6 concurrent positions. The book will actually open
+  trades again — it had opened **zero since 2026-07-17** while 57 buys were
+  emitted in September, because `open_positions` skipped every pick on
+  `state["cash"] < notional`.
 - Repo was briefly private (~2026-08-10 to ~2026-08-25), which silently
   hit a GitHub Actions billing block (jobs failed in 3-5s, "recent account
   payments have failed"). Fixed by making the repo public. Not a code bug
   — keep the repo public.
+
+## Shipped 2026-09-17: REGIME_WEIGHTS pruned (15 of 37 entries were wrong-signed)
+`REGIME_WEIGHTS` re-weights signals by NIFTY trend. Unlike SHORT_TERM_WEIGHTS
+it was **never validated** when generated (2026-07 Phase 5) — and 15 entries
+had a sign the backtest contradicts. Worst: `ranging` set
+**rsi_momentum to −2**, while rsi_momentum is the ONLY signal in scorer.py
+sign-consistently positive across the 70/30 holdout at every horizon
+(fwd_10d train +1.02 t=9.09 / holdout +0.60 t=2.55). Ranging is ~22% of the
+sample, so for a fifth of its life the scorer penalised its best predictor.
+`uptrend` likewise rewarded actual_52w_breakout (+1) and rs_vs_nifty (+1)
+whose train lifts are −0.61 and −0.76.
+
+Rule (`scripts/regime_override_audit.py`, re-runnable): drop the entry when
+sign(TRAIN lift) ≠ sign(override); leave entries with <200 train obs ALONE
+rather than guess. Holdout per-day rank IC **0.0241 → 0.0356 (+48%)**,
+paired t=+1.70, positive in **12 of 12** split-point × horizon cells,
+improving monotonically with train size. No single cell reaches p<0.05
+(best t=+1.97) — what justifies it is the consistency plus the fact that the
+dropped entries never had evidence behind them. Pinned by
+`tests/test_regime_overrides_match_evidence.py` (17/30 fail against the old
+table).
+
+**Do NOT delete this table wholesale.** An earlier pass this session compared
+all-overrides vs no-overrides and appeared to show deletion helped — that was
+an artifact of a reconstruction that omitted the bearish penalties
+(distribution_signal, heavy_selling, volume_5x). Those are the CORRECT part
+and carry most of the table's value; with them included, wholesale deletion
+measures as a wash (t=−0.50/−0.00/+0.60).
+
+**Also beware:** several scorer.py weight comments are Simpson's-paradox
+artifacts. `near_52w_high` is commented "BEST validated signal: +1.01 ret
+lift" and weighted +3 — its **pooled** return_pct lift is +0.138 but its
+**within-year** lift is −0.230. The signal fires more in bull years, so a
+pooled signal-on-vs-signal-off comparison credits it with the year. Same for
+`actual_52w_breakout` (+3, within-year −0.680) and `rsi_bearish_div` (+3,
+within-year −0.249). Always control for period before believing a lift.
+Rebalancing the base weights on this was tested and did **not** beat the
+existing weights out of sample, so the base table was left alone — the
+finding is about the comments being wrong, not a shippable reweight.
 
 ## Shipped, holdout-validated
 - `rsi_overbought` = RSI>80, weight -1 (2026-08). RSI>75 and a graduated
@@ -126,6 +164,28 @@ All t-stats between -1.51 and +0.87 — nothing significant. The short
 horizons were actively bad (picks fall for the first ~3 days) because of
 the stale-data bug below; re-measure once post-fix picks accumulate.
 
+## Open lead 2026-09-17: the 10-day time stop may be cutting winners early
+On the SAME `score>=4` trades (paired, so this is not a cohort difference),
+holding 20 bars instead of 10:
+
+| split | excess@10d vs NIFTY | excess@20d | diff | paired t |
+|---|---|---|---|---|
+| train | +0.70% | +1.59% | **+0.89pp** | +12.12 |
+| holdout | +0.85% | +1.87% | **+1.03pp** | +13.71 |
+
+p<1e-4 both sides, sign-consistent, and **not beta** — NIFTY itself returned
++0.06%/+0.31% over those windows, and the NIFTY-excess version is *stronger*
+than the raw one. This is the largest clean effect found this session.
+
+**Caveat that stops it being shipped on this number alone:** `fwd_20d` is
+exit-agnostic buy-and-hold. The live book exits on SL/T1 first, so a longer
+time cap only affects trades still open at day 10 — stops and the time cap
+interact. `time_15d`/`time_20d` were added to `src/trade_sim.py`
+(`_TIME_STOP_BARS`) and `scripts/backtest_exits.py`'s POLICIES so the real
+comparison can be run; `WINNER_POLICY` is **unchanged at `time_10d`** until
+that backtest says otherwise. This is also the one legitimate reason to
+reopen the "exits" question, which the note below otherwise forbids.
+
 ## Fixed 2026-09-17: scans ran one trading day late
 `end = date.today()` in the four yfinance feeds (breakouts, breakdowns,
 reversal, volume) — **yfinance's `end` is exclusive**, so today's bar was
@@ -172,22 +232,52 @@ the trade profited, for both buys and sells). Reading them as raw price
 moves makes the short book look like a huge *winner* when it is the
 opposite. Split by `direction` before interpreting.
 
-## Known reporting defects (not yet fixed)
-- **`live_alpha_gate` over-counts evidence.** The 5 signals reporting
-  ✅ PROVEN in `outputs/live_proof.json` (actual_52w_breakout,
-  near_52w_high, weekly_trend_aligned, rs_vs_nifty, rs_quality_strong)
-  are pairwise Jaccard 0.56-0.99 overlapping — **71 distinct trades
-  reported as n=70+71+70+60+41=312**. The Telegram alert therefore shows
-  five independent-looking proofs for what is one cohort over ~6 weeks.
-  Also why per-signal says PROVEN while AGGREGATE says NO-EDGE: the
-  aggregate additionally includes 57 older picks whose `active_signals`
-  was never recorded (empty list), which average -2.76%.
-- **`score` is never recorded on live picks.** `record_picks` in
-  `src/performance.py:104-133` stores active_signals/regime/big_mover but
-  not `score`, so all 285 picks in `outputs/performance.json` have
-  `score: None` and live score→outcome attribution is impossible from the
-  audit trail. (`analyse_picks.py` only has score because it re-parses the
-  Telegram text.) One-line fix, not yet made.
+## What this system can and cannot do (measured 2026-09-17)
+Asked for "sure shot" 3-day / 1-week / 1-month calls. **That does not exist
+here and the numbers say so plainly.** Best measured directional accuracy of
+any cohort is **52.3% up**. Everything below is holdout-only (2024-08 to
+2026-06, n=210,072 buy rows), net of the repo's 0.30% round-trip cost, cut by
+the live actionable-buy bar (`score >= 4`, `src/agent.py:346`):
+
+| horizon | net/trade @score≥4 | up% | verdict |
+|---|---|---|---|
+| **fwd_5d (3d-1wk)** | **−0.09%** | 47% | **no edge — cost eats it** |
+| fwd_10d (2 wks) | +0.82% | 50.6% | real, thin |
+| **fwd_20d (~1 month)** | **+1.88%** | 52% | **best horizon** |
+
+Two things follow, and they are the opposite of the intuition:
+1. **The short end is the weak end.** 3-day/1-week calls are net-negative at
+   every score threshold below 6. Do not market or trade this as a 3-day
+   system.
+2. **Positional (~1 month) is where the edge lives**, and it is monotone in
+   score (`>=2` +0.25% → `>=4` +0.82% → `>=6` +1.06% at 10d, all
+   sign-consistent train+holdout). The `score >= 4` emission bar is already
+   correctly placed — do NOT raise `MIN_SCORE` (2) to match it; that is a
+   Pass-1 pre-enrichment funnel filter, and raising it would drop candidates
+   before options/SAST enrichment can lift their score.
+
+Expressed honestly: at its best configuration this is a ~52% win rate with a
+~+1.9% net edge per one-month trade. That is a real edge and it is worth
+having. It is not a guarantee about any individual stock, and no amount of
+further work will make it one.
+
+## Known reporting defects
+- ~~`live_alpha_gate` over-counts evidence~~ **FIXED 2026-09-17.** The 5
+  ✅ PROVEN signals were **71 distinct trades reported as n=312** (4.39x),
+  actual_52w_breakout/near_52w_high overlapping 99%. Attribution is still
+  one-pick-to-all-its-signals (correct for measuring a signal), but
+  `live_alpha_gate` now returns an `attribution` block and
+  `live_proof_report` emits a caveat line whenever inflation ≥1.5x:
+  `⚠️ NOT 5 independent proofs: n=312 ... is only 71 distinct trades`.
+  Pinned by `tests/test_live_proof_attribution.py` (mutation-checked).
+  Still true and unfixed: AGGREGATE says NO-EDGE partly because it also
+  includes 57 older picks whose `active_signals` was never recorded.
+- ~~`score` is never recorded on live picks~~ **FIXED 2026-09-17.**
+  `record_picks` now stores `score`. All 285 pre-fix picks keep
+  `score: None` permanently — live score→outcome attribution only becomes
+  possible for picks recorded from here on. Pinned by
+  `tests/test_record_picks_stores_score.py` (incl. a score-of-0 case, since
+  `entry.get("score") or None` would silently lose it).
 - `active_signals` recording was broken before 2026-08 (0/80 in June,
   33/107 in July, 41/41 Aug, 57/57 Sep). Now fixed; historical gap
   permanently contaminates any pre-August aggregate.

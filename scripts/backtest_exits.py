@@ -42,6 +42,8 @@ OUT_FILE    = ROOT / "outputs" / "backtest_exits.json"
 POLICIES = [
     "static",
     "time_10d",
+    "time_15d",
+    "time_20d",
     "breakeven_1r",
     "partial_t1_be",
     "trail_atr3",
@@ -51,6 +53,8 @@ POLICIES = [
 EXIT_POLICY_LABELS = {
     "static":           "SL/T1 first touch (baseline)",
     "time_10d":         "static + force-exit day 10",
+    "time_15d":         "static + force-exit day 15",
+    "time_20d":         "static + force-exit day 20",
     "breakeven_1r":     "breakeven SL after +1R",
     "partial_t1_be":    "50% @ T1, rest → breakeven SL → T2",
     "trail_atr3":       "chandelier trail 3×ATR (no T1)",

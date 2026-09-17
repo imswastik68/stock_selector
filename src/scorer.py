@@ -7,6 +7,8 @@ Claude is NOT involved here — all scoring is rule-based and auditable.
 
 from __future__ import annotations
 
+from src.trade_sim import horizon_label
+
 # PENDING_VALIDATION (2026-07, Phase 2): every signal below carries a hand weight
 # with ZERO rows in any backtest (outputs/backtest_signal_stats.json's
 # note_untested_signals) -- bulk deals/SAST/promoter/delivery/announcements/options
@@ -72,7 +74,7 @@ SHORT_TERM_WEIGHTS = {
 
 SWING_WEIGHTS = {
     "results_due": 0,               # PENDING_VALIDATION (was 1) — informational only, untested
-    "promoter_buying": 0,           # PENDING_VALIDATION (was 3) — sets timeframe -> 5-7d still (see _compute_score)
+    "promoter_buying": 0,           # PENDING_VALIDATION (was 3) — no longer overrides timeframe (see _compute_score)
     "sast_insider_buying": 0,       # FAILED backtest (not pending) -- fires on ANY SAST filing (pledges,
                                     # creeping acquisitions, inter-se transfers), ret_lift=-0.407, n=2010.
                                     # The isolated open-market-buy version SHIPPED once more PIT history
@@ -419,7 +421,11 @@ def _compute_score(
     nifty_trend: str = "ranging",
 ) -> tuple[int, str]:
     score = 0
-    timeframe = "1-2d"
+    # Tracks the exit policy instead of the old hardcoded "1-2d" -- see
+    # src.trade_sim.horizon_label. 66 of 70 live picks said "1-2d" while the book
+    # held for 10 bars, and 1-2 days is the one horizon that loses money net of
+    # costs. The label now cannot contradict the exit.
+    timeframe = horizon_label()
 
     # Regime override merges into (not replaces) the hand weights, and only touches
     # keys belonging to the table they're meant for — see REGIME_WEIGHTS comment.
@@ -438,8 +444,11 @@ def _compute_score(
     for sig, weight in SWING_WEIGHTS.items():
         if signals.get(sig):
             score += weight
-            if sig in ("results_due", "promoter_buying"):
-                timeframe = "5-7d"
+            # NB: results_due/promoter_buying used to force timeframe="5-7d". Dropped
+            # 2026-09-17 -- now that the default tracks the exit policy, that branch
+            # SHORTENED the advertised hold below what the book enforces, and nothing
+            # measures a shorter horizon as better for those two signals (both are
+            # weight 0 / PENDING_VALIDATION anyway).
 
     for sig, weight in bearish.items():
         if signals.get(sig):

@@ -24,15 +24,43 @@ import pandas as pd
 # scripts/backtest_exits.py periodically and update this constant if a better policy emerges.
 WINNER_POLICY: str = "time_10d"
 
+# Bars-held cap per time-stop policy. Added time_15d/time_20d 2026-09-17: on the
+# same score>=4 trades the live buy bar emits, holding 20 days instead of 10 added
+# +1.03pp of NIFTY-EXCESS return on the 70/30 holdout (paired t=+13.71, p<1e-4),
+# sign-consistent with train (+0.89pp, t=+12.12), and it is not market beta --
+# NIFTY itself returned only +0.06%/+0.31% over those windows. That is a
+# buy-and-hold measure though: stops interact with the time cap, so which policy
+# actually wins is settled by scripts/backtest_exits.py, not by this number.
+_TIME_STOP_BARS: dict[str, int] = {"time_10d": 10, "time_15d": 15, "time_20d": 20}
+
 # Human-readable exit plan shown in Telegram alerts. Update alongside WINNER_POLICY.
 EXIT_PLAN_HINT: dict[str, str] = {
     "static":           "first touch: exit at SL or T1",
     "time_10d":         "first touch + force-exit day 10 if still open",
+    "time_15d":         "first touch + force-exit day 15 if still open",
+    "time_20d":         "first touch + force-exit day 20 if still open",
     "breakeven_1r":     "SL → breakeven after +1R; target T1",
     "partial_t1_be":    "book 50% @ T1 · SL → breakeven · ride to T2",
     "trail_atr3":       "chandelier trail 3×ATR, no fixed target",
     "partial_t1_trail": "book 50% @ T1 · trail rest 3×ATR",
 }
+
+
+def horizon_label(policy: str | None = None) -> str:
+    """Holding period the live exit policy actually enforces, for display.
+
+    Single source of truth for the `timeframe` shown to the user. Before
+    2026-09-17 src/scorer.py hardcoded "1-2d" and 66 of 70 live buy picks
+    carried it -- while WINNER_POLICY held trades to 10 bars, and a 1-2 day
+    hold is the one horizon measured to be NET-NEGATIVE after the 0.30%
+    round-trip cost (holdout, score>=4: fwd_5d -0.09% vs fwd_10d +0.82% and
+    fwd_20d +1.88%). The alert was advising the worst available horizon.
+
+    Deriving it from the policy means the label cannot drift from the exit
+    again when WINNER_POLICY changes.
+    """
+    bars = _TIME_STOP_BARS.get(policy or WINNER_POLICY)
+    return f"~{bars}d" if bars else "until SL/T1"
 
 
 def simulate_raw(
@@ -125,7 +153,8 @@ def simulate_raw(
         bar_close = float(row["Close"])
 
         # ── time stop ─────────────────────────────────────────────────────
-        if exit_policy == "time_10d" and bar_n >= 10:
+        _stop_bars = _TIME_STOP_BARS.get(exit_policy)
+        if _stop_bars is not None and bar_n >= _stop_bars:
             outcome = "timeout"; exit_price = bar_close; exit_idx = idx; break
 
         # ── trailing stop ratchet (before exit checks) ────────────────────

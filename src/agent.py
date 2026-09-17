@@ -23,6 +23,7 @@ import re
 from datetime import date, datetime, timezone, timedelta
 
 from src.scorer import BEARISH_EVENT_WEIGHTS, REGIME_WEIGHTS
+from src.trade_sim import horizon_label
 
 _GROQ_BASE  = "https://api.groq.com/openai/v1"
 _GROQ_MODEL = "llama-3.3-70b-versatile"
@@ -411,7 +412,7 @@ def _build_entries(candidates: list[dict], market_context: dict, nifty_trend: st
             # (src.gates.live_alpha_gate) can attribute forward returns per signal,
             # not just in aggregate.
             "active_signals": active_signals,
-            "timeframe": c.get("timeframe", "1-2d"),
+            "timeframe": c.get("timeframe") or horizon_label(),
             "risk": risk,
             "promoter_pct": c.get("promoter_pct"),
             "options_pcr": c.get("options_pcr"),
