@@ -15,6 +15,39 @@ dump, not a diary. Full history is in `git log`.
 4. `tests/test_*.py` docstrings for shipped signals — each one documents
    the backtest/holdout numbers that justified it.
 
+## READ FIRST 2026-09-17: every t-stat in this repo is inflated ~10x
+`backtest_trades.csv` is **weekly-sampled**: 280 scan dates, ~750 trades
+per date. Trades sharing a scan date are massively cross-correlated (same
+market, same day), so a per-trade t-test overstates significance by
+roughly √(trades-per-date). **The unit of independence is the scan date,
+not the trade.**
+
+Long side, `score>=4`, NIFTY-excess fwd_20d, the same numbers three ways:
+
+| | mean | naive t | date-clustered t | Newey-West(3) t |
+|---|---|---|---|---|
+| train (219 dates) | +0.945% | +10.07 | +3.79 | **+2.89** |
+| holdout (**55 dates**) | +2.472% | +19.06 | +1.62 | **+1.49 (n.s.)** |
+| full (274 dates) | +1.374% | +17.90 | +4.12 | **+3.24** |
+
+Newey-West lag 3 because a 20-day horizon overlaps ~3 weekly scans.
+
+**What this means, stated honestly:** the long edge is *sign-consistent*
+(positive in both halves) and *full-sample significant* (t=+3.24), but it
+is **not established on the holdout alone** (p=0.11). Only **50.9%** of
+holdout scan dates have positive mean excess — a coin flip. The holdout
+is 55 observations, not 10,743.
+
+**Rules that follow:**
+- Never quote a per-trade t-stat from this file again. Cluster by
+  `as_of`, then Newey-West for horizon overlap.
+- A four-figure `n` in any older table in this document is a trade count,
+  not a sample size. Historic claims here carrying t>10 (e.g. "+31.96",
+  "+13.71", "+14.52") are inflated by this bug and should be re-derived
+  before being relied on.
+- Resolving anything about *ranking* needs a denser (daily) backtest.
+  55 dates cannot settle it.
+
 ## Working rules (do not violate)
 - **Ship gate:** any scoring change must be backtested with a 70/30
   chronological holdout against `outputs/backtest_trades.csv` /
@@ -216,7 +249,7 @@ volume_ratio until close); that is conservative and still better than
 quoting yesterday.
 
 ## Why the system is long-only (asked 2026-09-17, re-verified)
-`SHORT_PIPELINE_LIVE = False` in `src/agent.py:115`. Sells are scored and
+`SHORT_PIPELINE_LIVE = False` in `src/agent.py:116`. Sells are scored and
 routed to phase_b as informational only. This is evidence-backed, not an
 oversight — re-measured on `outputs/backtest_trades.csv` (291,314 trades,
 2020-11 to 2026-06, of which 79,972 are sell-direction):
@@ -246,6 +279,60 @@ the trade profited, for both buys and sells). Reading them as raw price
 moves makes the short book look like a huge *winner* when it is the
 opposite. Split by `direction` before interpreting.
 
+### The short cohort is beta, not inverted alpha (measured 2026-09-17)
+The mean-reversion above is tempting to trade the other way — "if the
+sell list rises, go long the sell list." **It does not work: the sell
+cohort is simply high-beta.** OLS of direction-adjusted net trade P&L on
+the matching NIFTY move, fwd_20d, sell cost 0.15% futures per
+`src/costs.py`:
+
+| cohort (fwd_20d) | alpha | t (naive, INFLATED) | beta |
+|---|---|---|---|
+| BUY score≥4, train | **+1.93%** | +16.7 | 0.67 |
+| BUY score≥4, holdout | **+1.77%** | +15.4 | 0.64 |
+| SELL score≥4, train | −1.10% | −1.9 | 1.30 |
+| SELL score≥4, holdout | **−2.12%** | −5.1 | 1.19 |
+
+⚠️ The t column is per-trade and therefore **inflated ~10x** — see
+"every t-stat in this repo is inflated" at the top. Date-clustered, the
+long side is t=+2.89 train / **+1.49 holdout (not significant)**. The
+alpha *point estimates* and the beta estimates stand; the significance
+does not. The short side's negative sign is what matters there, and it
+is negative in both halves at any inference standard.
+
+The short book carries beta ~1.2-1.3 and *negative* alpha on top of it,
+so going long the sell list is a leveraged index bet, not an edge. The
+long book carries beta **0.64** with ~+1.8% alpha — less market exposure
+than the index and a real excess on top. Sign-consistent across the
+split.
+
+Because beta is 0.64 and not 1.0, a plain NIFTY-excess subtraction
+(which implicitly assumes beta=1) **understates** the long alpha. Use
+the regression.
+
+**Method warning:** an earlier version of this test split the cohorts by
+NIFTY's *forward* return ("NIFTY up" vs "NIFTY down" buckets). That
+conditions on the future and is not a valid alpha estimate, though it is
+fine as a beta diagnostic. The regression above replaces it. Results are
+robust to entry misalignment (fills land 1-2 bars after `as_of`; lags of
+0/1/2 days move the buy figure only +1.40/+1.37/+1.34%).
+
+Pooled NIFTY-excess at the live bar, both splits sign-consistent:
+
+| horizon | train | holdout |
+|---|---|---|
+| fwd_5d | −0.05% (p=0.36) | +0.07% (p=0.25) — **no alpha** |
+| fwd_10d | +0.35% (t=+4.8) | +0.69% (t=+8.8) |
+| fwd_20d | +1.21% (t=+11.8) | +1.73% (t=+15.4) — **best** |
+
+Note the 5d row: the earlier raw-return table showed fwd_5d as merely
+weak; with beta removed it is **zero in both splits**. The 3-day/1-week
+horizon has no alpha at all, not just a thin one. This matches the
+published record — one-month cross-sectional momentum is a documented
+effect, while sub-weekly horizons are where costs and reversal dominate
+(Jegadeesh-Titman line of work; "short-term momentum (almost)
+everywhere", J. Int. Financial Markets 2019).
+
 ## What this system can and cannot do (measured 2026-09-17)
 Asked for "sure shot" 3-day / 1-week / 1-month calls. **That does not exist
 here and the numbers say so plainly.** Best measured directional accuracy of
@@ -274,6 +361,94 @@ Expressed honestly: at its best configuration this is a ~52% win rate with a
 ~+1.9% net edge per one-month trade. That is a real edge and it is worth
 having. It is not a guarantee about any individual stock, and no amount of
 further work will make it one.
+
+## 2026-09-17: the score is a proven FILTER; whether it RANKS is undetermined
+Asked to surface "max expectancy" picks. Measured on beta-adjusted fwd_20d
+alpha, buy rows, 70/30 split.
+
+**The bar itself.** `score>=4` earns alpha=**+1.93%** train / **+1.77%**
+holdout at beta 0.64 — sign-consistent, and full-sample significant once
+clustered by date (t=+3.24). On the holdout alone it is **not**
+significant (clustered t=+1.49). Best current read: a likely edge of
+roughly +1 to +2% per one-month trade, not a settled one.
+
+**Undetermined — the ordering.** Correctly measured (per-day paired,
+top-6 vs 6 drawn at random from the same day's eligible pool, 400 draws):
+
+| split | top-6 by score | random-6 | random − top | p |
+|---|---|---|---|---|
+| train | +1.168% | +1.670% | +0.502pp | 0.24 |
+| holdout | +0.874% | +0.594% | −0.281pp | 0.61 |
+
+Sign-flips across the split and neither is significant → **no evidence
+either way.** Do not conclude that score-ranking helps, and do not
+conclude it hurts.
+
+**A pooled test here is misleading and I ran one first.** Pooling all
+top-5 rows across dates gave "top-5 = −0.21% vs pool +1.57%", which
+looks like the push is actively picking the worst names. That comparison
+mixes dates with very different market conditions; the per-day paired
+version above is the correct test and it shows no such effect. Earlier
+Spearman/rank-IC numbers (train −0.041, holdout +0.039) have the same
+pooling flaw.
+
+**Power limit — read this before running another ranking test.**
+`backtest_trades.csv` is sampled **weekly**, not daily: 280 scan dates
+over 5.7 years, of which only ~253 have ≥6 eligible names and **75 land
+in the holdout**. Any per-day ranking claim is therefore low-powered by
+construction. Getting a real answer needs a denser backtest, not another
+pass over this file.
+
+**Consequence:** there is currently no evidence-backed reason to change
+the top-5 Telegram selection. The value is in the filter. Leave the
+selection alone until a daily-sampled backtest can actually resolve it.
+
+### The edge is concentrated in 3 of 7 years
+Alpha of the admitted cohort (fwd_20d, per-trade t shown — inflated, use
+for sign only):
+
+| yr | alpha | t | dominant regime |
+|---|---|---|---|
+| 2020 | **−6.12** | −4.07 | uptrend |
+| 2021 | +4.40 | +15.73 | uptrend |
+| 2022 | +0.06 | +0.28 | downtrend |
+| 2023 | +4.49 | +20.10 | uptrend |
+| 2024 | −0.33 | −1.48 | uptrend |
+| 2025 | −0.18 | −0.77 | downtrend |
+| 2026 | +2.99 | +20.56 | downtrend |
+
+2021, 2023 and 2026 carry the whole result; 2020 is strongly negative
+and 2022/2024/2025 are flat. This is the real reason the holdout fails
+to reach significance — it is not a power artifact alone, the effect
+genuinely switches off for years at a time.
+
+**The 70/30 split is nearly a regime split**, which confounds every
+train-vs-holdout comparison in this document: train is mostly uptrend
+(14,632 admitted rows) and holdout mostly downtrend (5,060). Splitting
+*within* each regime on its own timeline:
+
+| regime | train alpha | holdout alpha | |
+|---|---|---|---|
+| uptrend | +2.81% | **−0.75%** | SIGN FLIP |
+| ranging | +1.66% | −0.78% | SIGN FLIP |
+| downtrend | +2.27% | +2.01% | consistent |
+
+Only the downtrend cohort holds up. Note this is the cohort the scorer
+floods (94.5% admit) — so the regime override that looks like a bug by
+admit-rate is, by alpha, the part that works.
+
+### The score's scale is not stable across regimes
+Monthly mean score on buy rows swings from **−2.96** (2026-02) to
+**+9.12** (2026-04) with no matching change in any `sig_*` firing rate —
+the swing comes from `REGIME_WEIGHTS`, which reprices every signal when
+the NIFTY regime flips. So the fixed `score>=4` bar admits a wildly
+varying share of candidates:
+
+    2024Q4: 4%   2025Q1: 46%   2025Q3: 6%   2026Q2: 95%
+
+A 95%-admit quarter is not a filter. This is the likely mechanism behind
+the ranking instability above, and it means `score>=4` does not mean the
+same thing in two different months. Unresolved.
 
 ## Known reporting defects
 - ~~`live_alpha_gate` over-counts evidence~~ **FIXED 2026-09-17.** The 5
