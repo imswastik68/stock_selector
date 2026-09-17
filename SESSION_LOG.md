@@ -39,7 +39,7 @@ dump, not a diary. Full history is in `git log`.
      the EOD scan). Edit the script if the content needs to change. -->
 _(as of 2026-09-17, auto-generated)_
 
-- **Last commit at log time:** 96493d0 2026-09-17.
+- **Last commit at log time:** 57dac1e 2026-09-17.
 - **Score IC:** 16 days recorded (needs 30), mean IC 0.0303, t=1.08, verdict **INSUFFICIENT**.
 - **Momentum gate:** PAPER-ONLY -- no momentum strategy has passed the multi-split ship gate — PAPER-ONLY (outputs/factor_backtest.json)
 - **Portfolio:** equity 101224.11, cash 11412.507370000005, 5 open holdings: PIRAMALFIN.NS, BHARATFORG.NS, KPIL.NS, NYKAA.NS, POLYCAB.NS.
@@ -108,6 +108,36 @@ Re-run both to refresh; numbers below are point-in-time.
 - **Pick diversity still bad:** last 40 buys had 11 distinct signal
   fingerprints; the single most common set appeared 15×. Still one
   momentum bet repeated.
+
+## Directional accuracy (measured 2026-09-17, buy next day's open)
+Answers "does a pick actually go the predicted way over 3 days / a week?"
+— **no, not to any significant degree.**
+
+| horizon | up% (all) | up% (Aug+) | beat NIFTY (Aug+) |
+|---|---|---|---|
+| 1d | 41.0% | 36.8% | 42.6% |
+| 3d | 46.8% | 33.8% | 50.8% |
+| 5d | 50.6% | 51.8% | 60.7% |
+| 10d | 53.4% | 60.5% | 73.7% |
+
+All t-stats between -1.51 and +0.87 — nothing significant. The short
+horizons were actively bad (picks fall for the first ~3 days) because of
+the stale-data bug below; re-measure once post-fix picks accumulate.
+
+## Fixed 2026-09-17: scans ran one trading day late
+`end = date.today()` in the four yfinance feeds (breakouts, breakdowns,
+reversal, volume) — **yfinance's `end` is exclusive**, so today's bar was
+never downloaded and `closes.iloc[-1]` was the previous session's close.
+EOD scans run 18:00-23:00 IST (NSE closes 15:30) yet quoted the previous
+day's close in 136/138 picks. Every "52-week breakout" was a day-old
+breakout; picks gapped +0.34% overnight (t=+3.94) before you could buy.
+Fixed to `date.today() + timedelta(days=1)`, pinned by
+`tests/test_download_window_includes_today.py` (mutation-checked).
+**All performance numbers above predate this fix** — they measure a
+system running a day late, so they are a floor, not the system's ceiling.
+Mid-day scans now see a partial current-session bar (understates
+volume_ratio until close); that is conservative and still better than
+quoting yesterday.
 
 ## Known reporting defects (not yet fixed)
 - **`live_alpha_gate` over-counts evidence.** The 5 signals reporting
