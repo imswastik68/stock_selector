@@ -134,6 +134,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Refresh SESSION_LOG.md's auto-generated state block (score IC,
+          # momentum gate verdict, portfolio snapshot) so a new session reading
+          # it sees today's numbers without anyone remembering to update it.
+          python scripts/update_session_log.py || echo "session log update failed, continuing"
           # `-A outputs/` rather than naming each file: git add ERRORS OUT on a
           # pathspec that matches nothing ("fatal: pathspec ... did not match"),
           # so naming outputs/cross_section or outputs/score_ic.json explicitly
@@ -143,6 +147,7 @@ jobs:
           # non-ignored files under outputs/ (the .gitignore whitelist) and is a
           # no-op when they're absent.
           git add -A outputs/
+          git add SESSION_LOG.md
           if ! git diff --cached --quiet; then
             git commit -m "live-proof: $(date +%F) [skip ci]"
             # --autostash: see the archive step above -- other tracked files are
