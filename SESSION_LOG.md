@@ -39,10 +39,10 @@ dump, not a diary. Full history is in `git log`.
      the EOD scan). Edit the script if the content needs to change. -->
 _(as of 2026-09-17, auto-generated)_
 
-- **Last commit at log time:** f124026 2026-09-17.
-- **Score IC:** 16 days recorded (needs 30), mean IC 0.0303, t=1.08, verdict **INSUFFICIENT**.
+- **Last commit at log time:** e1186ed 2026-09-17.
+- **Score IC:** 17 days recorded (needs 30), mean IC 0.0417, t=1.46, verdict **INSUFFICIENT**.
 - **Momentum gate:** PAPER-ONLY -- no momentum strategy has passed the multi-split ship gate — PAPER-ONLY (outputs/factor_backtest.json)
-- **Portfolio:** equity 1000000.0, cash 1000000.0, 0 open holdings: none.
+- **Portfolio:** equity 101224.11, cash 11412.507370000005, 5 open holdings: PIRAMALFIN.NS, BHARATFORG.NS, KPIL.NS, NYKAA.NS, POLYCAB.NS.
 <!-- AUTO-GENERATED:END -->
 
 **Known unresolved (human-tracked, not auto-updated):**
