@@ -349,7 +349,7 @@ def _compute_atr(df_slice: pd.DataFrame) -> float:
 
 # ── main backtest loop ────────────────────────────────────────────────────────
 
-def run_backtest(weeks: int, sample: int | None, step: int = 5) -> None:
+def run_backtest(weeks: int, sample: int | None, step: int = 5, jobs: int = 1) -> None:
     today = date.today()
     end   = today
     start = today - timedelta(days=weeks * 7 + 252)  # extra year for warmup
@@ -379,10 +379,76 @@ def run_backtest(weeks: int, sample: int | None, step: int = 5) -> None:
         signal_dates.append(nifty_ts.index[i])
     print(f"[backtest] {len(signal_dates)} signal dates × {len(ohlcv)} tickers ...")
 
+    global _G_OHLCV, _G_NIFTY_CLOSE, _G_TREND
+    _G_OHLCV, _G_NIFTY_CLOSE, _G_TREND = ohlcv, nifty_close, trend_series
+
     rows: list[dict] = []
     total_evals = 0
 
-    for as_of in signal_dates:
+    if jobs > 1:
+        # Each scan date is independent: the body below only reads ohlcv /
+        # nifty_close / trend_series and contributes its own rows. fork(2)
+        # shares those read-only via copy-on-write, and Pool.map preserves
+        # input order, so the output is identical to the serial path
+        # (verified by diffing both at --sample 30).
+        import multiprocessing as mp
+
+        ctx = mp.get_context("fork")
+        with ctx.Pool(processes=jobs) as pool:
+            for date_rows, date_evals in pool.map(_scan_date, signal_dates, chunksize=1):
+                rows.extend(date_rows)
+                total_evals += date_evals
+    else:
+        for as_of in signal_dates:
+            date_rows, date_evals = _scan_date(as_of)
+            rows.extend(date_rows)
+            total_evals += date_evals
+
+    print(f"[backtest] {total_evals} evaluations → {len(rows)} with active signals")
+
+    if not rows:
+        print("[backtest] no trades generated — check universe or date range")
+        return
+
+    df_trades = pd.DataFrame(rows)
+    OUTPUTS.mkdir(parents=True, exist_ok=True)
+    trades_path = OUTPUTS / "backtest_trades.csv"
+
+    # Archive any existing dataset before overwriting it. A --sample run
+    # silently replaced the full 291k-row file with a 50-ticker one twice on
+    # 2026-09-17; every documented number in SESSION_LOG is measured against
+    # this path, and regenerating it costs hours.
+    if trades_path.exists():
+        archive_dir = OUTPUTS / "backtest_archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.fromtimestamp(trades_path.stat().st_mtime).strftime("%Y%m%d_%H%M%S")
+        prior = archive_dir / f"backtest_trades_{stamp}.csv"
+        if not prior.exists():
+            shutil.copy2(trades_path, prior)
+            print(f"[backtest] archived previous dataset → {prior.relative_to(OUTPUTS)}")
+
+    df_trades.to_csv(trades_path, index=False)
+    print(f"[backtest] trades saved → {trades_path.name} "
+          f"({len(df_trades):,} rows, {df_trades['as_of'].nunique()} scan dates, step={step})")
+
+    _finish_backtest(df_trades, weeks, universe, ohlcv, signal_dates)
+
+
+# Shared read-only state for _scan_date, populated by run_backtest before the
+# worker pool forks. Globals rather than arguments so fork can share them
+# copy-on-write instead of pickling ~GBs of DataFrames to every worker.
+_G_OHLCV: dict[str, pd.DataFrame] = {}
+_G_NIFTY_CLOSE: pd.Series = None  # type: ignore[assignment]
+_G_TREND: pd.Series = None  # type: ignore[assignment]
+
+
+def _scan_date(as_of: pd.Timestamp) -> tuple[list[dict], int]:
+    """Evaluate every ticker at one scan date. Pure w.r.t. the globals above."""
+    ohlcv, nifty_close, trend_series = _G_OHLCV, _G_NIFTY_CLOSE, _G_TREND
+    rows: list[dict] = []
+    total_evals = 0
+
+    if True:
         # Nifty 20d return at this date
         nifty_hist = nifty_close[nifty_close.index <= as_of]
         nifty_20d: float | None = None
@@ -463,32 +529,10 @@ def run_backtest(weeks: int, sample: int | None, step: int = 5) -> None:
             }
             rows.append(row)
 
-    print(f"[backtest] {total_evals} evaluations → {len(rows)} with active signals")
+    return rows, total_evals
 
-    if not rows:
-        print("[backtest] no trades generated — check universe or date range")
-        return
 
-    df_trades = pd.DataFrame(rows)
-    OUTPUTS.mkdir(parents=True, exist_ok=True)
-    trades_path = OUTPUTS / "backtest_trades.csv"
-
-    # Archive any existing dataset before overwriting it. A --sample run
-    # silently replaced the full 291k-row file with a 50-ticker one twice on
-    # 2026-09-17; every documented number in SESSION_LOG is measured against
-    # this path, and regenerating it is a ~15h job at --step 1.
-    if trades_path.exists():
-        archive_dir = OUTPUTS / "backtest_archive"
-        archive_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.fromtimestamp(trades_path.stat().st_mtime).strftime("%Y%m%d_%H%M%S")
-        prior = archive_dir / f"backtest_trades_{stamp}.csv"
-        if not prior.exists():
-            shutil.copy2(trades_path, prior)
-            print(f"[backtest] archived previous dataset → {prior.relative_to(OUTPUTS)}")
-
-    df_trades.to_csv(trades_path, index=False)
-    print(f"[backtest] trades saved → {trades_path.name} "
-          f"({len(df_trades):,} rows, {df_trades['as_of'].nunique()} scan dates, step={step})")
+def _finish_backtest(df_trades, weeks, universe, ohlcv, signal_dates) -> None:
 
     # ── per-signal stats ──────────────────────────────────────────────────────
     triggered = df_trades[df_trades["triggered"] == True].copy()
@@ -571,5 +615,6 @@ if __name__ == "__main__":
     ap.add_argument("--sample", type=int, default=None, help="Limit universe to N tickers (fast sanity check)")
     ap.add_argument("--force",  action="store_true", help="Re-download ignoring cache")
     ap.add_argument("--step",   type=int, default=5, help="Trading days between scan dates (default 5 = weekly; 1 = daily)")
+    ap.add_argument("--jobs",   type=int, default=1, help="Parallel worker processes over scan dates (default 1 = serial)")
     args = ap.parse_args()
-    run_backtest(args.weeks, args.sample, args.step)
+    run_backtest(args.weeks, args.sample, args.step, args.jobs)
