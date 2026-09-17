@@ -219,8 +219,13 @@ def simulate_raw(
     return_pct_gross = return_pct
     return_pct = return_pct - cost_pct
 
-    lows  = post_entry["Low"].astype(float).values
-    highs = post_entry["High"].astype(float).values
+    # MAE/MFE must span the HOLDING period only (entry..exit). post_entry runs to
+    # the end of the dataframe, so scanning it measured excursions that happened
+    # after the trade was already closed -- which reported shorts at MAE -110% and
+    # made losers look like they had been deeply green before reversing.
+    held = post_entry[post_entry.index <= exit_idx]
+    lows  = held["Low"].astype(float).values
+    highs = held["High"].astype(float).values
     if direction == "buy":
         mae = (min(lows)  - entry_price) / entry_price * 100
         mfe = (max(highs) - entry_price) / entry_price * 100
