@@ -39,19 +39,24 @@ dump, not a diary. Full history is in `git log`.
      the EOD scan). Edit the script if the content needs to change. -->
 _(as of 2026-09-17, auto-generated)_
 
-- **Last commit at log time:** f53f51f 2026-09-16.
+- **Last commit at log time:** 96493d0 2026-09-17.
 - **Score IC:** 16 days recorded (needs 30), mean IC 0.0303, t=1.08, verdict **INSUFFICIENT**.
 - **Momentum gate:** PAPER-ONLY -- no momentum strategy has passed the multi-split ship gate — PAPER-ONLY (outputs/factor_backtest.json)
 - **Portfolio:** equity 101224.11, cash 11412.507370000005, 5 open holdings: PIRAMALFIN.NS, BHARATFORG.NS, KPIL.NS, NYKAA.NS, POLYCAB.NS.
 <!-- AUTO-GENERATED:END -->
 
 **Known unresolved (human-tracked, not auto-updated):**
-- **Portfolio ₹1L vs ₹10L reconciliation.** `outputs/portfolio.json` is
-  still on the old ~₹1L lineage, holdings from June 2026
-  (PIRAMALFIN, BHARATFORG, KPIL, NYKAA, POLYCAB), `exit_policy: "static"`.
-  Flagged as an open decision since 2026-08-25, still unanswered — do not
-  silently reconcile it, ask first. If the user has answered this since,
-  remove this bullet.
+- **Portfolio ₹1L vs ₹10L mismatch — the paper book is DEAD.** Measured
+  2026-09-17: `outputs/portfolio.json` is the old ~₹1L lineage (equity
+  ~101k, cash ₹11.4k) but `RISK_CAPITAL=1000000` in CI, so
+  `src/risk.py:size_position` returns ₹125k-150k notional per pick.
+  `src/portfolio.py:open_positions` then skips every pick on
+  `state["cash"] < notional`. **Zero positions opened since 2026-07-17
+  while 57 buys were emitted in September alone.** The 5 remaining
+  holdings are from June with `exit_policy: "static"` (no time cap), so
+  they never free the capital. The live-proof book has not tracked the
+  system for two months. Needs a decision: reset the book to ₹10L, or set
+  RISK_CAPITAL to match the ~₹1L book. Do not pick one silently — ask.
 - Repo was briefly private (~2026-08-10 to ~2026-08-25), which silently
   hit a GitHub Actions billing block (jobs failed in 3-5s, "recent account
   payments have failed"). Fixed by making the repo public. Not a code bug
@@ -78,6 +83,51 @@ _(as of 2026-09-17, auto-generated)_
 - CI persistence fixes: `git pull --rebase --autostash` (dirty
   `outputs/*.json` was aborting rebase), `git add -A outputs/` instead of
   naming files explicitly (was erroring on missing pathspec).
+
+## Measured live performance (2026-09-17, 248 Telegram picks)
+Source: `scripts/fetch_telegram_history.py` → `scripts/analyse_picks.py`.
+Re-run both to refresh; numbers below are point-in-time.
+
+- **Raw SL/T1 result:** 219 closed, 43% win rate, avg win +12.2% / avg
+  loss -9.7%, expectancy **-0.33%/trade gross**, ≈**-0.63% net** of the
+  repo's own 0.30% cost model (`src/costs.py`).
+- **Beta-adjusted alpha vs NIFTY (fwd 10d, regression intercept):**
+  - all 215 matured picks: beta 0.35, **alpha +0.00%, t=0.00**
+  - pre-2026-08: beta 0.96, alpha -1.23%, t=-1.55
+  - 2026-08 onward: beta 0.25, alpha +2.21%, **t=+1.21 (n=32)**
+  The post-August improvement is real in direction but **not
+  significant**, and roughly half of the naive +3.9% "alpha" was just low
+  beta during a -5% NIFTY stretch. By the repo's own bar this is
+  INSUFFICIENT, not a proven edge.
+- **Exit policy is NOT the problem.** Paired test (pure 10-day hold minus
+  SL/T1 realised, same trades): pre-Aug +0.24pp t=+0.32, Aug+ -0.32pp
+  t=-0.20. Neither significant. All six policies in
+  `outputs/backtest_exits.json` have negative OOS expectancy. Do not
+  re-litigate exits without new evidence — the entry signal is the
+  binding constraint.
+- **Pick diversity still bad:** last 40 buys had 11 distinct signal
+  fingerprints; the single most common set appeared 15×. Still one
+  momentum bet repeated.
+
+## Known reporting defects (not yet fixed)
+- **`live_alpha_gate` over-counts evidence.** The 5 signals reporting
+  ✅ PROVEN in `outputs/live_proof.json` (actual_52w_breakout,
+  near_52w_high, weekly_trend_aligned, rs_vs_nifty, rs_quality_strong)
+  are pairwise Jaccard 0.56-0.99 overlapping — **71 distinct trades
+  reported as n=70+71+70+60+41=312**. The Telegram alert therefore shows
+  five independent-looking proofs for what is one cohort over ~6 weeks.
+  Also why per-signal says PROVEN while AGGREGATE says NO-EDGE: the
+  aggregate additionally includes 57 older picks whose `active_signals`
+  was never recorded (empty list), which average -2.76%.
+- **`score` is never recorded on live picks.** `record_picks` in
+  `src/performance.py:104-133` stores active_signals/regime/big_mover but
+  not `score`, so all 285 picks in `outputs/performance.json` have
+  `score: None` and live score→outcome attribution is impossible from the
+  audit trail. (`analyse_picks.py` only has score because it re-parses the
+  Telegram text.) One-line fix, not yet made.
+- `active_signals` recording was broken before 2026-08 (0/80 in June,
+  33/107 in July, 41/41 Aug, 57/57 Sep). Now fixed; historical gap
+  permanently contaminates any pre-August aggregate.
 
 ## Rejected on evidence (don't re-propose without new data)
 - Momentum-cluster cap (cap picks from the same momentum bucket) — paired
