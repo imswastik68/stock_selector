@@ -24,9 +24,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 import warnings
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
@@ -471,8 +472,23 @@ def run_backtest(weeks: int, sample: int | None, step: int = 5) -> None:
     df_trades = pd.DataFrame(rows)
     OUTPUTS.mkdir(parents=True, exist_ok=True)
     trades_path = OUTPUTS / "backtest_trades.csv"
+
+    # Archive any existing dataset before overwriting it. A --sample run
+    # silently replaced the full 291k-row file with a 50-ticker one twice on
+    # 2026-09-17; every documented number in SESSION_LOG is measured against
+    # this path, and regenerating it is a ~15h job at --step 1.
+    if trades_path.exists():
+        archive_dir = OUTPUTS / "backtest_archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.fromtimestamp(trades_path.stat().st_mtime).strftime("%Y%m%d_%H%M%S")
+        prior = archive_dir / f"backtest_trades_{stamp}.csv"
+        if not prior.exists():
+            shutil.copy2(trades_path, prior)
+            print(f"[backtest] archived previous dataset → {prior.relative_to(OUTPUTS)}")
+
     df_trades.to_csv(trades_path, index=False)
-    print(f"[backtest] trades saved → {trades_path.name}")
+    print(f"[backtest] trades saved → {trades_path.name} "
+          f"({len(df_trades):,} rows, {df_trades['as_of'].nunique()} scan dates, step={step})")
 
     # ── per-signal stats ──────────────────────────────────────────────────────
     triggered = df_trades[df_trades["triggered"] == True].copy()
