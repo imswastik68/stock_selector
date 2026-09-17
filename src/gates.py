@@ -227,12 +227,13 @@ def live_alpha_gate(perf: dict | None = None) -> dict:
     perf = perf if perf is not None else _load_perf()
 
     by_signal: dict[str, list[tuple[str, float]]] = {}
+    by_signal_picks: dict[str, set[tuple[str, str]]] = {}
     aggregate: list[tuple[str, float]] = []
     reversal_stress: list[tuple[str, float]] = []
 
     for scan_date, picks in perf.items():
         month = scan_date[:7]
-        for pick in picks.values():
+        for ticker, pick in picks.items():
             if pick.get("eval_method") != "next_day_zone_v2":
                 continue  # v2-only, same discipline as scanner_gate
             if pick.get("direction") != "buy":
@@ -245,6 +246,7 @@ def live_alpha_gate(perf: dict | None = None) -> dict:
             active_signals = pick.get("active_signals") or []
             for sig in active_signals:
                 by_signal.setdefault(sig, []).append((month, abnormal))
+                by_signal_picks.setdefault(sig, set()).add((scan_date, ticker))
 
             if "reversal_oversold_v2" in active_signals:
                 stress = pick.get("abnormal_10d_stress")
@@ -264,6 +266,52 @@ def live_alpha_gate(perf: dict | None = None) -> dict:
         "per_signal": per_signal,
         "aggregate": agg,
         "reversal_oversold_v2_stress": reversal_stress_verdict,
+        "attribution": _attribution_overlap(per_signal, by_signal_picks),
+    }
+
+
+def _attribution_overlap(per_signal: dict, by_signal_picks: dict[str, set]) -> dict:
+    """How much of the per-signal evidence is the SAME trades counted twice.
+
+    Attribution is deliberately not a partition (a pick with 3 signals counts
+    toward all 3), which is the right call for measuring a signal -- but it
+    makes the report read as N independent proofs when it is one cohort. As of
+    2026-09-17 the five PROVEN signals summed to n=312 over 71 DISTINCT trades,
+    pairwise Jaccard 0.56-0.99. Without this, the Telegram alert showed five
+    green ticks for what is a single repeated bet.
+
+    Returns the distinct-trade count behind the PROVEN set, the inflation
+    factor, and the worst overlapping pair.
+    """
+    proven = [s for s, r in per_signal.items() if r.get("verdict") == "PROVEN"]
+    picks_union: set = set()
+    for sig in proven:
+        picks_union |= by_signal_picks.get(sig, set())
+
+    # worst_pair stays None only when NO pair was comparable; a genuine 0.0
+    # overlap must report 0.0, not None, or "no overlap" is indistinguishable
+    # from "never checked".
+    worst_pair, worst_j, compared = None, 0.0, False
+    for i, a in enumerate(proven):
+        for b in proven[i + 1:]:
+            sa, sb = by_signal_picks.get(a, set()), by_signal_picks.get(b, set())
+            union = sa | sb
+            if not union:
+                continue
+            compared = True
+            j = len(sa & sb) / len(union)
+            if j > worst_j:
+                worst_j, worst_pair = j, (a, b)
+
+    claimed = sum(per_signal[s]["n"] for s in proven)
+    distinct = len(picks_union)
+    return {
+        "proven_signals": proven,
+        "n_claimed": claimed,          # sum of the per-signal n's, as reported
+        "n_distinct_picks": distinct,  # how many real trades that actually is
+        "inflation_factor": round(claimed / distinct, 2) if distinct else None,
+        "max_pairwise_jaccard": round(worst_j, 2) if compared else None,
+        "most_overlapping_pair": list(worst_pair) if worst_pair else None,
     }
 
 
@@ -306,6 +354,20 @@ def live_proof_report(perf: dict | None = None) -> dict:
             "reversal_oversold_v2 [2x-cost stress]", gate["reversal_oversold_v2_stress"],
             LIVE_ALPHA_MIN_N_PER_SIGNAL,
         ))
+
+    # Say out loud when the green ticks above are the same trades counted N times,
+    # so the reader cannot take them for N independent confirmations.
+    attr = gate.get("attribution") or {}
+    if attr.get("inflation_factor", 0) and attr["inflation_factor"] >= 1.5:
+        pair = attr.get("most_overlapping_pair") or []
+        lines.append(
+            f"⚠️ NOT {len(attr['proven_signals'])} independent proofs: "
+            f"n={attr['n_claimed']} across those signals is only "
+            f"{attr['n_distinct_picks']} distinct trades "
+            f"({attr['inflation_factor']}x counted)"
+            + (f"; {pair[0]}/{pair[1]} overlap {attr['max_pairwise_jaccard']:.0%}"
+               if len(pair) == 2 else "")
+        )
 
     report = {**gate, "lines": lines}
     OUTPUTS.mkdir(parents=True, exist_ok=True)

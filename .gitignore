@@ -19,6 +19,11 @@ outputs/*
 !outputs/performance.json
 !outputs/portfolio.json
 !outputs/live_proof.json
+# Pre-reset snapshots of portfolio.json (scripts/reset_portfolio.py). Resetting
+# the capital base rewrites portfolio.json in place, so without this the old
+# book's closed-trade lineage would survive only in one working copy and vanish
+# on a fresh clone -- exactly the loss the paragraph above exists to prevent.
+!outputs/portfolio_archive/
 # Same reasoning for the scored cross-sections + their rank-IC summary: they are
 # an accumulating measurement record (one file per scan day) that cannot be
 # reconstructed after the fact -- the scores are only knowable at emission time.

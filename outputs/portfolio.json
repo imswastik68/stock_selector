@@ -1,79 +1,8 @@
 {
-  "cash": 11412.507370000005,
-  "equity": 101224.11,
-  "realized_pnl": -720.99,
-  "holdings": {
-    "PIRAMALFIN.NS": {
-      "qty": 6,
-      "entry": 2017.2,
-      "entry_lo": 2017.2,
-      "entry_hi": 2017.2,
-      "sl": 1873.07,
-      "t1": 2190.15,
-      "t2": 2316.98,
-      "direction": "buy",
-      "opened": "2026-06-16",
-      "exit_policy": "static",
-      "last_price": 1999.9,
-      "unrealized_pnl": -103.8
-    },
-    "BHARATFORG.NS": {
-      "qty": 8,
-      "entry": 2020.5,
-      "entry_lo": 2020.5,
-      "entry_hi": 2020.5,
-      "sl": 1900.44,
-      "t1": 2170.59,
-      "t2": 2278.64,
-      "direction": "buy",
-      "opened": "2026-06-17",
-      "exit_policy": "static",
-      "last_price": 2008.5,
-      "unrealized_pnl": -96.0
-    },
-    "KPIL.NS": {
-      "qty": 11,
-      "entry": 1365.699951171875,
-      "entry_lo": 1365.699951171875,
-      "entry_hi": 1365.699951171875,
-      "sl": 1278.38,
-      "t1": 1505.68,
-      "t2": 1596.6,
-      "direction": "buy",
-      "opened": "2026-06-17",
-      "exit_policy": "static",
-      "last_price": 1367.8,
-      "unrealized_pnl": 23.1
-    },
-    "NYKAA.NS": {
-      "qty": 88,
-      "entry": 280.95,
-      "entry_lo": 280.95,
-      "entry_hi": 280.95,
-      "sl": 281.1,
-      "t1": 323.61,
-      "t2": 340.61,
-      "direction": "buy",
-      "opened": "2026-06-18",
-      "exit_policy": "static",
-      "last_price": 302.3,
-      "unrealized_pnl": 1878.8
-    },
-    "POLYCAB.NS": {
-      "qty": 2,
-      "entry": 9926.5,
-      "entry_lo": 9926.5,
-      "entry_hi": 9926.5,
-      "sl": 9526.73,
-      "t1": 10591.15,
-      "t2": 11016.92,
-      "direction": "buy",
-      "opened": "2026-06-18",
-      "exit_policy": "static",
-      "last_price": 10048.0,
-      "unrealized_pnl": 243.0
-    }
-  },
+  "cash": 1000000.0,
+  "equity": 1000000.0,
+  "realized_pnl": 0.0,
+  "holdings": {},
   "closed": [
     {
       "ticker": "SHREEJISPG.NS",
@@ -152,168 +81,74 @@
       "return_pct": -10.03,
       "cost_pct": 0.3,
       "outcome": "timeout"
+    },
+    {
+      "ticker": "PIRAMALFIN.NS",
+      "qty": 6,
+      "entry": 2017.2,
+      "exit_price": 1999.9,
+      "direction": "buy",
+      "opened": "2026-06-16",
+      "closed": "2026-09-17",
+      "pnl": -103.8,
+      "return_pct": -0.86,
+      "outcome": "reset"
+    },
+    {
+      "ticker": "BHARATFORG.NS",
+      "qty": 8,
+      "entry": 2020.5,
+      "exit_price": 2008.5,
+      "direction": "buy",
+      "opened": "2026-06-17",
+      "closed": "2026-09-17",
+      "pnl": -96.0,
+      "return_pct": -0.59,
+      "outcome": "reset"
+    },
+    {
+      "ticker": "KPIL.NS",
+      "qty": 11,
+      "entry": 1365.699951171875,
+      "exit_price": 1367.8,
+      "direction": "buy",
+      "opened": "2026-06-17",
+      "closed": "2026-09-17",
+      "pnl": 23.1,
+      "return_pct": 0.15,
+      "outcome": "reset"
+    },
+    {
+      "ticker": "NYKAA.NS",
+      "qty": 88,
+      "entry": 280.95,
+      "exit_price": 302.3,
+      "direction": "buy",
+      "opened": "2026-06-18",
+      "closed": "2026-09-17",
+      "pnl": 1878.8,
+      "return_pct": 7.6,
+      "outcome": "reset"
+    },
+    {
+      "ticker": "POLYCAB.NS",
+      "qty": 2,
+      "entry": 9926.5,
+      "exit_price": 10048.0,
+      "direction": "buy",
+      "opened": "2026-06-18",
+      "closed": "2026-09-17",
+      "pnl": 243.0,
+      "return_pct": 1.22,
+      "outcome": "reset"
     }
   ],
   "equity_history": [
     {
-      "date": "2026-07-06",
-      "equity": 102551.44
-    },
-    {
-      "date": "2026-07-07",
-      "equity": 102932.0
-    },
-    {
-      "date": "2026-07-08",
-      "equity": 103082.08
-    },
-    {
-      "date": "2026-07-09",
-      "equity": 103137.48
-    },
-    {
-      "date": "2026-07-10",
-      "equity": 103168.08
-    },
-    {
-      "date": "2026-07-13",
-      "equity": 103370.3
-    },
-    {
-      "date": "2026-07-14",
-      "equity": 103067.0
-    },
-    {
-      "date": "2026-07-15",
-      "equity": 102998.6
-    },
-    {
-      "date": "2026-07-16",
-      "equity": 101946.78
-    },
-    {
-      "date": "2026-07-17",
-      "equity": 101576.47
-    },
-    {
-      "date": "2026-07-20",
-      "equity": 101615.37
-    },
-    {
-      "date": "2026-07-21",
-      "equity": 101883.37
-    },
-    {
-      "date": "2026-07-23",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-07-24",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-07-27",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-07-28",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-07-29",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-07-30",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-07-31",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-08-03",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-08-04",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-08-05",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-08-06",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-08-07",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-08-25",
-      "equity": 101812.87
-    },
-    {
-      "date": "2026-08-26",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-08-27",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-08-28",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-01",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-02",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-03",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-04",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-07",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-08",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-09",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-10",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-11",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-14",
-      "equity": 101336.88
-    },
-    {
-      "date": "2026-09-15",
-      "equity": 101224.11
-    },
-    {
-      "date": "2026-09-16",
-      "equity": 101224.11
+      "date": "2026-09-17",
+      "equity": 1000000.0
     }
-  ]
+  ],
+  "reset_on": "2026-09-17",
+  "reset_capital": 1000000.0
 }

@@ -129,6 +129,12 @@ def record_picks(watchlist_data: dict, nifty_at_emission: float | None = None) -
                     # mutated after recording (only "outcome"/"outcome_date" and the
                     # Phase-3 alpha fields below are updated post-emission):
                     "active_signals":     entry.get("active_signals", []),
+                    # score was NOT recorded before 2026-09-17, so all 285 earlier
+                    # picks carry score: None and no live score->outcome attribution
+                    # was possible from the audit trail at all. Needed to answer "does
+                    # a higher score actually predict a better outcome" on live picks
+                    # rather than only in backtest.
+                    "score":              entry.get("score"),
                     "regime":             watchlist_data.get("nifty_context"),
                     "nifty_at_emission":  nifty_at_emission,
                 }
