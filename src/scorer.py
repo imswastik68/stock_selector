@@ -219,10 +219,36 @@ BEARISH_EVENT_WEIGHTS = {
 # regime overrides (-2/-5/+5) would resurrect a proven-negative signal via the
 # merge in _compute_score (short_term = {**SHORT_TERM_WEIGHTS, **override}).
 # None = fall back to flat hand weights for that bucket.
+#
+# PRUNED 2026-09-17 -- 15 of the 37 entries above had a sign the data contradicts,
+# and were removed. Worst case: "ranging" set rsi_momentum to -2, but rsi_momentum
+# is the ONLY signal in this file that is sign-consistently POSITIVE across a 70/30
+# chronological holdout at every horizon (train +1.02 t=9.09 / holdout +0.60 t=2.55
+# on fwd_10d). In ranging markets the scorer was penalising its single best
+# predictor. Likewise "uptrend" rewarded actual_52w_breakout (+1) and rs_vs_nifty
+# (+1) whose train lifts are -0.61 and -0.76.
+#
+# Prune rule (scripts/regime_override_audit.py, re-runnable): drop the entry when
+# sign(TRAIN lift vs same-regime baseline) != sign(override). Entries with <200
+# train observations are LEFT ALONE rather than guessed at -- so "downtrend"
+# rsi_bearish_div/actual_52w_breakout survive on thin data (n=109/168), NOT on
+# evidence. They are the next things to re-check when more history accumulates.
+#
+# Effect, scored on the untouched holdout as per-day rank IC (fwd_10d):
+#     0.0241 -> 0.0356 (+48%), paired t=+1.70
+# and positive in 12 of 12 (split point x horizon) cells, improving monotonically
+# with train size. No single cell reaches p<0.05 (best t=+1.97); what justifies the
+# change is the consistency plus the fact that the dropped entries never had
+# validation behind them. Full numbers in outputs/regime_override_audit.json.
+#
+# DO NOT delete this table wholesale. The retained bearish penalties
+# (distribution_signal, heavy_selling, volume_5x, actual_52w_breakdown) are the
+# correct part and carry most of its value -- deleting everything measures as a
+# wash (t=-0.50/-0.00/+0.60). See the audit script's docstring.
 REGIME_WEIGHTS: dict[str, dict[str, int] | None] = {
-    "uptrend":   {"rsi_momentum": 2, "rs_vs_nifty": 1, "rsi_bearish_div": 2, "rsi_bullish_div": -1, "macd_bearish_cross": -2, "bb_squeeze_breakout": -2, "bullish_candle": -2, "bearish_candle": -2, "volume_5x": -2, "distribution_signal": -4, "heavy_selling": -5, "actual_52w_breakout": 1, "actual_52w_breakdown": -5},
-    "ranging":   {"rsi_momentum": -2, "rs_vs_nifty": -2, "rsi_bearish_div": -3, "rsi_bullish_div": 1, "macd_bearish_cross": 1, "bb_squeeze_breakout": 1, "bullish_candle": -2, "bearish_candle": 3, "volume_5x": -2, "distribution_signal": -1, "heavy_selling": -3, "actual_52w_breakdown": -2},
-    "downtrend": {"rsi_momentum": 5, "rs_vs_nifty": 5, "rsi_bearish_div": 5, "rsi_bullish_div": -5, "macd_bearish_cross": -5, "bullish_candle": 5, "bearish_candle": -5, "volume_5x": -3, "distribution_signal": -5, "heavy_selling": -5, "actual_52w_breakout": 5, "actual_52w_breakdown": -5},
+    "uptrend":   {"rsi_momentum": 2, "rsi_bullish_div": -1, "bearish_candle": -2, "volume_5x": -2, "distribution_signal": -4, "heavy_selling": -5, "actual_52w_breakdown": -5},
+    "ranging":   {"rsi_bullish_div": 1, "bb_squeeze_breakout": 1, "bullish_candle": -2, "volume_5x": -2, "heavy_selling": -3, "actual_52w_breakdown": -2},
+    "downtrend": {"rsi_momentum": 5, "rsi_bearish_div": 5, "rsi_bullish_div": -5, "bearish_candle": -5, "volume_5x": -3, "distribution_signal": -5, "heavy_selling": -5, "actual_52w_breakout": 5, "actual_52w_breakdown": -5},
 }
 
 # Lowered to 2 to prevent dropping single-signal stocks before Pass 2 options/SAST fetch

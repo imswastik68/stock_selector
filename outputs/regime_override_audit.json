@@ -1,0 +1,195 @@
+{
+  "generated": "2026-09-17",
+  "split": 0.7,
+  "cut_date": "2024-08-02",
+  "horizon": "fwd_10d",
+  "min_obs": 200,
+  "n_buy_rows": 210072,
+  "dropped": [
+    {
+      "regime": "uptrend",
+      "signal": "rs_vs_nifty",
+      "override": 1,
+      "train_lift": -0.7587,
+      "train_n": 85973
+    },
+    {
+      "regime": "uptrend",
+      "signal": "rsi_bearish_div",
+      "override": 2,
+      "train_lift": -0.2912,
+      "train_n": 5297
+    },
+    {
+      "regime": "uptrend",
+      "signal": "macd_bearish_cross",
+      "override": -2,
+      "train_lift": 0.0457,
+      "train_n": 16209
+    },
+    {
+      "regime": "uptrend",
+      "signal": "bb_squeeze_breakout",
+      "override": -2,
+      "train_lift": 0.5088,
+      "train_n": 4097
+    },
+    {
+      "regime": "uptrend",
+      "signal": "bullish_candle",
+      "override": -2,
+      "train_lift": 0.088,
+      "train_n": 10025
+    },
+    {
+      "regime": "uptrend",
+      "signal": "actual_52w_breakout",
+      "override": 1,
+      "train_lift": -0.6061,
+      "train_n": 9164
+    },
+    {
+      "regime": "ranging",
+      "signal": "rsi_momentum",
+      "override": -2,
+      "train_lift": 0.8373,
+      "train_n": 14021
+    },
+    {
+      "regime": "ranging",
+      "signal": "rs_vs_nifty",
+      "override": -2,
+      "train_lift": 0.763,
+      "train_n": 12771
+    },
+    {
+      "regime": "ranging",
+      "signal": "rsi_bearish_div",
+      "override": -3,
+      "train_lift": 1.0813,
+      "train_n": 505
+    },
+    {
+      "regime": "ranging",
+      "signal": "macd_bearish_cross",
+      "override": 1,
+      "train_lift": -0.9212,
+      "train_n": 2107
+    },
+    {
+      "regime": "ranging",
+      "signal": "bearish_candle",
+      "override": 3,
+      "train_lift": -0.2653,
+      "train_n": 1482
+    },
+    {
+      "regime": "ranging",
+      "signal": "distribution_signal",
+      "override": -1,
+      "train_lift": 0.5271,
+      "train_n": 395
+    },
+    {
+      "regime": "downtrend",
+      "signal": "rs_vs_nifty",
+      "override": 5,
+      "train_lift": -0.4241,
+      "train_n": 3626
+    },
+    {
+      "regime": "downtrend",
+      "signal": "macd_bearish_cross",
+      "override": -5,
+      "train_lift": 0.1991,
+      "train_n": 363
+    },
+    {
+      "regime": "downtrend",
+      "signal": "bullish_candle",
+      "override": 5,
+      "train_lift": -0.4808,
+      "train_n": 462
+    }
+  ],
+  "pruned_table": {
+    "uptrend": {
+      "rsi_momentum": 2,
+      "rsi_bullish_div": -1,
+      "bearish_candle": -2,
+      "volume_5x": -2,
+      "distribution_signal": -4,
+      "heavy_selling": -5,
+      "actual_52w_breakdown": -5
+    },
+    "ranging": {
+      "rsi_bullish_div": 1,
+      "bb_squeeze_breakout": 1,
+      "bullish_candle": -2,
+      "volume_5x": -2,
+      "heavy_selling": -3,
+      "actual_52w_breakdown": -2
+    },
+    "downtrend": {
+      "rsi_momentum": 5,
+      "rsi_bearish_div": 5,
+      "rsi_bullish_div": -5,
+      "bearish_candle": -5,
+      "volume_5x": -3,
+      "distribution_signal": -5,
+      "heavy_selling": -5,
+      "actual_52w_breakout": 5,
+      "actual_52w_breakdown": -5
+    }
+  },
+  "ic": {
+    "fwd_5d_train": {
+      "days": 186,
+      "ic_current": 0.0193,
+      "ic_pruned": 0.0262,
+      "diff": 0.0068,
+      "paired_t": 1.78,
+      "p_value": 0.0772
+    },
+    "fwd_5d_HOLDOUT": {
+      "days": 93,
+      "ic_current": 0.0266,
+      "ic_pruned": 0.0374,
+      "diff": 0.0108,
+      "paired_t": 1.65,
+      "p_value": 0.1018
+    },
+    "fwd_10d_train": {
+      "days": 186,
+      "ic_current": 0.019,
+      "ic_pruned": 0.026,
+      "diff": 0.007,
+      "paired_t": 2.02,
+      "p_value": 0.0446
+    },
+    "fwd_10d_HOLDOUT": {
+      "days": 92,
+      "ic_current": 0.0241,
+      "ic_pruned": 0.0356,
+      "diff": 0.0115,
+      "paired_t": 1.7,
+      "p_value": 0.0932
+    },
+    "fwd_20d_train": {
+      "days": 186,
+      "ic_current": 0.0122,
+      "ic_pruned": 0.0203,
+      "diff": 0.0081,
+      "paired_t": 2.05,
+      "p_value": 0.0421
+    },
+    "fwd_20d_HOLDOUT": {
+      "days": 90,
+      "ic_current": 0.0248,
+      "ic_pruned": 0.0355,
+      "diff": 0.0107,
+      "paired_t": 1.86,
+      "p_value": 0.0657
+    }
+  }
+}
