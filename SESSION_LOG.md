@@ -211,18 +211,58 @@ survived. Now derived from the exit policy via
 independently told the user a holding period and three were short. Pinned by
 `tests/test_timeframe_matches_exit_policy.py` (mutation-checked).
 
-## Open lead 2026-09-17: the 10-day time stop may be cutting winners early
+## RESOLVED 2026-09-17: the 10-day time stop is CORRECT — keep `time_10d`
+The lead below said a 20-bar hold beats 10. **It does not survive contact
+with the actual exit rules.** `scripts/backtest_exits.py` re-simulated all
+280,799 trades across 8 policies (~35 min). OOS from 2024-10-22:
+
+| policy | OOS expectancy | OOS WR% |
+|---|---|---|
+| **time_10d** | **−0.814%** | 43.1% |
+| time_15d | −0.916% | 41.9% |
+| time_20d | −0.979% | 40.9% |
+| static | −1.035% | 38.8% |
+| partial_t1_be | −1.199% | 38.8% |
+| breakeven_1r | −1.426% | 29.6% |
+| partial_t1_trail | −1.659% | 31.8% |
+| trail_atr3 | −1.874% | 30.4% |
+
+`time_10d` wins and the ordering is **monotone the wrong way** for the
+lead: 10 > 15 > 20. **Mechanism:** `fwd_20d` is exit-agnostic
+buy-and-hold, so it rewards holding through drawdowns that the live book
+would have stopped out. Once SL/T1 are live, a longer cap just means more
+trades reach their stop. `WINNER_POLICY` stays **`time_10d`** — this is
+exactly the caveat below, and it was the right call not to ship on the
+paired number.
+
+**Note the levels are all negative** because this run filters by neither
+score nor direction: it pools sub-threshold trades and the short book
+(which carries −2.12% alpha, see above). It ranks policies correctly but
+does not estimate the live system's expectancy. A cohort-restricted
+re-run (buy + `score>=4`) is the number to quote for that.
+
+**Do not re-open this without a new mechanism.** The paired-horizon
+result is real but is not evidence about exit policy.
+
+## Original lead (kept for the reasoning) — the 10-day stop may cut winners early
 On the SAME `score>=4` trades (paired, so this is not a cohort difference),
 holding 20 bars instead of 10:
 
-| split | excess@10d vs NIFTY | excess@20d | diff | paired t |
+| split | excess@10d vs NIFTY | excess@20d | diff | paired t (naive) |
 |---|---|---|---|---|
 | train | +0.70% | +1.59% | **+0.89pp** | +12.12 |
 | holdout | +0.85% | +1.87% | **+1.03pp** | +13.71 |
 
-p<1e-4 both sides, sign-consistent, and **not beta** — NIFTY itself returned
-+0.06%/+0.31% over those windows, and the NIFTY-excess version is *stronger*
-than the raw one. This is the largest clean effect found this session.
+Re-derived with date-clustered inference (the naive t above is inflated,
+see the note at the top of this file) the effect **does** hold up on its
+own terms — train +0.88pp (Newey-West t=+3.17), holdout +1.23pp (NW
+t=+2.22, p=0.023), positive on 58.4% of scan dates. It survives
+clustering because it is *paired* on identical trades, so the
+market-wide move cancels and the date-to-date variance is small.
+
+It is nonetheless **not** an argument for a longer time stop — see the
+resolution above. Both things are true: holding longer helps if you never
+stop out, and hurts once you do.
 
 **Caveat that stops it being shipped on this number alone:** `fwd_20d` is
 exit-agnostic buy-and-hold. The live book exits on SL/T1 first, so a longer
