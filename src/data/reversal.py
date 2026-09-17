@@ -139,7 +139,8 @@ def fetch_reversal_signals() -> list[dict]:
     universe = _load_universe()
     print(f"[reversal] scanning {len(universe)} tickers in batches of {BATCH_SIZE}...")
 
-    end = date.today()
+    # +1 day: yfinance's `end` is EXCLUSIVE -- see src/data/breakouts.py.
+    end = date.today() + timedelta(days=1)
     start = end - timedelta(days=90)  # 3mo -- RSI(2)+3d return need ~30 bars, no 200DMA here
 
     results = []

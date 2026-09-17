@@ -108,7 +108,10 @@ def fetch_breakouts() -> list[dict]:
     universe = _load_universe()
     print(f"[breakouts] scanning {len(universe)} tickers in batches of {BATCH_SIZE}...")
 
-    end = date.today()
+    # +1 day: yfinance's `end` is EXCLUSIVE, so end=date.today() silently drops
+    # today's bar and every scan ran on yesterday's close -- the breakout being
+    # "detected" was a day old and already gapped away by the time it was alerted.
+    end = date.today() + timedelta(days=1)
     start = end - timedelta(days=395)  # 52 weeks + buffer
 
     results = []

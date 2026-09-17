@@ -113,7 +113,8 @@ def fetch_breakdowns() -> list[dict]:
     universe = _load_universe()
     print(f"[breakdowns] scanning {len(universe)} tickers in batches of {BATCH_SIZE}...")
 
-    end = date.today()
+    # +1 day: yfinance's `end` is EXCLUSIVE -- see src/data/breakouts.py.
+    end = date.today() + timedelta(days=1)
     start = end - timedelta(days=395)  # 52 weeks + buffer
 
     results = []

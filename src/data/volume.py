@@ -37,7 +37,8 @@ def _load_universe() -> list[str]:
 
 def _batch_download(tickers: list[str], lookback_days: int = 36) -> pd.DataFrame:
     """Download OHLCV for a list of tickers in one request. Returns a MultiIndex DataFrame."""
-    end = date.today()
+    # +1 day: yfinance's `end` is EXCLUSIVE -- see src/data/breakouts.py.
+    end = date.today() + timedelta(days=1)
     start = end - timedelta(days=lookback_days)
     df = yf.download(
         tickers,
