@@ -53,7 +53,16 @@ SHORT_TERM_WEIGHTS = {
     "options_long_buildup": 0,      # PENDING_VALIDATION (was 1) — untested
     "options_short_covering": 0,    # PENDING_VALIDATION (was 1) — untested
     "fo_ban_lifted": 0,             # PENDING_VALIDATION (was 1) — untested
-    "weekly_trend_aligned": 1,     # weekly EMA10 > EMA20: daily signal aligns with larger timeframe
+    "weekly_trend_aligned": 0,     # DEAD (was 1) — zeroed 2026-09-17. Nothing ever sets this:
+                                    # src/technicals.py never computes it, so both read sites
+                                    # (scorer.py _compute_score, scripts/backtest.py) fall through
+                                    # to .get(..., False). It fired on 0 of 291,314 backtest rows.
+                                    # Zeroed rather than implemented because adding an unvalidated
+                                    # signal is what the holdout discipline exists to prevent — if
+                                    # you implement the weekly EMA10>EMA20 calc, BACKTEST IT FIRST,
+                                    # then set the weight. tests/test_weekly_trend_aligned_is_dead.py
+                                    # fails the moment it starts firing, so this cannot silently
+                                    # switch on with an unearned +1.
     "sector_in_momentum": 0,       # PENDING_VALIDATION (was 1) — untested
     "reversal_oversold_v2": 3,     # PROMOTED (SOTA Round Phase 2): scripts/backtest_events.py SHIP
                                     # verdict, n=6843, ret_lift +2.102 -- the single strongest measured

@@ -348,7 +348,7 @@ def _compute_atr(df_slice: pd.DataFrame) -> float:
 
 # ── main backtest loop ────────────────────────────────────────────────────────
 
-def run_backtest(weeks: int, sample: int | None) -> None:
+def run_backtest(weeks: int, sample: int | None, step: int = 5) -> None:
     today = date.today()
     end   = today
     start = today - timedelta(days=weeks * 7 + 252)  # extra year for warmup
@@ -367,10 +367,12 @@ def run_backtest(weeks: int, sample: int | None) -> None:
 
     trend_series = _classify_nifty_trend_series(nifty_close) if not nifty_close.empty else pd.Series(dtype=object)
 
-    # Walk-forward: every 5 trading days over the test window
+    # Walk-forward: every `step` trading days over the test window.
+    # step=5 (weekly) gives too few independent scan dates to test anything
+    # OOS-only (measured 2026-09-17: 55-85 holdout dates, most claims don't
+    # clear a date-clustered significance bar). step=1 is daily.
     signal_dates: list[pd.Timestamp] = []
     nifty_ts = nifty_close[nifty_close.index >= pd.Timestamp(start)]
-    step = 5
     idxs = list(range(0, len(nifty_ts), step))
     for i in idxs:
         signal_dates.append(nifty_ts.index[i])
@@ -552,5 +554,6 @@ if __name__ == "__main__":
     ap.add_argument("--weeks",  type=int, default=260, help="Weeks to test (default 260 = 5y)")
     ap.add_argument("--sample", type=int, default=None, help="Limit universe to N tickers (fast sanity check)")
     ap.add_argument("--force",  action="store_true", help="Re-download ignoring cache")
+    ap.add_argument("--step",   type=int, default=5, help="Trading days between scan dates (default 5 = weekly; 1 = daily)")
     args = ap.parse_args()
-    run_backtest(args.weeks, args.sample)
+    run_backtest(args.weeks, args.sample, args.step)
