@@ -238,11 +238,37 @@ paired number.
 **Note the levels are all negative** because this run filters by neither
 score nor direction: it pools sub-threshold trades and the short book
 (which carries −2.12% alpha, see above). It ranks policies correctly but
-does not estimate the live system's expectancy. A cohort-restricted
-re-run (buy + `score>=4`) is the number to quote for that.
+does not estimate the live system's expectancy.
 
-**Do not re-open this without a new mechanism.** The paired-horizon
-result is real but is not evidence about exit policy.
+**The cohort-restricted re-run (buy + `score>=4`) does NOT confirm this
+and should not be read as overturning it either** — it is a weaker test,
+not a better one:
+
+| policy | OOS exp | OOS WR% | delta vs time_10d | clustered t | p |
+|---|---|---|---|---|---|
+| static | +1.455% | 50.2% | +0.66pp | +1.73 | 0.098 |
+| **time_10d** | +0.799% | 48.4% | — | — | — |
+| time_15d | +1.016% | 48.9% | +0.22pp | +1.01 | 0.32 |
+| time_20d | +1.159% | 49.2% | +0.36pp | +1.13 | 0.27 |
+| partial_t1_be | +1.577% | 50.2% | +0.78pp | +2.50 | **0.020** |
+
+n=41,857 trades but only **24 OOS scan dates**. Filtering to `score>=4`
+pushes the 70/30 cut to 2025-12-30, so this OOS window is entirely
+**Jan-Jun 2026** — exactly the flood period documented above where
+`score>=4` admits 94.5% of candidates in the prevailing downtrend regime.
+It is one regime, not a mix, and 24 dates is a third of the 84-date OOS
+window the full-pool result above was measured on. Only `partial_t1_be`
+clears p<0.05, and barely.
+
+**Verdict: `WINNER_POLICY` stays `time_10d`.** This is a real lead
+(`partial_t1_be` — scale out at T1, move stop to breakeven, let the rest
+run — deserves a proper look) but not evidence strong enough to act on:
+single regime, low date count, borderline significance. Needs the daily
+backtest to get real power before changing anything.
+
+**Do not re-open the "longer time stop" question without a new
+mechanism** — that specific idea is dead on both runs. The
+`partial_t1_be` lead is a different, open question.
 
 ## Original lead (kept for the reasoning) — the 10-day stop may cut winners early
 On the SAME `score>=4` trades (paired, so this is not a cohort difference),
