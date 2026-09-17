@@ -39,7 +39,7 @@ dump, not a diary. Full history is in `git log`.
      the EOD scan). Edit the script if the content needs to change. -->
 _(as of 2026-09-17, auto-generated)_
 
-- **Last commit at log time:** 57dac1e 2026-09-17.
+- **Last commit at log time:** 59bc3fa 2026-09-17.
 - **Score IC:** 16 days recorded (needs 30), mean IC 0.0303, t=1.08, verdict **INSUFFICIENT**.
 - **Momentum gate:** PAPER-ONLY -- no momentum strategy has passed the multi-split ship gate — PAPER-ONLY (outputs/factor_backtest.json)
 - **Portfolio:** equity 101224.11, cash 11412.507370000005, 5 open holdings: PIRAMALFIN.NS, BHARATFORG.NS, KPIL.NS, NYKAA.NS, POLYCAB.NS.
@@ -104,7 +104,9 @@ Re-run both to refresh; numbers below are point-in-time.
   t=-0.20. Neither significant. All six policies in
   `outputs/backtest_exits.json` have negative OOS expectancy. Do not
   re-litigate exits without new evidence — the entry signal is the
-  binding constraint.
+  binding constraint. NB: any pre-2026-09-17 claim that "most losers were
+  deeply green first" came from the MAE/MFE window bug (fixed 59bc3fa)
+  and was an artifact of post-exit bars — do not revive it.
 - **Pick diversity still bad:** last 40 buys had 11 distinct signal
   fingerprints; the single most common set appeared 15×. Still one
   momentum bet repeated.
@@ -138,6 +140,37 @@ system running a day late, so they are a floor, not the system's ceiling.
 Mid-day scans now see a partial current-session bar (understates
 volume_ratio until close); that is conservative and still better than
 quoting yesterday.
+
+## Why the system is long-only (asked 2026-09-17, re-verified)
+`SHORT_PIPELINE_LIVE = False` in `src/agent.py:115`. Sells are scored and
+routed to phase_b as informational only. This is evidence-backed, not an
+oversight — re-measured on `outputs/backtest_trades.csv` (291,314 trades,
+2020-11 to 2026-06, of which 79,972 are sell-direction):
+
+| cohort (fwd_10d, direction-adjusted) | n | mean | t |
+|---|---|---|---|
+| all BUY rows | 203,162 | **+1.22%** | +23.6 |
+| all SELL rows | 79,972 | **−1.64%** | **−39.6** |
+| short a 52w breakdown | 4,976 | −5.49% | −25.2 |
+| short a heavy-selling name | 5,470 | −4.91% | −24.0 |
+| short near 52w low | 10,886 | −3.34% | −26.7 |
+| short a distribution name | 6,000 | −3.17% | −18.7 |
+
+Every bearish signal loses money on the short side, and the effect is
+huge and stable (t between −17 and −40). **Mechanism:** un-flipping the
+sign shows breakdown names *rise* +5.49% over the next 10 days (t=+25.2,
+59.7% up) — Indian small/midcaps that break to 52-week lows mean-revert
+violently, so shorting them fights a strong bounce.
+
+Structural constraint on top of that: India has no overnight short in the
+cash segment. A held short needs stock futures (~190 F&O names) or long
+puts, so even a real edge would only be executable on the F&O subset.
+
+**Trap for future sessions:** `fwd_5d/10d/20d` in `backtest_trades.csv`
+and in `src/trade_sim.py` are ALREADY direction-adjusted (positive =
+the trade profited, for both buys and sells). Reading them as raw price
+moves makes the short book look like a huge *winner* when it is the
+opposite. Split by `direction` before interpreting.
 
 ## Known reporting defects (not yet fixed)
 - **`live_alpha_gate` over-counts evidence.** The 5 signals reporting
