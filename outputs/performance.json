@@ -8199,5 +8199,138 @@
       "regime": "downtrend",
       "nifty_at_emission": 22421.95
     }
+  },
+  "2026-10-02": {
+    "SMCGLOBAL.NS": {
+      "direction": "buy",
+      "entry": 99.06,
+      "entry_lo": 96.29,
+      "entry_hi": 101.83,
+      "stop_loss": 87.99,
+      "target_1": 115.66,
+      "target_2": 126.72,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": true,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_bearish_div",
+        "rsi_momentum",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "score": 19,
+      "regime": "downtrend",
+      "nifty_at_emission": 22421.95
+    },
+    "UNIMECH.NS": {
+      "direction": "buy",
+      "entry": 1773.0,
+      "entry_lo": 1732.4,
+      "entry_hi": 1813.6,
+      "stop_loss": 1610.59,
+      "target_1": 2016.61,
+      "target_2": 2179.02,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_bearish_div",
+        "rsi_momentum",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "score": 19,
+      "regime": "downtrend",
+      "nifty_at_emission": 22421.95
+    },
+    "ROLEXRINGS.NS": {
+      "direction": "buy",
+      "entry": 196.36000061035156,
+      "entry_lo": 192.62,
+      "entry_hi": 200.1,
+      "stop_loss": 181.39,
+      "target_1": 218.82,
+      "target_2": 233.79,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_bearish_div",
+        "rsi_momentum",
+        "rs_quality_strong",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "score": 16,
+      "regime": "downtrend",
+      "nifty_at_emission": 22421.95
+    },
+    "HARSHA.NS": {
+      "direction": "buy",
+      "entry": 474.5,
+      "entry_lo": 466.08,
+      "entry_hi": 482.92,
+      "stop_loss": 440.84,
+      "target_1": 524.99,
+      "target_2": 558.65,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "score": 14,
+      "regime": "downtrend",
+      "nifty_at_emission": 22421.95
+    },
+    "AAREYDRUGS.NS": {
+      "direction": "buy",
+      "entry": 103.85,
+      "entry_lo": 101.8,
+      "entry_hi": 105.9,
+      "stop_loss": 95.67,
+      "target_1": 116.12,
+      "target_2": 124.3,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "score": 14,
+      "regime": "downtrend",
+      "nifty_at_emission": 22421.95
+    }
   }
 }
