@@ -134,12 +134,22 @@
       "date": "2026-09-11",
       "n_names": 318,
       "ic": 0.0843
+    },
+    {
+      "date": "2026-09-14",
+      "n_names": 318,
+      "ic": 0.0448
+    },
+    {
+      "date": "2026-09-15",
+      "n_names": 318,
+      "ic": 0.0667
     }
   ],
-  "n_days": 27,
+  "n_days": 29,
   "min_days": 30,
   "horizon_days": 10,
-  "mean_ic": 0.0652,
-  "t_stat": 3.15,
+  "mean_ic": 0.0645,
+  "t_stat": 3.35,
   "verdict": "INSUFFICIENT"
 }
