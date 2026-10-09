@@ -1,11 +1,11 @@
 {
   "per_signal": {
     "actual_52w_breakout": {
-      "n": 120,
+      "n": 123,
       "months": 3,
-      "mean": 3.07,
-      "win_pct": 69.2,
-      "t_stat": 3.68,
+      "mean": 3.052,
+      "win_pct": 68.3,
+      "t_stat": 3.7,
       "p_value": 0.0002,
       "verdict": "PROVEN"
     },
@@ -37,11 +37,11 @@
       "verdict": "INSUFFICIENT"
     },
     "near_52w_high": {
-      "n": 121,
+      "n": 124,
       "months": 3,
-      "mean": 3.194,
-      "win_pct": 69.4,
-      "t_stat": 3.82,
+      "mean": 3.173,
+      "win_pct": 68.5,
+      "t_stat": 3.84,
       "p_value": 0.0001,
       "verdict": "PROVEN"
     },
@@ -91,39 +91,39 @@
       "verdict": "INSUFFICIENT"
     },
     "rs_quality_strong": {
-      "n": 71,
+      "n": 73,
       "months": 3,
-      "mean": 3.04,
-      "win_pct": 63.4,
-      "t_stat": 2.51,
-      "p_value": 0.012,
+      "mean": 3.142,
+      "win_pct": 63.0,
+      "t_stat": 2.64,
+      "p_value": 0.0083,
       "verdict": "PROVEN"
     },
     "rs_vs_nifty": {
-      "n": 110,
+      "n": 113,
       "months": 3,
-      "mean": 3.003,
-      "win_pct": 69.1,
-      "t_stat": 3.39,
-      "p_value": 0.0007,
+      "mean": 2.984,
+      "win_pct": 68.1,
+      "t_stat": 3.42,
+      "p_value": 0.0006,
       "verdict": "PROVEN"
     },
     "rsi_bearish_div": {
-      "n": 20,
+      "n": 22,
       "months": 2,
-      "mean": 4.673,
-      "win_pct": 70.0,
+      "mean": 4.627,
+      "win_pct": 68.2,
       "t_stat": null,
       "p_value": null,
       "verdict": "INSUFFICIENT"
     },
     "rsi_momentum": {
-      "n": 63,
+      "n": 65,
       "months": 3,
-      "mean": 4.427,
-      "win_pct": 74.6,
-      "t_stat": 4.23,
-      "p_value": 0.0,
+      "mean": 4.168,
+      "win_pct": 72.3,
+      "t_stat": 4.04,
+      "p_value": 0.0001,
       "verdict": "PROVEN"
     },
     "sast_insider_buying": {
@@ -145,22 +145,22 @@
       "verdict": "INSUFFICIENT"
     },
     "weekly_trend_aligned": {
-      "n": 120,
+      "n": 123,
       "months": 3,
-      "mean": 3.272,
-      "win_pct": 70.0,
-      "t_stat": 3.9,
+      "mean": 3.249,
+      "win_pct": 69.1,
+      "t_stat": 3.92,
       "p_value": 0.0001,
       "verdict": "PROVEN"
     }
   },
   "aggregate": {
-    "n": 178,
+    "n": 181,
     "months": 3,
-    "mean": 1.288,
-    "win_pct": 55.6,
-    "t_stat": 1.84,
-    "p_value": 0.0655,
+    "mean": 1.305,
+    "win_pct": 55.2,
+    "t_stat": 1.88,
+    "p_value": 0.0598,
     "verdict": "NO-EDGE"
   },
   "reversal_oversold_v2_stress": {
@@ -181,9 +181,9 @@
       "rsi_momentum",
       "weekly_trend_aligned"
     ],
-    "n_claimed": 605,
-    "n_distinct_picks": 121,
-    "inflation_factor": 5.0,
+    "n_claimed": 621,
+    "n_distinct_picks": 124,
+    "inflation_factor": 5.01,
     "max_pairwise_jaccard": 0.99,
     "most_overlapping_pair": [
       "actual_52w_breakout",
@@ -191,25 +191,25 @@
     ]
   },
   "lines": [
-    "actual_52w_breakout: +3.07% \u03b1 over n=120 (win 69.2%), p=0.0002 \u2705 PROVEN",
+    "actual_52w_breakout: +3.052% \u03b1 over n=123 (win 68.3%), p=0.0002 \u2705 PROVEN",
     "consolidation_breakout: INSUFFICIENT (n=4/30, 2/3 months)",
     "delivery_surge: INSUFFICIENT (n=12/30, 3/3 months)",
     "fundamental_strong: INSUFFICIENT (n=10/30, 2/3 months)",
-    "near_52w_high: +3.194% \u03b1 over n=121 (win 69.4%), p=0.0001 \u2705 PROVEN",
+    "near_52w_high: +3.173% \u03b1 over n=124 (win 68.5%), p=0.0001 \u2705 PROVEN",
     "options_long_buildup: INSUFFICIENT (n=10/30, 2/3 months)",
     "options_short_buildup: INSUFFICIENT (n=1/30, 1/3 months)",
     "options_short_covering: INSUFFICIENT (n=2/30, 1/3 months)",
     "promoter_buying: INSUFFICIENT (n=3/30, 2/3 months)",
     "reversal_oversold_v2: INSUFFICIENT (n=1/30, 1/3 months)",
-    "rs_quality_strong: +3.04% \u03b1 over n=71 (win 63.4%), p=0.012 \u2705 PROVEN",
-    "rs_vs_nifty: +3.003% \u03b1 over n=110 (win 69.1%), p=0.0007 \u2705 PROVEN",
-    "rsi_bearish_div: INSUFFICIENT (n=20/30, 2/3 months)",
-    "rsi_momentum: +4.427% \u03b1 over n=63 (win 74.6%), p=0.0 \u2705 PROVEN",
+    "rs_quality_strong: +3.142% \u03b1 over n=73 (win 63.0%), p=0.0083 \u2705 PROVEN",
+    "rs_vs_nifty: +2.984% \u03b1 over n=113 (win 68.1%), p=0.0006 \u2705 PROVEN",
+    "rsi_bearish_div: INSUFFICIENT (n=22/30, 2/3 months)",
+    "rsi_momentum: +4.168% \u03b1 over n=65 (win 72.3%), p=0.0001 \u2705 PROVEN",
     "sast_insider_buying: INSUFFICIENT (n=3/30, 1/3 months)",
     "sector_in_momentum: INSUFFICIENT (n=7/30, 2/3 months)",
-    "weekly_trend_aligned: +3.272% \u03b1 over n=120 (win 70.0%), p=0.0001 \u2705 PROVEN",
-    "AGGREGATE (all buys): +1.288% \u03b1 over n=178 (win 55.6%), p=0.0655 \u274c NO-EDGE",
+    "weekly_trend_aligned: +3.249% \u03b1 over n=123 (win 69.1%), p=0.0001 \u2705 PROVEN",
+    "AGGREGATE (all buys): +1.305% \u03b1 over n=181 (win 55.2%), p=0.0598 \u274c NO-EDGE",
     "reversal_oversold_v2 [2x-cost stress]: INSUFFICIENT (n=1/30, 1/3 months)",
-    "\u26a0\ufe0f NOT 6 independent proofs: n=605 across those signals is only 121 distinct trades (5.0x counted); actual_52w_breakout/near_52w_high overlap 99%"
+    "\u26a0\ufe0f NOT 6 independent proofs: n=621 across those signals is only 124 distinct trades (5.01x counted); actual_52w_breakout/near_52w_high overlap 99%"
   ]
 }
