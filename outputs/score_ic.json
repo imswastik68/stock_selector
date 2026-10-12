@@ -159,12 +159,22 @@
       "date": "2026-09-18",
       "n_names": 221,
       "ic": 0.1126
+    },
+    {
+      "date": "2026-09-21",
+      "n_names": 221,
+      "ic": 0.12
+    },
+    {
+      "date": "2026-09-22",
+      "n_names": 285,
+      "ic": 0.0739
     }
   ],
-  "n_days": 32,
+  "n_days": 34,
   "min_days": 30,
   "horizon_days": 10,
-  "mean_ic": 0.0661,
-  "t_stat": 3.76,
+  "mean_ic": 0.0679,
+  "t_stat": 4.09,
   "verdict": "RANKS"
 }
