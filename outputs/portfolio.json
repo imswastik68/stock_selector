@@ -1,6 +1,6 @@
 {
   "cash": 11412.507370000005,
-  "equity": 104541.71,
+  "equity": 104246.91,
   "realized_pnl": -720.99,
   "holdings": {
     "PIRAMALFIN.NS": {
@@ -56,8 +56,8 @@
       "direction": "buy",
       "opened": "2026-06-18",
       "exit_policy": "static",
-      "last_price": 340.0,
-      "unrealized_pnl": 5196.4
+      "last_price": 336.65,
+      "unrealized_pnl": 4901.6
     },
     "POLYCAB.NS": {
       "qty": 2,
@@ -386,6 +386,10 @@
     {
       "date": "2026-10-13",
       "equity": 104541.71
+    },
+    {
+      "date": "2026-10-14",
+      "equity": 104246.91
     }
   ]
 }
