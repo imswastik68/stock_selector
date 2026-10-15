@@ -37,10 +37,10 @@ dump, not a diary. Full history is in `git log`.
 <!-- AUTO-GENERATED:BEGIN -- do not hand-edit between these markers.
      Regenerated daily by scripts/update_session_log.py (runs in CI after
      the EOD scan). Edit the script if the content needs to change. -->
-_(as of 2026-10-14, auto-generated)_
+_(as of 2026-10-15, auto-generated)_
 
-- **Last commit at log time:** b0ecd16 2026-10-14.
-- **Score IC:** 36 days recorded (needs 30), mean IC 0.0651, t=4.12, verdict **RANKS**.
+- **Last commit at log time:** ee97f50 2026-10-15.
+- **Score IC:** 37 days recorded (needs 30), mean IC 0.0657, t=4.27, verdict **RANKS**.
 - **Momentum gate:** PAPER-ONLY -- no momentum strategy has passed the multi-split ship gate — PAPER-ONLY (outputs/factor_backtest.json)
 - **Portfolio:** equity 104246.91, cash 11412.507370000005, 5 open holdings: PIRAMALFIN.NS, BHARATFORG.NS, KPIL.NS, NYKAA.NS, POLYCAB.NS.
 <!-- AUTO-GENERATED:END -->
