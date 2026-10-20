@@ -10031,5 +10031,132 @@
       "regime": "downtrend",
       "nifty_at_emission": 22849.4
     }
+  },
+  "2026-10-20": {
+    "TEXINFRA.NS": {
+      "direction": "buy",
+      "entry": 128.27,
+      "entry_lo": 125.69,
+      "entry_hi": 130.85,
+      "stop_loss": 117.96,
+      "target_1": 143.74,
+      "target_2": 154.05,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "score": 14,
+      "regime": "downtrend",
+      "nifty_at_emission": 22888.95
+    },
+    "MUFIN.NS": {
+      "direction": "buy",
+      "entry": 141.94,
+      "entry_lo": 139.82,
+      "entry_hi": 144.06,
+      "stop_loss": 133.46,
+      "target_1": 154.66,
+      "target_2": 163.14,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "score": 14,
+      "regime": "downtrend",
+      "nifty_at_emission": 22888.95
+    },
+    "THELEELA.NS": {
+      "direction": "buy",
+      "entry": 622.75,
+      "entry_lo": 608.53,
+      "entry_hi": 636.97,
+      "stop_loss": 565.88,
+      "target_1": 708.05,
+      "target_2": 764.92,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "score": 14,
+      "regime": "downtrend",
+      "nifty_at_emission": 22888.95
+    },
+    "SONAMLTD.NS": {
+      "direction": "buy",
+      "entry": 78.02,
+      "entry_lo": 76.4,
+      "entry_hi": 79.64,
+      "stop_loss": 71.52,
+      "target_1": 87.77,
+      "target_2": 94.26,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "score": 14,
+      "regime": "downtrend",
+      "nifty_at_emission": 22888.95
+    },
+    "KRISHANA.NS": {
+      "direction": "buy",
+      "entry": 212.89,
+      "entry_lo": 208.89,
+      "entry_hi": 216.89,
+      "stop_loss": 196.9,
+      "target_1": 236.88,
+      "target_2": 252.87,
+      "outcome": "open",
+      "outcome_date": null,
+      "exit_policy": "time_10d",
+      "eval_method": "next_day_zone_v2",
+      "big_mover": false,
+      "instrument": "cash_equity",
+      "active_signals": [
+        "actual_52w_breakout",
+        "near_52w_high",
+        "rsi_momentum",
+        "rs_vs_nifty",
+        "weekly_trend_aligned"
+      ],
+      "score": 14,
+      "regime": "downtrend",
+      "nifty_at_emission": 22888.95
+    }
   }
 }
