@@ -40,6 +40,38 @@ Tradable bullish touched 8.2% / 6.8% / 6.9% (1d/1w/1m) vs random
 ever sent. Score 15+ touched 13.2% at 1w (n=38) but still lost money —
 volatility, not skill. Need ~4× more hits to reach 30%.
 
+## BACKTEST 2026-11-12: 1-month model replayed with live rules
+Monthly walk-forward (44 LightGBM fits, each trained only on labels matured
+37+ days before the month), signals 2023-01 → 2026-08. Rules as proposed for
+live: EOD signal → buy next open; top 5/day among ≥₹5cr/day, ≥₹20; each
+stock once per 21-bar window; skip entry days locked at upper circuit (4%);
+limit sell at +27.54% else close of bar 21; 0.30% cost. Scratch scripts
+(not committed): wf_monthly.py, bt_live.py.
+
+| | 2023 | 2024 | 2025 | 2026 (to Aug) | ALL |
+|---|---|---|---|---|---|
+| alerts (days) | 271 (171) | 302 (176) | 256 (163) | 178 (115) | 1007 (625) |
+| hit 1-month bar | 20.3% | 21.9% | 18.0% | 27.5% | **21.4%** |
+| random ≥5cr stock | 6.7% | 8.8% | 4.6% | 8.2% | 7.1% |
+| P&L/trade | +3.84% | +2.76% | +0.41% | +4.33% | **+2.73%** |
+| beyond random (NW t) | +0.86 (1.0) | +1.27 (1.2) | +1.32 (1.8) | +3.27 (1.8) | **+1.53 (2.75)** |
+
+Median trade +0.43%, win 52%; median in-trade drawdown −9.5%, worst 10%
+< −24.6%. At 0.60% cost: +2.43%/trade. **Verdict: FAIL** (hit 21.4% < 30%);
+passes sample size, ≥2x random (3.0x), P&L > 0.
+**₹10L portfolio** (equity/30 per trade, ~19 open): ₹21.8L by 2026-09-16,
+CAGR +23.5%, max DD −25.7%; years +31.8 / +33.0 / +1.4 / +23.0%. To
+2026-08-17: model ₹21.3L vs **equal-weight basket of all ≥₹5cr stocks ₹19.8L**
+(CAGR 20.7%, DD −25.2%) vs NIFTY ₹13.3L. 20 slots: ₹24.0L, DD −31%.
+Most of the money is small-cap beta; the model's own edge is ~+1.5%/trade.
+Survivor-only cache inflates model AND basket alike. No T2T/Z filter before
+Nov 2025 (no BSE group data).
+**Data bug found:** yfinance writes exchange-holiday rows (e.g. 2026-05-01,
+05-28, 06-26) with no volume; any 20-day volume window touching one goes NaN
+→ the 11-11 research panel silently lost May–Jul 2026 (1.53M → 1.67M rows
+after dropping them). Unchecked: whether scripts/backtest.py /
+factor_backtest.py, which read the same cache, have the same hole.
+
 ## RESEARCH 2026-11-11: reverse-engineering top-50 movers
 Panel: 1.53M tradable stock-days (2021-01→2026-08, ₹20+, ₹1cr+/day), ~25
 price/volume features, labels = touched the top-50 bar from next open.
