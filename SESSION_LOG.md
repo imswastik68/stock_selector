@@ -15,6 +15,31 @@ dump, not a diary. Full history is in `git log`.
 4. `tests/test_*.py` docstrings for shipped signals — each one documents
    the backtest/holdout numbers that justified it.
 
+## THE GOAL (adopted 2026-11-11) — supersedes "alpha vs NIFTY"
+Telegram alerts that pick stocks about to become **top-50 movers**, in
+stocks the user can actually trade; the user places trades manually.
+Same bar as stock-news-alerts. Scored by `scripts/top50_scorecard.py`
+(BSE bhavcopy, method in its docstring, pinned by
+`tests/test_top50_scorecard.py`):
+
+| | 1 day | 1 week (5 bars) | 1 month (21 bars) |
+|---|---|---|---|
+| bullish | +5.71% | +12.63% | +27.54% |
+| bearish (F&O only) | −4.44% | −9.65% | −19.71% |
+
+Entry by send time: before 09:15 → that day's open; market hours → that
+day's close; after 15:30/holiday → next open. Tradable = BSE group
+A/B/X, ≥ ₹20, ≥ ₹1 cr/day. **PASS** a horizon only with ≥100 tradable
+alerts on ≥40 dates AND touched ≥30% AND ≥2× a random tradable stock on
+the same days AND P&L/alert > 0 (limit at bar, else window close, 0.30%).
+
+**Baseline 2026-11-11 (453 alerts, May→Nov): FAIL at every horizon.**
+Tradable bullish touched 8.2% / 6.8% / 6.9% (1d/1w/1m) vs random
+5.2% / 6.3% / 5.5% → 1.1-1.6× random, P&L/alert −0.44% / −0.62% / +1.01%.
+19 of 280 one-week alerts touched +12.63%. Only 3 tradable F&O shorts
+ever sent. Score 15+ touched 13.2% at 1w (n=38) but still lost money —
+volatility, not skill. Need ~4× more hits to reach 30%.
+
 ## READ FIRST 2026-11-11: live is losing; most backtest "alpha" is size beta
 **Paper book was dead for 2 months (fixed).** The 2026-09-17 ₹10L reset
 (8b9e200) was reverted 23 min later: `actions/cache` restores `outputs/`
