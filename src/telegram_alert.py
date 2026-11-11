@@ -156,6 +156,11 @@ def _fmt_pivots(entry: dict) -> str:
 def _fmt_price(price) -> str:
     if price is None:
         return ""
+    if isinstance(price, str):
+        # technicals.compute_entry_levels already renders SL/targets as "₹123.4";
+        # formatting that with :f raised ValueError and killed the whole EOD
+        # Telegram send on any day an F&O pick carried levels.
+        return price
     return f"₹{price:,.2f}"
 
 

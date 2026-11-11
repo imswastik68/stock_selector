@@ -50,3 +50,19 @@ def test_zero_candidate_day_without_gates_key_does_not_crash():
     msg = t._build_message(data)
     assert "No qualifying candidates" in msg
     assert "🚦" not in msg
+
+
+def test_fo_entry_with_string_levels_renders():
+    # technicals emits SL/targets as "₹90" strings; _fmt_price used :,.2f on
+    # them and crashed every EOD send that had an F&O pick (CI 2026-11-06..11).
+    data = {
+        "scan_date": "2026-11-11", "total_screened": 300, "nifty_context": "ranging",
+        "buy_watchlist": [{"ticker": "X.NS", "score": 5, "today_close": 100.0,
+                            "stop_loss": "₹90", "target_1": "₹120", "target_2": "₹130"}],
+        "sell_watchlist": [], "phase_b_watchlist": [],
+        "fo_watchlist": [{"ticker": "Y.NS", "phase": "MARKUP", "score": 6,
+                          "today_close": 200.0, "entry_zone": "₹195-₹205",
+                          "stop_loss": "₹180", "target_1": "₹230"}],
+    }
+    msg = t._build_message(data)
+    assert "SL" in msg and "₹180" in msg and "₹230" in msg
