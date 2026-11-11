@@ -45,6 +45,28 @@ jobs:
           restore-keys: |
             scan-data-${{ runner.os }}-
 
+      # Git, not the cache, is the source of truth for the git-tracked
+      # outputs. The restore above extracts outputs/ OVER the checkout, so a
+      # commit that edits a tracked output was silently reverted by the next
+      # run and the stale cached copy committed back -- the 2026-09-17 Rs 10L
+      # portfolio reset (8b9e200) was undone 23 min later this way. Each run
+      # records the git blobs it started from; if HEAD's blob differs, the
+      # file changed in git since that cache was saved, so git wins. If not,
+      # keep the cache: it carries pre_market/mid_day state that only EOD
+      # commits.
+      - name: Prefer git over cache for tracked outputs
+        run: |
+          prev=outputs/.base_blobs
+          git ls-files outputs/ | while read -r f; do
+            head_blob=$(git rev-parse "HEAD:$f")
+            base_blob=$(awk -v f="$f" '$2==f{print $1}' "$prev" 2>/dev/null)
+            if [ "$head_blob" != "$base_blob" ]; then
+              git checkout HEAD -- "$f"
+            fi
+            echo "$head_blob $f"
+          done > "$RUNNER_TEMP/base_blobs"
+          mv "$RUNNER_TEMP/base_blobs" "$prev"
+
       # Restore F&O ban cache from the previous run so we can compute the delta
       - name: Restore F&O ban cache
         uses: actions/cache@v4
