@@ -50,18 +50,29 @@ def load_picks() -> list[dict]:
 
 # ── yfinance fetch ────────────────────────────────────────────────────────────
 
-def fetch_ohlcv(tickers: list[str], start: str) -> dict[str, pd.DataFrame]:
+def fetch_ohlcv(tickers: list[str], start: str) -> tuple[dict[str, pd.DataFrame], dict[str, pd.Series]]:
+    """Returns (ohlcv_by_ticker, splits_by_ticker).
+
+    auto_adjust=True back-adjusts the WHOLE series for any split, including
+    ones that happen after a pick's date. A pick's entry/SL/T1 prices come
+    from the Telegram message (frozen at pick time, pre-split), so comparing
+    them against a post-split-adjusted series produces a fake ~1/split_ratio
+    "loss" the day the split lands. splits_by_ticker lets the caller skip
+    any pick whose window contains a split instead of simulating garbage.
+    """
     if not tickers:
-        return {}
+        return {}, {}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         raw = yf.download(
-            tickers, start=start, auto_adjust=True, progress=False, group_by="ticker"
+            tickers, start=start, auto_adjust=True, actions=True,
+            progress=False, group_by="ticker",
         )
     if raw.empty:
-        return {}
+        return {}, {}
 
     result: dict[str, pd.DataFrame] = {}
+    splits: dict[str, pd.Series] = {}
     if isinstance(raw.columns, pd.MultiIndex):
         level0 = raw.columns.get_level_values(0).unique().tolist()
         for t in tickers:
@@ -70,6 +81,9 @@ def fetch_ohlcv(tickers: list[str], start: str) -> dict[str, pd.DataFrame]:
                 df = df[df["Close"].notna()]
                 if not df.empty:
                     result[t] = df
+                if "Stock Splits" in df.columns:
+                    s = df["Stock Splits"]
+                    splits[t] = s[s != 0]
     else:
         # Single-ticker fallback
         if len(tickers) == 1:
@@ -77,7 +91,10 @@ def fetch_ohlcv(tickers: list[str], start: str) -> dict[str, pd.DataFrame]:
             df = df[df["Close"].notna()]
             if not df.empty:
                 result[tickers[0]] = df
-    return result
+            if "Stock Splits" in df.columns:
+                s = df["Stock Splits"]
+                splits[tickers[0]] = s[s != 0]
+    return result, splits
 
 
 # ── trade simulator (delegated to src/trade_sim.py) ──────────────────────────
@@ -202,21 +219,28 @@ def main():
     tickers = list({p["ticker"] for p in picks})
     print(f"Fetching OHLCV for {len(tickers)} tickers from {start} ...")
 
-    ohlcv = fetch_ohlcv(tickers, start)
+    ohlcv, splits = fetch_ohlcv(tickers, start)
     print(f"Got OHLCV for {len(ohlcv)} / {len(tickers)} tickers.")
 
     results = []
     no_data = []
+    split_skipped = []
     for pick in picks:
         df = ohlcv.get(pick["ticker"])
         if df is None or df.empty:
             no_data.append(pick["ticker"])
+            continue
+        s = splits.get(pick["ticker"])
+        if s is not None and not s.empty and (s.index >= pd.Timestamp(pick["date"])).any():
+            split_skipped.append(pick["ticker"])
             continue
         sim = simulate(pick, df)
         results.append({"pick": pick, "sim": sim})
 
     if no_data:
         print(f"No OHLCV data for: {', '.join(set(no_data))}")
+    if split_skipped:
+        print(f"Skipped (split after pick date, prices not comparable): {', '.join(set(split_skipped))}")
 
     print_summary(results)
 
