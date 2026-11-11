@@ -15,6 +15,53 @@ dump, not a diary. Full history is in `git log`.
 4. `tests/test_*.py` docstrings for shipped signals — each one documents
    the backtest/holdout numbers that justified it.
 
+## READ FIRST 2026-11-11: live is losing; most backtest "alpha" is size beta
+**Paper book was dead for 2 months (fixed).** The 2026-09-17 ₹10L reset
+(8b9e200) was reverted 23 min later: `actions/cache` restores `outputs/`
+over the checkout, so CI committed the stale cached ₹1L June book back and
+kept it (5 June holdings, ₹11k cash, zero new trades). Workflow now
+prefers git when a tracked output changed since the cache was saved;
+reset re-applied (old book → `portfolio_archive/portfolio_2026-11-11.json`).
+
+**Live Telegram buys (427 picks, 95 alert dates, May→Nov 5)**, entry at
+next open, net 0.30%, clustered by alert date, NW lag = horizon:
+
+| | 10d vs NIFTY | 20d vs NIFTY | 20d vs random universe name |
+|---|---|---|---|
+| before 2026-09-18 (64 dates) | −0.18% | +0.92% (t=+1.09) | −0.33% (t=+0.35) |
+| since 2026-09-18 (16-26 dates) | −6.44% | **−13.89%** | **−4.58%** |
+
+As-advertised trades since 9/18 (zone/SL/T1/10d): 38 SL, 10 T1, 13
+timeout, mean **−4.45%**. Post-9/18 dates overlap heavily (~2 independent
+20d windows) — treat as one bad episode, not 16 failures. ~2/3 of it is
+size: random universe names fell −5.4% while NIFTY rose +3.9% (V-bottom
+mid-Oct). The rest is selection: DOWNTREND REGIME_WEIGHTS pushed scores
+to 14-19 on small-cap momentum names that kept falling; SMCGLOBAL was
+alerted 5x in 3 weeks. Regime label itself is correct by its EMA rule.
+Before 9/18 the picks were **indistinguishable from a random universe
+name**.
+
+**Daily backtest (1,401 dates, 2021-01→2026-09) settles two questions**
+(score>=4 buys, gross, 70/30 cut 2025-01-08, NW t):
+
+| 20d | train | holdout | full |
+|---|---|---|---|
+| admitted − NIFTY | +2.29% (4.51) | +0.54% (0.88) | +1.79% (4.21) |
+| universe EW − NIFTY | +1.72% (3.25) | −0.24% | +1.16% (2.48) |
+| admitted − universe EW | +0.57% (2.72) | +0.78% (1.92) | +0.63% (3.30) |
+| admitted − same-day pool | +0.15% (0.99) | +0.70% (3.27) | +0.31% (2.38) |
+| **top-5 by score − admitted** | −0.30% (−1.52) | −0.26% (−0.59) | −0.29% (−1.51) |
+
+1. **~2/3 of "alpha vs NIFTY" is the small-cap universe beating NIFTY**,
+   not selection. Selection edge vs the universe is ~+0.6% gross (~+0.3%
+   net) per 20d trade. Measure future alpha vs universe EW, not NIFTY.
+   (Universe is survivor-only; adm−universe also mixes limit-zone entry vs
+   next-open, so it is an upper bound. adm−pool is the clean comparison.)
+2. **Score does not rank above the bar.** Top-5 by score is slightly
+   *worse* than the average admitted name in both halves (n.s.); within-
+   admitted rank IC ≈ 0. Taking the 5 highest scores adds nothing.
+   Not shipped: no alternative selection has been tested.
+
 ## READ FIRST 2026-09-17: every t-stat in this repo is inflated ~10x
 `backtest_trades.csv` is **weekly-sampled**: 280 scan dates, ~750 trades
 per date. Trades sharing a scan date are massively cross-correlated (same
