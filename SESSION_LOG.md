@@ -40,6 +40,46 @@ Tradable bullish touched 8.2% / 6.8% / 6.9% (1d/1w/1m) vs random
 ever sent. Score 15+ touched 13.2% at 1w (n=38) but still lost money —
 volatility, not skill. Need ~4× more hits to reach 30%.
 
+## RESEARCH 2026-11-11: reverse-engineering top-50 movers
+Panel: 1.53M tradable stock-days (2021-01→2026-08, ₹20+, ₹1cr+/day), ~25
+price/volume features, labels = touched the top-50 bar from next open.
+Scripts were scratch-only (not committed). Random touch rate 7.7% (1w).
+
+**Single traits (vol-controlled, train vs holdout):** volatility dominates
+(top ATR decile 13-15% vs 1-2%) but loses money; volume spike today
+(x1.2 both halves), small turnover/low price (x1.25-1.3); momentum traits
+(r20/r60/MA/RSI) work in train and vanish in holdout. No single-trait
+decile makes money.
+
+**LightGBM, yearly walk-forward (retrain on all prior years, purged),
+top-5/day:**
+
+| 1-month bar (+27.54%) | 2023 | 2024 | 2025 | 2026 (82d) |
+|---|---|---|---|---|
+| hit (random) | 19.5% (8.1%) | 23.0% (8.7%) | 23.3% (4.6%) | 22.2% (9.7%) |
+| P&L/pick (random) | +3.90% (+3.29) | +2.20% (+0.71) | +3.04% (−1.43) | +2.81% (+1.99) |
+
+Positive every year, beats random every year. 1-week model hits 21-30%
+(3-4x random) but P&L ≈ 0 — misses eat the hits. Verified on official
+BSE prices: 97% label agreement, same P&L.
+Picks = **year's leaders under accumulation**: 12m +85-140%, r20 > 0,
+ATR 5-6%, vr5 1.25-1.6x, small (₹3-5cr/day, ~₹150). Weak market: buys
+leaders ~19% off highs (RSI ~55); normal/strong: near highs (RSI ~72).
+**A transparent rule distilled from this FAILED holdout** (train t=3.06,
+holdout 11.7% hit, −0.46%) — the edge lives in interactions.
+
+**Fundamentals (Nov 2025→Aug 2026 only, point-in-time results):** low
+institutional ownership is the strongest (12.1% vs 3.8%), small cap,
+revenue growth mildly +; profit growth is U-shaped (volatility, not
+direction); loss-makers hit MORE; no fundamental filter reliably improves
+the model's picks on this 9-month sample.
+
+**Against the goal: still FAIL on hit rate** (19.5-23% < 30%); passes
+≥2x random and P&L>0 at 1 month. Caveats: 15% of entries open locked at
+upper circuit; 76% of picks repeat a held name — first-signal-only is
+19.5% hit / +1.60%; median intra-month drawdown −10%, worst 10% < −24%;
+survivor-only price cache; ₹3-5cr/day names → slippage > 0.30%.
+
 ## READ FIRST 2026-11-11: live is losing; most backtest "alpha" is size beta
 **Paper book was dead for 2 months (fixed).** The 2026-09-17 ₹10L reset
 (8b9e200) was reverted 23 min later: `actions/cache` restores `outputs/`
