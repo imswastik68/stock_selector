@@ -16,7 +16,18 @@ These tests pin the disclosure, not the verdicts.
 
 from __future__ import annotations
 
+import pytest
+
+import src.gates as g
 from src.gates import live_alpha_gate, live_proof_report
+
+
+@pytest.fixture(autouse=True)
+def _outputs_in_tmp(tmp_path, monkeypatch):
+    """live_proof_report writes OUTPUTS/live_proof.json. Without this, running
+    these tests overwrote the git-tracked live track record with fixture data,
+    one `git add -A outputs/` away from being committed."""
+    monkeypatch.setattr(g, "OUTPUTS", tmp_path)
 
 
 def _pick(signals: list[str], abnormal: float) -> dict:
