@@ -53,10 +53,14 @@ jobs:
       # records the git blobs it started from; if HEAD's blob differs, the
       # file changed in git since that cache was saved, so git wins. If not,
       # keep the cache: it carries pre_market/mid_day state that only EOD
-      # commits.
+      # commits. A cache saved before this step existed has no record; awk
+      # then exits 2 on the missing file and `bash -e` kills the step, so the
+      # cache is never re-saved and every run fails. Start from an empty
+      # record instead: every blob mismatches, so git wins on that first run.
       - name: Prefer git over cache for tracked outputs
         run: |
           prev=outputs/.base_blobs
+          [ -f "$prev" ] || : > "$prev"
           git ls-files outputs/ | while read -r f; do
             head_blob=$(git rev-parse "HEAD:$f")
             base_blob=$(awk -v f="$f" '$2==f{print $1}' "$prev" 2>/dev/null)
