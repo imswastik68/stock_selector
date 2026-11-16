@@ -1,8 +1,65 @@
 {
-  "cash": 1000000.0,
-  "equity": 1000000.0,
+  "cash": 23315.699999999983,
+  "equity": 1092932.8,
   "realized_pnl": 0.0,
-  "holdings": {},
+  "holdings": {
+    "SPECTRUM.NS": {
+      "qty": 57,
+      "entry": 3982.2,
+      "entry_lo": 3982.2,
+      "entry_hi": 3982.2,
+      "sl": 4200.18,
+      "t1": 5395.23,
+      "t2": 5873.25,
+      "direction": "buy",
+      "opened": "2026-11-16",
+      "exit_policy": "time_10d",
+      "last_price": 4678.2,
+      "unrealized_pnl": 39672.0
+    },
+    "TANLA.NS": {
+      "qty": 387,
+      "entry": 645.45,
+      "entry_lo": 645.45,
+      "entry_hi": 645.45,
+      "sl": 639.92,
+      "t1": 793.13,
+      "t2": 854.41,
+      "direction": "buy",
+      "opened": "2026-11-16",
+      "exit_policy": "time_10d",
+      "last_price": 701.2,
+      "unrealized_pnl": 21575.25
+    },
+    "MBAPL.NS": {
+      "qty": 1345,
+      "entry": 185.83,
+      "entry_lo": 185.83,
+      "entry_hi": 185.83,
+      "sl": 179.04,
+      "t1": 217.14,
+      "t2": 232.39,
+      "direction": "buy",
+      "opened": "2026-11-16",
+      "exit_policy": "time_10d",
+      "last_price": 194.28,
+      "unrealized_pnl": 11365.25
+    },
+    "ALGOQUANT.NS": {
+      "qty": 3190,
+      "entry": 78.36,
+      "entry_lo": 78.36,
+      "entry_hi": 78.36,
+      "sl": 77.86,
+      "t1": 95.04,
+      "t2": 101.92,
+      "direction": "buy",
+      "opened": "2026-11-16",
+      "exit_policy": "time_10d",
+      "last_price": 84.73,
+      "unrealized_pnl": 20320.3
+    }
+  },
   "closed": [
     {
       "ticker": "SHREEJISPG.NS",
@@ -147,6 +204,10 @@
     {
       "date": "2026-11-11",
       "equity": 1000000.0
+    },
+    {
+      "date": "2026-11-16",
+      "equity": 1092932.8
     }
   ],
   "reset_on": "2026-11-11",
