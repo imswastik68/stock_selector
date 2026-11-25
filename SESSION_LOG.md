@@ -214,10 +214,10 @@ is 55 observations, not 10,743.
 <!-- AUTO-GENERATED:BEGIN -- do not hand-edit between these markers.
      Regenerated daily by scripts/update_session_log.py (runs in CI after
      the EOD scan). Edit the script if the content needs to change. -->
-_(as of 2026-11-24, auto-generated)_
+_(as of 2026-11-25, auto-generated)_
 
-- **Last commit at log time:** 329c742 2026-11-24.
-- **Score IC:** 65 days recorded (needs 30), mean IC 0.0006, t=0.04, verdict **NO_RANKING_ABILITY**.
+- **Last commit at log time:** 54f0aa1 2026-11-25.
+- **Score IC:** 66 days recorded (needs 30), mean IC 0.0136, t=1.05, verdict **WEAK**.
 - **Momentum gate:** PAPER-ONLY -- no momentum strategy has passed the multi-split ship gate — PAPER-ONLY (outputs/factor_backtest.json)
 - **Portfolio:** equity 1092932.8, cash 23315.699999999983, 4 open holdings: SPECTRUM.NS, TANLA.NS, MBAPL.NS, ALGOQUANT.NS.
 <!-- AUTO-GENERATED:END -->
